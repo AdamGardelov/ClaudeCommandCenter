@@ -37,6 +37,30 @@ public static class ConfigService
         }
     }
 
+    public static void SaveDescription(CccConfig config, string sessionName, string? description)
+    {
+        if (string.IsNullOrWhiteSpace(description))
+            config.SessionDescriptions.Remove(sessionName);
+        else
+            config.SessionDescriptions[sessionName] = description;
+        Save(config);
+    }
+
+    public static void RenameDescription(CccConfig config, string oldName, string newName)
+    {
+        if (config.SessionDescriptions.Remove(oldName, out var desc))
+        {
+            config.SessionDescriptions[newName] = desc;
+            Save(config);
+        }
+    }
+
+    public static void RemoveDescription(CccConfig config, string sessionName)
+    {
+        if (config.SessionDescriptions.Remove(sessionName))
+            Save(config);
+    }
+
     private static void Save(CccConfig config)
     {
         Directory.CreateDirectory(ConfigDir);

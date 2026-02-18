@@ -74,6 +74,11 @@ public class App
     private void LoadSessions()
     {
         _state.Sessions = TmuxService.ListSessions();
+        foreach (var s in _state.Sessions)
+        {
+            if (_config.SessionDescriptions.TryGetValue(s.Name, out var desc))
+                s.Description = desc;
+        }
         _state.ClampCursor();
     }
 
@@ -202,6 +207,11 @@ public class App
             return;
         }
 
+        var description = AnsiConsole.Prompt(
+            new TextPrompt<string>("[darkorange]Description[/] [grey](optional)[/][darkorange]:[/]")
+                .AllowEmpty()
+                .PromptStyle(new Style(Color.White)));
+
         var dir = PickDirectory();
 
         if (dir == null)
@@ -221,9 +231,15 @@ public class App
         }
 
         if (TmuxService.CreateSession(name, dir))
+        {
+            if (!string.IsNullOrWhiteSpace(description))
+                ConfigService.SaveDescription(_config, name, description);
             TmuxService.AttachSession(name);
+        }
         else
+        {
             _state.SetStatus("Failed to create session");
+        }
 
         Console.CursorVisible = false;
         LoadSessions();
@@ -320,6 +336,7 @@ public class App
         if (confirm.Key == ConsoleKey.Y)
         {
             TmuxService.KillSession(session.Name);
+            ConfigService.RemoveDescription(_config, session.Name);
             _state.SetStatus("Session killed");
             LoadSessions();
         }
@@ -348,6 +365,7 @@ public class App
         {
             if (TmuxService.RenameSession(session.Name, newName))
             {
+                ConfigService.RenameDescription(_config, session.Name, newName);
                 _state.SetStatus($"Renamed to '{newName}'");
                 LoadSessions();
             }
