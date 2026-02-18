@@ -6,8 +6,7 @@ public class AppState
 {
     public List<TmuxSession> Sessions { get; set; } = [];
     public int CursorIndex { get; set; }
-    public int PreviewScrollOffset { get; set; }
-    public bool PreviewFollowBottom { get; set; } = true;
+
     public bool Running { get; set; } = true;
     private string? StatusMessage { get; set; }
     private DateTime? StatusMessageTime { get; set; }

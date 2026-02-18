@@ -123,13 +123,6 @@ public class App
                 MoveCursor(1);
                 break;
 
-            case ConsoleKey.PageUp:
-                ScrollPreview(-10);
-                break;
-
-            case ConsoleKey.PageDown:
-                ScrollPreview(10);
-                break;
 
             case ConsoleKey.Enter:
                 AttachToSession();
@@ -165,12 +158,6 @@ public class App
             case 'i':
                 OpenInIde();
                 break;
-            case 'J':
-                ScrollPreview(3);
-                break;
-            case 'K':
-                ScrollPreview(-3);
-                break;
         }
     }
 
@@ -178,15 +165,9 @@ public class App
     {
         if (_state.Sessions.Count == 0) return;
         _state.CursorIndex = Math.Clamp(_state.CursorIndex + delta, 0, _state.Sessions.Count - 1);
-        _state.PreviewFollowBottom = true;
         _lastSelectedSession = null; // Force pane recapture
     }
 
-    private void ScrollPreview(int delta)
-    {
-        _state.PreviewFollowBottom = false;
-        _state.PreviewScrollOffset = Math.Max(0, _state.PreviewScrollOffset + delta);
-    }
 
     private void AttachToSession()
     {

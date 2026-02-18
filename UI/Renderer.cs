@@ -133,25 +133,15 @@ public static class Renderer
             // Available height = terminal - header (1) - status bar (1) - panel border (2) - info rows (5)
             var availableLines = Math.Max(1, Console.WindowHeight - 9);
 
-            var maxOffset = Math.Max(0, lines.Length - availableLines);
-            if (state.PreviewFollowBottom)
-                state.PreviewScrollOffset = maxOffset;
-            if (state.PreviewScrollOffset > maxOffset)
-                state.PreviewScrollOffset = maxOffset;
-
-            var visibleLines = lines.AsSpan(state.PreviewScrollOffset,
-                Math.Min(availableLines, lines.Length - state.PreviewScrollOffset));
+            // Always show the bottom of the pane output
+            var offset = Math.Max(0, lines.Length - availableLines);
+            var visibleLines = lines.AsSpan(offset,
+                Math.Min(availableLines, lines.Length - offset));
 
             foreach (var line in visibleLines)
             {
                 var trimmed = line.Length > maxWidth ? line[..maxWidth] : line;
                 rows.Add(new Markup($" {Markup.Escape(trimmed)}"));
-            }
-
-            if (state.PreviewScrollOffset > 0 || state.PreviewScrollOffset < maxOffset)
-            {
-                var indicator = $"[grey42] lines {state.PreviewScrollOffset + 1}-{state.PreviewScrollOffset + visibleLines.Length}/{lines.Length}[/]";
-                rows.Add(new Markup(indicator));
             }
         }
         else
@@ -174,7 +164,6 @@ public static class Renderer
 
         return new Markup(
             " [darkorange bold]j/k[/][grey] navigate [/] " +
-            "[darkorange bold]J/K[/][grey] scroll [/] " +
             "[darkorange bold]Enter[/][grey] attach [/] " +
             "[darkorange bold]n[/][grey] new [/] " +
             "[darkorange bold]i[/][grey] ide [/] " +
