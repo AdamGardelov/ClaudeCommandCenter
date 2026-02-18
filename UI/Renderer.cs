@@ -114,7 +114,7 @@ public static class Renderer
         };
 
         if (!string.IsNullOrWhiteSpace(session.Description))
-            rows.Add(new Markup($"             [italic grey70]{Markup.Escape(session.Description)}[/]"));
+            rows.Add(new Markup($" [grey50]Desc:[/]     [italic grey70]{Markup.Escape(session.Description)}[/]"));
 
         rows.Add(new Markup($" [grey50]Path:[/]     [white]{Markup.Escape(session.CurrentPath ?? "unknown")}[/]"));
 
