@@ -163,6 +163,15 @@ public class App
             case 'i':
                 OpenInIde();
                 break;
+            case 'y':
+                SendQuickKey("y");
+                break;
+            case 'N':
+                SendQuickKey("n");
+                break;
+            case 's':
+                SendText();
+                break;
         }
     }
 
@@ -339,6 +348,55 @@ public class App
             ConfigService.RemoveDescription(_config, session.Name);
             _state.SetStatus("Session killed");
             LoadSessions();
+        }
+        else
+        {
+            _state.SetStatus("Cancelled");
+        }
+    }
+
+    private void SendQuickKey(string key)
+    {
+        var session = _state.GetSelectedSession();
+        if (session == null) return;
+
+        if (TmuxService.SendKeys(session.Name, key))
+        {
+            _state.SetStatus($"Sent '{key}' to {session.Name}");
+            _lastSelectedSession = null; // Force pane refresh
+        }
+        else
+        {
+            _state.SetStatus("Send failed");
+        }
+    }
+
+    private void SendText()
+    {
+        var session = _state.GetSelectedSession();
+        if (session == null) return;
+
+        Console.CursorVisible = true;
+        Console.Clear();
+
+        var text = AnsiConsole.Prompt(
+            new TextPrompt<string>($"[darkorange]Send to[/] [white]'{Markup.Escape(session.Name)}'[/][darkorange]:[/]")
+                .AllowEmpty()
+                .PromptStyle(new Style(Color.White)));
+
+        Console.CursorVisible = false;
+
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            if (TmuxService.SendKeys(session.Name, text))
+            {
+                _state.SetStatus($"Sent to {session.Name}");
+                _lastSelectedSession = null;
+            }
+            else
+            {
+                _state.SetStatus("Send failed");
+            }
         }
         else
         {
