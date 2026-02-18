@@ -64,6 +64,9 @@ The app shows a split-panel TUI — sessions on the left, a live pane preview on
 | `d` | Delete session (with confirmation) |
 | `R` | Rename session |
 | `r` | Refresh session list |
+| `y` | Approve — sends `y` to the selected session |
+| `N` | Reject — sends `n` to the selected session |
+| `s` | Send — type a message and send it to the selected session |
 | `q` | Quit |
 
 When you attach to a session, detach with the standard tmux prefix (`Ctrl-b d`) to return to the command center.
