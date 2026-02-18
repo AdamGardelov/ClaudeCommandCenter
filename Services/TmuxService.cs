@@ -43,7 +43,7 @@ public abstract class TmuxService
 
     public static string? CapturePaneContent(string sessionName, int lines = 500)
     {
-        return RunTmux("capture-pane", "-t", sessionName, "-p", "-S", $"-{lines}");
+        return RunTmux("capture-pane", "-t", sessionName, "-p", "-e", "-S", $"-{lines}");
     }
 
     public static void DetectWaitingForInput(TmuxSession session)
@@ -74,8 +74,11 @@ public abstract class TmuxService
 
     public static bool CreateSession(string name, string workingDirectory)
     {
-        var result = RunTmux("new-session", "-d", "-s", name, "-c", workingDirectory, "claude");
-        return result != null;
+        var result = RunTmux("new-session", "-d", "-s", name, "-n", name, "-c", workingDirectory, "claude");
+        if (result == null) return false;
+        // Prevent tmux from renaming the window to the running command
+        RunTmux("set-option", "-t", name, "automatic-rename", "off");
+        return true;
     }
 
     public static void AttachSession(string name)
