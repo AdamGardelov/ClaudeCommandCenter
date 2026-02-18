@@ -143,10 +143,7 @@ public static class Renderer
                 Math.Min(availableLines, lines.Length - offset));
 
             foreach (var line in visibleLines)
-            {
-                var trimmed = line.Length > maxWidth ? line[..maxWidth] : line;
-                rows.Add(new Markup($" {Markup.Escape(trimmed)}"));
-            }
+                rows.Add(AnsiParser.ParseLine(line, maxWidth));
         }
         else
         {
