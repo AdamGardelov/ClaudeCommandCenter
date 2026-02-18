@@ -98,6 +98,16 @@ public abstract class TmuxService
         }
     }
 
+    public static bool SendKeys(string sessionName, string text)
+    {
+        // send-keys with -l sends literal text (no key name interpretation),
+        // then a separate Enter keypress to submit
+        var result = RunTmux("send-keys", "-t", sessionName, "-l", text);
+        if (result == null) return false;
+        RunTmux("send-keys", "-t", sessionName, "Enter");
+        return true;
+    }
+
     public static void KillSession(string name)
     {
         RunTmux("kill-session", "-t", name);
