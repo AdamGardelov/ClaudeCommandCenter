@@ -118,6 +118,12 @@ public class App
 
     private void HandleKey(ConsoleKeyInfo key)
     {
+        if (_state.IsInputMode)
+        {
+            HandleInputKey(key);
+            return;
+        }
+
         switch (key.Key)
         {
             case ConsoleKey.UpArrow or ConsoleKey.K:
@@ -139,6 +145,52 @@ public class App
 
             default:
                 HandleCharKey(key.KeyChar);
+                break;
+        }
+    }
+
+    private void HandleInputKey(ConsoleKeyInfo key)
+    {
+        switch (key.Key)
+        {
+            case ConsoleKey.Escape:
+                _state.IsInputMode = false;
+                _state.InputBuffer = "";
+                _state.SetStatus("Cancelled");
+                break;
+
+            case ConsoleKey.Enter:
+                var text = _state.InputBuffer;
+                var target = _state.InputTarget;
+                _state.IsInputMode = false;
+                _state.InputBuffer = "";
+
+                if (text.Length > 0 && target != null)
+                {
+                    if (TmuxService.SendKeys(target, text))
+                    {
+                        _state.SetStatus($"Sent to {target}");
+                        _lastSelectedSession = null;
+                    }
+                    else
+                    {
+                        _state.SetStatus("Send failed");
+                    }
+                }
+                else
+                {
+                    _state.SetStatus("Cancelled");
+                }
+                break;
+
+            case ConsoleKey.Backspace:
+                if (_state.InputBuffer.Length > 0)
+                    _state.InputBuffer = _state.InputBuffer[..^1];
+                break;
+
+            default:
+                if (key.KeyChar >= ' ')
+                    _state.InputBuffer += key.KeyChar;
                 break;
         }
     }
@@ -376,32 +428,9 @@ public class App
         var session = _state.GetSelectedSession();
         if (session == null) return;
 
-        Console.CursorVisible = true;
-        Console.Clear();
-
-        var text = AnsiConsole.Prompt(
-            new TextPrompt<string>($"[darkorange]Send to[/] [white]'{Markup.Escape(session.Name)}'[/][darkorange]:[/]")
-                .AllowEmpty()
-                .PromptStyle(new Style(Color.White)));
-
-        Console.CursorVisible = false;
-
-        if (!string.IsNullOrWhiteSpace(text))
-        {
-            if (TmuxService.SendKeys(session.Name, text))
-            {
-                _state.SetStatus($"Sent to {session.Name}");
-                _lastSelectedSession = null;
-            }
-            else
-            {
-                _state.SetStatus("Send failed");
-            }
-        }
-        else
-        {
-            _state.SetStatus("Cancelled");
-        }
+        _state.IsInputMode = true;
+        _state.InputBuffer = "";
+        _state.InputTarget = session.Name;
     }
 
     private void RenameSession()

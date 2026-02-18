@@ -158,6 +158,15 @@ public static class Renderer
 
     private static Markup BuildStatusBar(AppState state)
     {
+        if (state.IsInputMode)
+        {
+            var target = Markup.Escape(state.InputTarget ?? "");
+            var buffer = Markup.Escape(state.InputBuffer);
+            return new Markup(
+                $" [darkorange]Send to[/] [white]{target}[/][darkorange]>[/] [white]{buffer}[/][grey]▌[/]" +
+                $"  [grey50]Enter[/][grey] send · [/][grey50]Esc[/][grey] cancel[/]");
+        }
+
         var status = state.GetActiveStatus();
 
         if (status != null)

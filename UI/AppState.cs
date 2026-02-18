@@ -8,6 +8,9 @@ public class AppState
     public int CursorIndex { get; set; }
 
     public bool Running { get; set; } = true;
+    public bool IsInputMode { get; set; }
+    public string InputBuffer { get; set; } = "";
+    public string? InputTarget { get; set; }
     private string? StatusMessage { get; set; }
     private DateTime? StatusMessageTime { get; set; }
 
