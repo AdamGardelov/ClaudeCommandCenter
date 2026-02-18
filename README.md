@@ -88,6 +88,6 @@ Create `~/.ccc/config.json` to configure favorite folders. When creating a new s
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `favoriteFolders` | `[]` | Quick-pick directories when creating sessions |
-| `ideCommand` | `cursor` | Command to run when pressing `i` (e.g. `rider`, `code`, `cursor`) |
+| `ideCommand` | `` | Command to run when pressing `i` (e.g. `rider`, `code`, `cursor`) |
 
 The config file is created automatically on first run. Tilde (`~`) paths are expanded automatically.
