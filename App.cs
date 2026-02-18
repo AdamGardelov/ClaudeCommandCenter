@@ -190,8 +190,10 @@ public class App
         Console.CursorVisible = true;
         Console.Clear();
 
-        Console.Write("Session name (Enter to cancel): ");
-        var name = Console.ReadLine()?.Trim();
+        var name = AnsiConsole.Prompt(
+            new TextPrompt<string>("[darkorange]Session name[/] [grey](empty to go back)[/][darkorange]:[/]")
+                .AllowEmpty()
+                .PromptStyle(new Style(Color.White)));
 
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -200,7 +202,7 @@ public class App
             return;
         }
 
-        string? dir = PickDirectory();
+        var dir = PickDirectory();
 
         if (dir == null)
         {
@@ -228,38 +230,58 @@ public class App
         _lastSelectedSession = null;
     }
 
+    private const string CustomPathChoice = "Custom path...";
+    private const string CancelChoice = "Cancel";
+
     private string? PickDirectory()
     {
         var favorites = _config.FavoriteFolders;
 
         if (favorites.Count == 0)
+            return PromptCustomPath();
+
+        while (true)
         {
-            Console.Write("Working directory (Enter to cancel): ");
-            return Console.ReadLine()?.Trim();
+            var prompt = new SelectionPrompt<string>()
+                .Title("[darkorange]Pick a directory[/]")
+                .PageSize(15)
+                .HighlightStyle(new Style(Color.White, Color.DarkOrange))
+                .MoreChoicesText("[grey](Move up and down to reveal more)[/]");
+
+            foreach (var fav in favorites)
+                prompt.AddChoice($"{fav.Name}  [grey50]{fav.Path}[/]");
+
+            prompt.AddChoice(CustomPathChoice);
+            prompt.AddChoice(CancelChoice);
+
+            var selected = AnsiConsole.Prompt(prompt);
+
+            if (selected == CancelChoice)
+                return null;
+
+            if (selected == CustomPathChoice)
+            {
+                var custom = PromptCustomPath();
+                if (custom != null)
+                    return custom;
+                continue; // empty input → back to picker
+            }
+
+            // Match back to the favorite by prefix (name before the spacing)
+            var selectedName = selected.Split("  ")[0];
+            var match = favorites.FirstOrDefault(f => f.Name == selectedName);
+            return match?.Path;
         }
+    }
 
-        Console.WriteLine("Pick a directory (Enter to cancel):");
-        for (var i = 0; i < favorites.Count; i++)
-            Console.WriteLine($"  {i + 1}) {favorites[i].Name,-12} {favorites[i].Path}");
-        Console.WriteLine($"  {favorites.Count + 1}) Custom path...");
-        Console.Write("> ");
+    private static string? PromptCustomPath()
+    {
+        var path = AnsiConsole.Prompt(
+            new TextPrompt<string>("[darkorange]Working directory:[/]")
+                .AllowEmpty()
+                .PromptStyle(new Style(Color.White)));
 
-        var input = Console.ReadLine()?.Trim();
-
-        if (string.IsNullOrWhiteSpace(input))
-            return null;
-
-        if (int.TryParse(input, out var choice) && choice >= 1 && choice <= favorites.Count + 1)
-        {
-            if (choice <= favorites.Count)
-                return favorites[choice - 1].Path;
-
-            // Custom path
-            Console.Write("Working directory (Enter to cancel): ");
-            return Console.ReadLine()?.Trim();
-        }
-
-        return null;
+        return string.IsNullOrWhiteSpace(path) ? null : path;
     }
 
     private void OpenInIde()
@@ -314,9 +336,12 @@ public class App
 
         Console.CursorVisible = true;
         Console.Clear();
-        Console.Write($"Rename '{session.Name}' to: ");
 
-        var newName = Console.ReadLine()?.Trim();
+        var newName = AnsiConsole.Prompt(
+            new TextPrompt<string>($"[darkorange]Rename[/] [white]'{Markup.Escape(session.Name)}'[/] [darkorange]to:[/]")
+                .AllowEmpty()
+                .PromptStyle(new Style(Color.White)));
+
         Console.CursorVisible = false;
 
         if (!string.IsNullOrWhiteSpace(newName))

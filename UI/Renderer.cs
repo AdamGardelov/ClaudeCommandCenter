@@ -163,7 +163,7 @@ public static class Renderer
             return new Markup($" [yellow]{Markup.Escape(status)}[/]");
 
         return new Markup(
-            " [darkorange bold]j/k[/][grey] navigate [/] " +
+            " [darkorange bold]up/down[/][grey] navigate [/] " +
             "[darkorange bold]Enter[/][grey] attach [/] " +
             "[darkorange bold]n[/][grey] new [/] " +
             "[darkorange bold]i[/][grey] ide [/] " +
