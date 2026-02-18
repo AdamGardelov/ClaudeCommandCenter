@@ -103,7 +103,7 @@ public static class Renderer
                     CenterFiglet("Command center", panelWidth, Color.DarkOrange),
                     new Text(""),
                     Align.Center(new Markup("[grey50]Select a session to see preview[/]"))))
-                .Header("[darkorange] Preview [/]")
+                .Header("[darkorange] Live Preview [/]")
                 .BorderColor(Color.Grey42)
                 .Expand();
         }
@@ -151,7 +151,7 @@ public static class Renderer
         }
 
         return new Panel(new Rows(rows))
-            .Header("[darkorange] Preview [/]")
+            .Header("[darkorange] Live Preview [/]")
             .BorderColor(Color.Grey42)
             .Expand();
     }
