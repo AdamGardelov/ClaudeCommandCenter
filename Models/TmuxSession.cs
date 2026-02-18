@@ -3,6 +3,7 @@ namespace ClaudeCommandCenter.Models;
 public class TmuxSession
 {
     public required string Name { get; set; }
+    public string? Description { get; set; }
     public DateTime? Created { get; set; }
     public bool IsAttached { get; set; }
     public int WindowCount { get; set; }

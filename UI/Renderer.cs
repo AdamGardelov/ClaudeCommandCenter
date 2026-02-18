@@ -111,8 +111,12 @@ public static class Renderer
         var rows = new List<IRenderable>
         {
             new Markup($" [grey50]Session:[/]  [white]{Markup.Escape(session.Name)}[/]"),
-            new Markup($" [grey50]Path:[/]     [white]{Markup.Escape(session.CurrentPath ?? "unknown")}[/]"),
         };
+
+        if (!string.IsNullOrWhiteSpace(session.Description))
+            rows.Add(new Markup($"             [italic grey70]{Markup.Escape(session.Description)}[/]"));
+
+        rows.Add(new Markup($" [grey50]Path:[/]     [white]{Markup.Escape(session.CurrentPath ?? "unknown")}[/]"));
 
         if (session.GitBranch != null)
             rows.Add(new Markup($" [grey50]Branch:[/]   [aqua]{Markup.Escape(session.GitBranch)}[/]"));
