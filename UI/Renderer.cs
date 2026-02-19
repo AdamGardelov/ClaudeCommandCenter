@@ -63,7 +63,10 @@ public static class Renderer
             var status = isWorking ? spinner : "!";
 
             if (isSelected)
-                rows.Add(new Markup($"[white on darkorange] {status} {name,-18} {time} [/]"));
+            {
+                var bg = session.ColorTag ?? "grey37";
+                rows.Add(new Markup($"[white on {bg}] {status} {name,-18} {time} [/]"));
+            }
             else if (isWorking)
                 rows.Add(new Markup($" [green]{spinner}[/] [navajowhite1]{name,-18}[/] [grey50]{time}[/]"));
             else if (session.IsWaitingForInput)
