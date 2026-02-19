@@ -29,6 +29,12 @@ public class App
             return;
         }
 
+        if (!TmuxService.HasClaude())
+        {
+            AnsiConsole.MarkupLine("[yellow]Warning: 'claude' was not found in PATH.[/]");
+            AnsiConsole.MarkupLine("[grey]New sessions will fail to start. Install Claude Code: https://docs.anthropic.com/en/docs/claude-code[/]");
+        }
+
         LoadSessions();
 
         try

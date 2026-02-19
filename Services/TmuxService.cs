@@ -74,7 +74,9 @@ public abstract class TmuxService
 
     public static bool CreateSession(string name, string workingDirectory)
     {
-        var result = RunTmux("new-session", "-d", "-s", name, "-n", name, "-c", workingDirectory, "claude");
+        // Use a login shell to ensure the user's full PATH is loaded (e.g. npm-installed claude on WSL2)
+        var shell = Environment.GetEnvironmentVariable("SHELL") ?? "/bin/bash";
+        var result = RunTmux("new-session", "-d", "-s", name, "-n", name, "-c", workingDirectory, $"{shell} -lc claude");
         if (result == null) return false;
         // Prevent tmux from renaming the window to the running command
         RunTmux("set-option", "-t", name, "automatic-rename", "off");
@@ -131,6 +133,28 @@ public abstract class TmuxService
                 FileName = "tmux",
                 Arguments = "-V",
                 RedirectStandardOutput = true,
+                UseShellExecute = false,
+            };
+            var process = Process.Start(startInfo);
+            process?.WaitForExit();
+            return process?.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static bool HasClaude()
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "claude",
+                Arguments = "--version",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 UseShellExecute = false,
             };
             var process = Process.Start(startInfo);
