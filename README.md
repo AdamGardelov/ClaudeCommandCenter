@@ -8,7 +8,7 @@ A terminal UI for managing multiple Claude Code sessions via tmux. Lists your se
 
 - [.NET 10](https://dotnet.microsoft.com/download) SDK or runtime
 - [tmux](https://github.com/tmux/tmux)
-- Linux or macOS
+- Linux or macOS (Windows via [WSL2](docs/WSL2-SETUP.md))
 
 ## Build
 
