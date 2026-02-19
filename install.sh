@@ -40,11 +40,10 @@ tar -xzf "$TMPDIR/$ARCHIVE" -C "$TMPDIR"
 # Install
 if [ -w "$INSTALL_DIR" ]; then
   cp "$TMPDIR/$BINARY" "$INSTALL_DIR/$BINARY"
+  chmod +x "$INSTALL_DIR/$BINARY"
 else
   echo "Installing to $INSTALL_DIR (requires sudo)..."
-  sudo cp "$TMPDIR/$BINARY" "$INSTALL_DIR/$BINARY"
+  sudo install -m 755 "$TMPDIR/$BINARY" "$INSTALL_DIR/$BINARY"
 fi
-
-chmod +x "$INSTALL_DIR/$BINARY"
 
 echo "Installed $BINARY $LATEST to $INSTALL_DIR/$BINARY"
