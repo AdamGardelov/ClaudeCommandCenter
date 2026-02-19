@@ -61,12 +61,32 @@ ccc
 
 The app shows a split-panel TUI — sessions on the left, a live pane preview on the right. Sessions that have been idle for a few seconds are marked with `!` (waiting for input).
 
+### Grid View
+
+Press `G` to toggle a grid view that displays all sessions as rich panels in an auto-scaling grid. Each cell shows the session name, status, git branch, working directory, and live pane output.
+
+The grid auto-scales based on session count:
+
+| Sessions | Layout | Output lines per cell |
+|----------|--------|-----------------------|
+| 1 | 1x1 | ~30 lines |
+| 2 | 1x2 | ~15 lines |
+| 3–4 | 2x2 | ~10 lines |
+| 5–6 | 2x3 | ~5 lines |
+| 7–9 | 3x3 | ~3 lines |
+| 10+ | Falls back to list view |
+
+Press `Enter` on a grid cell to expand it full-screen with the complete live preview. Use `↑`/`↓` to cycle through sessions while expanded, and `Esc` to collapse back to the grid.
+
 ### Keybindings
+
+#### List View (default)
 
 | Key | Action |
 |-----|--------|
 | `j` / `k` / arrows | Navigate sessions |
 | `Enter` | Attach to selected session |
+| `G` | Toggle grid view |
 | `n` | Create new session (launches `claude` in a given directory) |
 | `f` | Open session directory in file manager |
 | `i` | Open session directory in IDE |
@@ -78,6 +98,26 @@ The app shows a split-panel TUI — sessions on the left, a live pane preview on
 | `N` | Reject — sends `n` to the selected session |
 | `S` | Send — type a message and send it to the selected session |
 | `q` | Quit |
+
+#### Grid View
+
+| Key | Action |
+|-----|--------|
+| `↑` `↓` `←` `→` | Navigate grid cells |
+| `Enter` | Expand selected cell full-screen |
+| `G` | Back to list view |
+| `Y` / `N` / `S` | Approve, reject, send (same as list view) |
+| `q` | Quit |
+
+#### Grid Expanded
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Cycle through sessions |
+| `Esc` | Collapse back to grid |
+| `Enter` | Attach to session |
+| `Y` / `N` / `S` | Approve, reject, send |
+| `G` | Back to list view |
 
 Arrow keys always work for navigation regardless of configuration. When you attach to a session, detach with the standard tmux prefix (`Ctrl-b d`) to return to the command center.
 
@@ -143,6 +183,7 @@ Each override supports three optional fields:
 | `open-config` | `c` | config | Yes |
 | `delete-session` | `d` | del | Yes |
 | `edit-session` | `e` | edit | Yes |
+| `toggle-grid` | `G` | grid | Yes |
 | `refresh` | `r` | (hidden) | Yes |
 | `quit` | `q` | quit | No |
 

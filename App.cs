@@ -12,6 +12,7 @@ public class App
     private readonly CccConfig _config = ConfigService.Load();
     private Dictionary<string, string> _keyMap = new();
     private string? _capturedPane;
+    private Dictionary<string, string> _allCapturedPanes = new();
     private DateTime _lastCapture = DateTime.MinValue;
     private string? _lastSelectedSession;
     private string? _lastSpinnerFrame;
@@ -76,10 +77,8 @@ public class App
 
             // Re-render when a status message expires
             if (_state.HasPendingStatus)
-            {
                 if (_state.GetActiveStatus() == null)
                     Render();
-            }
 
             // Re-render when spinner frame advances (only if sessions were spinning at last poll)
             var spinnerFrame = Renderer.GetSpinnerFrame();
@@ -122,6 +121,7 @@ public class App
                 s.IsWaitingForInput = old.IsWaitingForInput;
             }
         }
+
         _state.ClampCursor();
     }
 
@@ -130,6 +130,10 @@ public class App
         // Refresh waiting-for-input status on all sessions (single tmux call)
         TmuxService.DetectWaitingForInputBatch(_state.Sessions);
         _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput);
+
+        // In grid mode, capture panes for all sessions
+        if (_state.ViewMode is ViewMode.Grid or ViewMode.GridExpanded)
+            return UpdateAllCapturedPanes();
 
         var session = _state.GetSelectedSession();
         var sessionName = session?.Name;
@@ -141,7 +145,8 @@ public class App
             return true;
         }
 
-        if (session == null) return false;
+        if (session == null)
+            return false;
 
         var newContent = TmuxService.CapturePaneContent(session.Name);
         if (newContent != _capturedPane)
@@ -153,10 +158,44 @@ public class App
         return false;
     }
 
+    private bool UpdateAllCapturedPanes()
+    {
+        var changed = false;
+        var newPanes = new Dictionary<string, string>();
+
+        // In expanded mode, also update _capturedPane for the expanded session
+        var expandedIdx = _state.ExpandedSessionIndex ?? _state.CursorIndex;
+
+        foreach (var session in _state.Sessions)
+        {
+            var content = TmuxService.CapturePaneContent(session.Name);
+            if (content != null)
+                newPanes[session.Name] = content;
+
+            if (!changed)
+            {
+                _allCapturedPanes.TryGetValue(session.Name, out var oldContent);
+                if (content != oldContent)
+                    changed = true;
+            }
+        }
+
+        _allCapturedPanes = newPanes;
+
+        // Keep _capturedPane in sync for the expanded session
+        if (_state.ViewMode != ViewMode.GridExpanded || expandedIdx < 0 || expandedIdx >= _state.Sessions.Count)
+            return changed;
+
+        var expandedName = _state.Sessions[expandedIdx].Name;
+        _capturedPane = newPanes.GetValueOrDefault(expandedName);
+
+        return changed;
+    }
+
     private void Render()
     {
         Console.SetCursorPosition(0, 0);
-        AnsiConsole.Write(Renderer.BuildLayout(_state, _capturedPane));
+        AnsiConsole.Write(Renderer.BuildLayout(_state, _capturedPane, _allCapturedPanes));
     }
 
     private void HandleKey(ConsoleKeyInfo key)
@@ -173,15 +212,52 @@ public class App
             return;
         }
 
-        // Arrow keys are hardcoded fallbacks — always work
-        switch (key.Key)
+        // Grid/expanded mode arrow key handling
+        if (_state.ViewMode == ViewMode.Grid)
         {
-            case ConsoleKey.UpArrow:
-                MoveCursor(-1);
-                return;
-            case ConsoleKey.DownArrow:
-                MoveCursor(1);
-                return;
+            switch (key.Key)
+            {
+                case ConsoleKey.UpArrow:
+                    MoveGridCursor(0, -1);
+                    return;
+                case ConsoleKey.DownArrow:
+                    MoveGridCursor(0, 1);
+                    return;
+                case ConsoleKey.LeftArrow:
+                    MoveGridCursor(-1, 0);
+                    return;
+                case ConsoleKey.RightArrow:
+                    MoveGridCursor(1, 0);
+                    return;
+            }
+        }
+        else if (_state.ViewMode == ViewMode.GridExpanded)
+        {
+            switch (key.Key)
+            {
+                case ConsoleKey.UpArrow:
+                    CycleExpandedSession(-1);
+                    return;
+                case ConsoleKey.DownArrow:
+                    CycleExpandedSession(1);
+                    return;
+                case ConsoleKey.Escape:
+                    CollapseGrid();
+                    return;
+            }
+        }
+        else
+        {
+            // List view arrow keys
+            switch (key.Key)
+            {
+                case ConsoleKey.UpArrow:
+                    MoveCursor(-1);
+                    return;
+                case ConsoleKey.DownArrow:
+                    MoveCursor(1);
+                    return;
+            }
         }
 
         var keyId = ResolveKeyId(key);
@@ -204,18 +280,48 @@ public class App
     {
         switch (actionId)
         {
-            case "navigate-up":     MoveCursor(-1); break;
-            case "navigate-down":   MoveCursor(1); break;
-            case "approve":         SendQuickKey("y"); break;
-            case "reject":          SendQuickKey("n"); break;
-            case "send-text":       SendText(); break;
-            case "attach":          AttachToSession(); break;
-            case "new-session":     CreateNewSession(); break;
-            case "open-folder":     OpenFolder(); break;
-            case "open-ide":        OpenInIde(); break;
-            case "open-config":     OpenConfig(); break;
-            case "delete-session":  DeleteSession(); break;
-            case "edit-session":    EditSession(); break;
+            case "navigate-up":
+                MoveCursor(-1);
+                break;
+            case "navigate-down":
+                MoveCursor(1);
+                break;
+            case "approve":
+                SendQuickKey("y");
+                break;
+            case "reject":
+                SendQuickKey("n");
+                break;
+            case "send-text":
+                SendText();
+                break;
+            case "attach":
+                if (_state.ViewMode == ViewMode.Grid)
+                    ExpandGridCell();
+                else // List or GridExpanded — attach
+                    AttachToSession();
+                break;
+            case "toggle-grid":
+                ToggleGridView();
+                break;
+            case "new-session":
+                CreateNewSession();
+                break;
+            case "open-folder":
+                OpenFolder();
+                break;
+            case "open-ide":
+                OpenInIde();
+                break;
+            case "open-config":
+                OpenConfig();
+                break;
+            case "delete-session":
+                DeleteSession();
+                break;
+            case "edit-session":
+                EditSession();
+                break;
             case "refresh":
                 LoadSessions();
                 _state.SetStatus("Refreshed");
@@ -259,6 +365,7 @@ public class App
                 {
                     _state.SetStatus("Cancelled");
                 }
+
                 break;
 
             case ConsoleKey.Backspace:
@@ -275,16 +382,118 @@ public class App
 
     private void MoveCursor(int delta)
     {
-        if (_state.Sessions.Count == 0) return;
+        if (_state.Sessions.Count == 0)
+            return;
         _state.CursorIndex = Math.Clamp(_state.CursorIndex + delta, 0, _state.Sessions.Count - 1);
         _lastSelectedSession = null; // Force pane recapture
     }
 
+    private void MoveGridCursor(int dx, int dy)
+    {
+        if (_state.Sessions.Count == 0)
+            return;
+
+        var (cols, rows) = _state.GetGridDimensions();
+        if (cols == 0)
+            return;
+
+        var col = _state.CursorIndex % cols;
+        var row = _state.CursorIndex / cols;
+
+        col += dx;
+        row += dy;
+
+        // Wrap
+        if (col < 0)
+            col = cols - 1;
+        if (col >= cols)
+            col = 0;
+        if (row < 0)
+            row = rows - 1;
+        if (row >= rows)
+            row = 0;
+
+        var newIndex = row * cols + col;
+        if (newIndex < _state.Sessions.Count)
+        {
+            _state.CursorIndex = newIndex;
+            _lastSelectedSession = null;
+        }
+    }
+
+    private void ToggleGridView()
+    {
+        if (_state.ViewMode == ViewMode.List)
+        {
+            var (cols, _) = _state.GetGridDimensions();
+            if (cols == 0)
+            {
+                _state.SetStatus("Too many sessions for grid view (max 9)");
+                return;
+            }
+
+            _state.ViewMode = ViewMode.Grid;
+        }
+        else
+        {
+            _state.ViewMode = ViewMode.List;
+            _state.ExpandedSessionIndex = null;
+        }
+
+        _lastSelectedSession = null;
+    }
+
+    private void ExpandGridCell()
+    {
+        if (_state.Sessions.Count == 0)
+            return;
+        _state.ViewMode = ViewMode.GridExpanded;
+        _state.ExpandedSessionIndex = _state.CursorIndex;
+        _lastSelectedSession = null;
+
+        // Update capturedPane for the expanded session
+        var session = _state.Sessions[_state.CursorIndex];
+        _capturedPane = TmuxService.CapturePaneContent(session.Name);
+    }
+
+    private void CollapseGrid()
+    {
+        _state.ViewMode = ViewMode.Grid;
+        // Restore cursor to the previously expanded session
+        if (_state.ExpandedSessionIndex.HasValue)
+            _state.CursorIndex = _state.ExpandedSessionIndex.Value;
+        _state.ExpandedSessionIndex = null;
+        _lastSelectedSession = null;
+    }
+
+    private void CycleExpandedSession(int delta)
+    {
+        if (_state.Sessions.Count == 0)
+            return;
+
+        var idx = _state.ExpandedSessionIndex ?? _state.CursorIndex;
+        idx += delta;
+
+        // Wrap around
+        if (idx < 0)
+            idx = _state.Sessions.Count - 1;
+        if (idx >= _state.Sessions.Count)
+            idx = 0;
+
+        _state.ExpandedSessionIndex = idx;
+        _state.CursorIndex = idx;
+        _lastSelectedSession = null;
+
+        // Immediately update capturedPane for the newly expanded session
+        var session = _state.Sessions[idx];
+        _capturedPane = TmuxService.CapturePaneContent(session.Name);
+    }
 
     private void AttachToSession()
     {
         var session = _state.GetSelectedSession();
-        if (session == null) return;
+        if (session == null)
+            return;
 
         Console.CursorVisible = true;
         Console.Clear();
@@ -409,10 +618,8 @@ public class App
         }
 
         foreach (var (label, spectreColor) in ColorPalette)
-        {
             if (selected.EndsWith(label))
                 return spectreColor;
-        }
 
         return null;
     }
@@ -474,7 +681,7 @@ public class App
     private void OpenFolder()
     {
         var session = _state.GetSelectedSession();
-        if (session?.CurrentPath == null) 
+        if (session?.CurrentPath == null)
             return;
 
         try
@@ -499,10 +706,10 @@ public class App
 
     private static string GetFileManagerCommand()
     {
-        if (OperatingSystem.IsMacOS()) 
+        if (OperatingSystem.IsMacOS())
             return "open";
-        
-        if (OperatingSystem.IsWindows()) 
+
+        if (OperatingSystem.IsWindows())
             return "explorer";
 
         // Linux — check for WSL where explorer.exe is available
@@ -512,7 +719,10 @@ public class App
             if (version.Contains("microsoft", StringComparison.OrdinalIgnoreCase))
                 return "explorer.exe";
         }
-        catch { /* not WSL */ }
+        catch
+        {
+            /* not WSL */
+        }
 
         return "xdg-open";
     }
@@ -520,7 +730,8 @@ public class App
     private void OpenInIde()
     {
         var session = _state.GetSelectedSession();
-        if (session?.CurrentPath == null) return;
+        if (session?.CurrentPath == null)
+            return;
 
         try
         {
@@ -566,7 +777,8 @@ public class App
     private void DeleteSession()
     {
         var session = _state.GetSelectedSession();
-        if (session == null) return;
+        if (session == null)
+            return;
 
         _state.SetStatus($"Kill '{session.Name}'? (y/n)");
         Render();
@@ -585,6 +797,7 @@ public class App
             {
                 _state.SetStatus(killError);
             }
+
             LoadSessions();
         }
         else
@@ -596,7 +809,8 @@ public class App
     private void SendQuickKey(string key)
     {
         var session = _state.GetSelectedSession();
-        if (session == null) return;
+        if (session == null)
+            return;
 
         var error = TmuxService.SendKeys(session.Name, key);
         if (error == null)
@@ -613,7 +827,8 @@ public class App
     private void SendText()
     {
         var session = _state.GetSelectedSession();
-        if (session == null) return;
+        if (session == null)
+            return;
 
         _state.IsInputMode = true;
         _state.InputBuffer = "";
@@ -623,7 +838,8 @@ public class App
     private void EditSession()
     {
         var session = _state.GetSelectedSession();
-        if (session == null) return;
+        if (session == null)
+            return;
 
         Console.CursorVisible = true;
         Console.Clear();

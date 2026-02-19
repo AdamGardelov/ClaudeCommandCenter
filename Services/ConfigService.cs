@@ -103,13 +103,8 @@ public static class ConfigService
 
         // Add missing actions
         foreach (var (id, def) in defaults)
-        {
-            if (!config.Keybindings.ContainsKey(id))
-            {
-                config.Keybindings[id] = def;
+            if (config.Keybindings.TryAdd(id, def))
                 changed = true;
-            }
-        }
 
         // Remove stale actions
         var staleKeys = config.Keybindings.Keys
