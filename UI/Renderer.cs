@@ -185,7 +185,7 @@ public static class Renderer
             "[darkorange bold]q[/][grey] quit[/]");
     }
 
-    private static IRenderable CenterFiglet(string text, int availableWidth, Color color)
+    private static Padder CenterFiglet(string text, int availableWidth, Color color)
     {
         var figlet = new FigletText(text) { Pad = false }.Color(color).LeftJustified();
         var options = RenderOptions.Create(AnsiConsole.Console, AnsiConsole.Console.Profile.Capabilities);
