@@ -269,17 +269,18 @@ public static class Renderer
             rows.Add(new Markup(" [grey]No output[/]"));
         }
 
-        var borderColor = session.ColorTag != null
+        var sessionColor = session.ColorTag != null
             ? Style.Parse(session.ColorTag).Foreground
             : Color.Grey42;
 
-        if (!isSelected)
-            borderColor = new Color(
-                (byte)(borderColor.R / 2),
-                (byte)(borderColor.G / 2),
-                (byte)(borderColor.B / 2));
+        var borderColor = isSelected
+            ? Color.White
+            : new Color(
+                (byte)(sessionColor.R / 2),
+                (byte)(sessionColor.G / 2),
+                (byte)(sessionColor.B / 2));
 
-        var headerColor = isSelected ? session.ColorTag ?? "white" : "grey50";
+        var headerColor = session.ColorTag ?? "grey50";
         var headerName = Markup.Escape(session.Name);
 
         return new Panel(new Rows(rows))
