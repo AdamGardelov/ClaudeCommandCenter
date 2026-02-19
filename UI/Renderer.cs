@@ -121,10 +121,7 @@ public static class Renderer
         }
 
         var labelColor = session.ColorTag ?? "grey50";
-        var rows = new List<IRenderable>
-        {
-            new Markup($" [{labelColor}]Session:[/]  [white]{Markup.Escape(session.Name)}[/]"),
-        };
+        var rows = new List<IRenderable>();
 
         if (!string.IsNullOrWhiteSpace(session.Description))
             rows.Add(new Markup($" [{labelColor}]Desc:[/]     [italic grey70]{Markup.Escape(session.Description)}[/]"));
@@ -168,8 +165,9 @@ public static class Renderer
             : Color.Grey42;
 
         var headerColor = session.ColorTag ?? "grey70";
+        var headerName = Markup.Escape(session.Name);
         return new Panel(new Rows(rows))
-            .Header($"[{headerColor} bold] Live Preview [/]")
+            .Header($"[{headerColor} bold] {headerName} [/]")
             .BorderColor(borderColor)
             .Expand();
     }
