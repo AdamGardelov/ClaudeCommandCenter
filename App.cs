@@ -660,6 +660,11 @@ public class App
             AnsiConsole.MarkupLine($"\n[grey50]Group is full (9/9 sessions)[/]");
         }
 
+        // Pick new color
+        var currentColor = !string.IsNullOrEmpty(group.Color) ? group.Color : "none";
+        AnsiConsole.MarkupLine($"\n[grey70]Current color:[/] [{currentColor}]{currentColor}[/]");
+        var newColor = PickColor();
+
         Console.CursorVisible = false;
 
         var effectiveName = !string.IsNullOrWhiteSpace(newName) && newName != group.Name ? newName : group.Name;
@@ -713,13 +718,27 @@ public class App
                 break;
             }
 
-            if (!string.IsNullOrEmpty(group.Color))
+            var sessionColor = newColor ?? group.Color;
+            if (!string.IsNullOrEmpty(sessionColor))
             {
-                ConfigService.SaveColor(_config, sessionName, group.Color);
-                TmuxService.ApplyStatusColor(sessionName, group.Color);
+                ConfigService.SaveColor(_config, sessionName, sessionColor);
+                TmuxService.ApplyStatusColor(sessionName, sessionColor);
             }
 
             group.Sessions.Add(sessionName);
+            changed = true;
+        }
+
+        // Apply color change to all existing sessions
+        if (newColor != null)
+        {
+            group.Color = newColor;
+            foreach (var sessionName in group.Sessions)
+            {
+                ConfigService.SaveColor(_config, sessionName, newColor);
+                TmuxService.ApplyStatusColor(sessionName, newColor);
+            }
+
             changed = true;
         }
 
