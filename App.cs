@@ -699,36 +699,52 @@ public class App
             return;
         }
 
+        Console.CursorVisible = true;
+        Console.Clear();
+
+        // Check if worktrees are available
         var basePath = ConfigService.ExpandPath(_config.WorktreeBasePath);
-        if (!Directory.Exists(basePath))
+        var hasWorktrees = Directory.Exists(basePath) && ScanWorktreeFeatures(basePath).Count > 0;
+
+        if (hasWorktrees)
         {
-            _state.SetStatus($"Worktree path not found: {basePath}");
-            return;
+            var modePrompt = new SelectionPrompt<string>()
+                .Title("[grey70]Create group from[/]")
+                .HighlightStyle(new Style(Color.White, Color.Grey70))
+                .AddChoices("Worktree feature", "Manual (pick directories)", CancelChoice);
+
+            var mode = AnsiConsole.Prompt(modePrompt);
+            if (mode == CancelChoice)
+            {
+                Console.CursorVisible = false;
+                _state.SetStatus("Cancelled");
+                return;
+            }
+
+            if (mode.StartsWith("Worktree"))
+            {
+                CreateGroupFromWorktree(basePath);
+                return;
+            }
         }
 
-        // Scan for .feature-context.json files
+        CreateGroupManually();
+    }
+
+    private void CreateGroupFromWorktree(string basePath)
+    {
         var features = ScanWorktreeFeatures(basePath);
-        if (features.Count == 0)
-        {
-            _state.SetStatus("No worktrees found");
-            return;
-        }
-
-        // Filter out already-active groups
         var activeGroupNames = new HashSet<string>(_config.Groups.Keys);
         var available = features.Where(f => !activeGroupNames.Contains(f.Name)).ToList();
         if (available.Count == 0)
         {
+            Console.CursorVisible = false;
             _state.SetStatus("All worktrees already have active groups");
             return;
         }
 
-        Console.CursorVisible = true;
-        Console.Clear();
-
-        // Pick a feature
         var prompt = new SelectionPrompt<string>()
-            .Title("[grey70]Select a worktree feature to create a group from[/]")
+            .Title("[grey70]Select a worktree feature[/]")
             .HighlightStyle(new Style(Color.White, Color.Grey70));
 
         prompt.AddChoice(CancelChoice);
@@ -746,7 +762,6 @@ public class App
             return;
         }
 
-        // Match selection back to feature
         var selectedName = selected.Split(" - ")[0];
         var feature = available.FirstOrDefault(f => f.Name == selectedName);
         if (feature == null)
@@ -756,12 +771,9 @@ public class App
             return;
         }
 
-        // Pick a color
         var color = PickColor();
-
         Console.CursorVisible = false;
 
-        // Create tmux sessions for each repo
         var sessionNames = new List<string>();
         foreach (var (repoName, repoPath) in feature.Repos)
         {
@@ -782,7 +794,6 @@ public class App
             sessionNames.Add(sessionName);
         }
 
-        // Save group to config
         var group = new SessionGroup
         {
             Name = feature.Name,
@@ -792,14 +803,126 @@ public class App
             Sessions = sessionNames,
         };
         ConfigService.SaveGroup(_config, group);
+        FinishGroupCreation(feature.Name);
+    }
 
+    private void CreateGroupManually()
+    {
+        var name = AnsiConsole.Prompt(
+            new TextPrompt<string>("[grey70]Group name[/] [grey](empty to cancel)[/][grey70]:[/]")
+                .AllowEmpty()
+                .PromptStyle(new Style(Color.White)));
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            Console.CursorVisible = false;
+            _state.SetStatus("Cancelled");
+            return;
+        }
+
+        name = SanitizeTmuxSessionName(name);
+
+        if (_config.Groups.ContainsKey(name))
+        {
+            Console.CursorVisible = false;
+            _state.SetStatus($"Group '{name}' already exists");
+            return;
+        }
+
+        var directories = new List<(string Dir, string Label)>();
+
+        for (var i = 0; i < 4; i++)
+        {
+            AnsiConsole.MarkupLine($"\n[grey70]Session {i + 1} of 4[/]");
+
+            var dir = PickDirectory();
+            if (dir == null)
+            {
+                if (directories.Count == 0)
+                {
+                    Console.CursorVisible = false;
+                    _state.SetStatus("Cancelled");
+                    return;
+                }
+
+                break; // Done adding sessions
+            }
+
+            dir = ConfigService.ExpandPath(dir);
+            if (!Directory.Exists(dir))
+            {
+                AnsiConsole.MarkupLine("[red]Directory not found, skipping[/]");
+                continue;
+            }
+
+            var label = Path.GetFileName(dir.TrimEnd('/'));
+            directories.Add((dir, label));
+
+            if (directories.Count >= 4)
+                break;
+
+            if (directories.Count >= 1)
+            {
+                var more = AnsiConsole.Prompt(
+                    new SelectionPrompt<string>()
+                        .Title("[grey70]Add another session?[/]")
+                        .HighlightStyle(new Style(Color.White, Color.Grey70))
+                        .AddChoices("Yes", "No, create group"));
+
+                if (more.StartsWith("No"))
+                    break;
+            }
+        }
+
+        if (directories.Count == 0)
+        {
+            Console.CursorVisible = false;
+            _state.SetStatus("No sessions added");
+            return;
+        }
+
+        var color = PickColor();
+        Console.CursorVisible = false;
+
+        var sessionNames = new List<string>();
+        foreach (var (dir, label) in directories)
+        {
+            var sessionName = SanitizeTmuxSessionName($"{name}-{label}");
+            var error = TmuxService.CreateSession(sessionName, dir);
+            if (error != null)
+            {
+                _state.SetStatus($"Failed to create session '{sessionName}': {error}");
+                return;
+            }
+
+            if (color != null)
+            {
+                ConfigService.SaveColor(_config, sessionName, color);
+                TmuxService.ApplyStatusColor(sessionName, color);
+            }
+
+            sessionNames.Add(sessionName);
+        }
+
+        var group = new SessionGroup
+        {
+            Name = name,
+            Description = "",
+            Color = color ?? "",
+            WorktreePath = "",
+            Sessions = sessionNames,
+        };
+        ConfigService.SaveGroup(_config, group);
+        FinishGroupCreation(name);
+    }
+
+    private void FinishGroupCreation(string groupName)
+    {
         LoadSessions();
-
-        // Switch to group grid view
         _state.ActiveSection = ActiveSection.Groups;
-        _state.GroupCursor = _state.Groups.FindIndex(g => g.Name == feature.Name);
+        _state.GroupCursor = _state.Groups.FindIndex(g => g.Name == groupName);
         if (_state.GroupCursor < 0) _state.GroupCursor = 0;
-        _state.EnterGroupGrid(feature.Name);
+        _state.EnterGroupGrid(groupName);
         _lastSelectedSession = null;
     }
 
