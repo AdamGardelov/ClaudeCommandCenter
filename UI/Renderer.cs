@@ -243,9 +243,6 @@ public static class Renderer
         if (session.GitBranch != null)
             rows.Add(new Markup($" [{labelColor}]Branch:[/]   [aqua]{Markup.Escape(session.GitBranch)}[/]"));
 
-        if (session.IsWorktree)
-            rows.Add(new Markup($" [{labelColor}]Worktree:[/] [mediumpurple2]yes[/]"));
-
         rows.Add(new Markup($" [{labelColor}]Created:[/]  [white]{session.Created?.ToString("yyyy-MM-dd HH:mm:ss") ?? "unknown"}[/]"));
         rows.Add(new Markup($" [{labelColor}]Status:[/]   {StatusLabel(session)}"));
         rows.Add(new Rule().RuleStyle(Style.Parse(session.ColorTag ?? "grey42")));
@@ -291,7 +288,6 @@ public static class Renderer
 
         rows.Add(new Markup($" [{colorTag}]Group:[/]     [white bold]{Markup.Escape(group.Name)}[/]"));
         rows.Add(new Markup($" [{colorTag}]Feature:[/]   [grey70]{Markup.Escape(group.Description)}[/]"));
-        rows.Add(new Markup($" [{colorTag}]Worktree:[/]  [white]{Markup.Escape(group.WorktreePath)}[/]"));
         rows.Add(new Markup($" [{colorTag}]Sessions:[/]  [white]{group.Sessions.Count}[/]"));
         rows.Add(new Rule().RuleStyle(Style.Parse(colorTag)));
 
