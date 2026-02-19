@@ -32,9 +32,7 @@ public static class UpdateChecker
                 && Version.TryParse(latest, out var latestV)
                 && Version.TryParse(CurrentVersion, out var currentV)
                 && latestV > currentV)
-            {
                 return latest;
-            }
 
             return null;
         }
