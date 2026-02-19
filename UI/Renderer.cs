@@ -144,7 +144,7 @@ public static class Renderer
         }
 
         return new Panel(new Rows(rows))
-            .Header("[grey70] Claude Sessions [/]")
+            .Header("[grey70] Workspace [/]")
             .BorderColor(borderColor)
             .Expand();
     }
@@ -499,6 +499,9 @@ public static class Renderer
         if (visible.Count == 0)
             return new Markup(" ");
 
+        var sessionOnlyActions = new HashSet<string> { "approve", "reject", "send-text" };
+        var onGroup = state.ActiveSection == ActiveSection.Groups;
+
         var parts = new List<string>();
         var prevGroup = -1;
 
@@ -509,7 +512,10 @@ public static class Renderer
                 parts.Add("[grey]│[/]");
             prevGroup = group;
 
-            parts.Add($"[grey70 bold]{Markup.Escape(b.Key)}[/][grey] {Markup.Escape(b.Label!)} [/]");
+            var dimmed = onGroup && sessionOnlyActions.Contains(b.ActionId);
+            var keyColor = dimmed ? "grey35" : "grey70 bold";
+            var labelColor = dimmed ? "grey27" : "grey";
+            parts.Add($"[{keyColor}]{Markup.Escape(b.Key)}[/][{labelColor}] {Markup.Escape(b.Label!)} [/]");
         }
 
         // Tab hint when groups exist
