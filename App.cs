@@ -701,9 +701,11 @@ public class App
         }
 
         // Create new sessions
+        var usedNames = new HashSet<string>(group.Sessions, StringComparer.Ordinal);
         foreach (var (dir, label) in newDirectories)
         {
-            var sessionName = SanitizeTmuxSessionName($"{effectiveName}-{label}");
+            var sessionName = UniqueSessionName(SanitizeTmuxSessionName($"{effectiveName}-{label}"), usedNames);
+            usedNames.Add(sessionName);
             var error = TmuxService.CreateSession(sessionName, dir);
             if (error != null)
             {
@@ -1046,9 +1048,11 @@ public class App
         Console.CursorVisible = false;
 
         var sessionNames = new List<string>();
+        var usedNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (dir, label) in directories)
         {
-            var sessionName = SanitizeTmuxSessionName($"{name}-{label}");
+            var sessionName = UniqueSessionName(SanitizeTmuxSessionName($"{name}-{label}"), usedNames);
+            usedNames.Add(sessionName);
             var error = TmuxService.CreateSession(sessionName, dir);
             if (error != null)
             {
@@ -1091,6 +1095,21 @@ public class App
     {
         // tmux silently replaces dots and colons with underscores in session names
         return name.Replace('.', '_').Replace(':', '_');
+    }
+
+    private static string UniqueSessionName(string baseName, ICollection<string> existing)
+    {
+        if (!existing.Contains(baseName))
+            return baseName;
+
+        for (var i = 2; i <= 99; i++)
+        {
+            var candidate = $"{baseName}-{i}";
+            if (!existing.Contains(candidate))
+                return candidate;
+        }
+
+        return baseName; // Shouldn't happen with max 8 sessions
     }
 
     private record WorktreeFeature(string Name, string Description, string WorktreePath, Dictionary<string, string> Repos);
