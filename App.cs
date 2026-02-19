@@ -240,13 +240,16 @@ public class App
             case 'i':
                 OpenInIde();
                 break;
-            case 'y':
+            case 'Y':
                 SendQuickKey("y");
                 break;
             case 'N':
                 SendQuickKey("n");
                 break;
-            case 's':
+            case 'c':
+                OpenConfig();
+                break;
+            case 'S':
                 SendText();
                 break;
         }
@@ -456,6 +459,28 @@ public class App
             };
             Process.Start(startInfo);
             _state.SetStatus($"Opened in {_config.IdeCommand}");
+        }
+        catch
+        {
+            _state.SetStatus($"Failed to run '{_config.IdeCommand}'");
+        }
+    }
+
+    private void OpenConfig()
+    {
+        var configPath = ConfigService.GetConfigPath();
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = _config.IdeCommand,
+                ArgumentList = { configPath },
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            Process.Start(startInfo);
+            _state.SetStatus($"Opened config in {_config.IdeCommand}");
         }
         catch
         {

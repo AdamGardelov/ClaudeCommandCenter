@@ -10,6 +10,8 @@ public static class ConfigService
 
     private static readonly string ConfigPath = Path.Combine(ConfigDir, "config.json");
 
+    public static string GetConfigPath() => ConfigPath;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,

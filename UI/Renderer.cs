@@ -173,14 +173,15 @@ public static class Renderer
             return new Markup($" [yellow]{Markup.Escape(status)}[/]");
 
         return new Markup(
-            " [darkorange bold]y[/][grey] approve [/] " +
+            " [darkorange bold]Y[/][grey] approve [/] " +
             "[darkorange bold]N[/][grey] reject [/] " +
-            "[darkorange bold]s[/][grey] send [/] " +
+            "[darkorange bold]S[/][grey] send [/] " +
             "[grey]│[/] " +
             "[darkorange bold]Enter[/][grey] attach [/] " +
             "[darkorange bold]n[/][grey] new [/] " +
             "[darkorange bold]f[/][grey] folder [/] " +
             "[darkorange bold]i[/][grey] ide [/] " +
+            "[darkorange bold]c[/][grey] config [/] " +
             "[darkorange bold]d[/][grey] del [/] " +
             "[darkorange bold]R[/][grey] rename [/] " +
             "[darkorange bold]q[/][grey] quit[/]");
