@@ -6,6 +6,8 @@ public class AppState
 {
     public List<TmuxSession> Sessions { get; set; } = [];
     public int CursorIndex { get; set; }
+    public ViewMode ViewMode { get; set; } = ViewMode.List;
+    public int? ExpandedSessionIndex { get; set; }
 
     public bool Running { get; set; } = true;
     public bool IsInputMode { get; set; }
@@ -19,6 +21,39 @@ public class AppState
         if (CursorIndex >= 0 && CursorIndex < Sessions.Count)
             return Sessions[CursorIndex];
         return null;
+    }
+
+    /// <summary>
+    /// Returns (columns, rows) for the grid based on session count.
+    /// </summary>
+    public (int Cols, int Rows) GetGridDimensions()
+    {
+        return Sessions.Count switch
+        {
+            0 => (1, 1),
+            1 => (1, 1),
+            2 => (2, 1),
+            3 or 4 => (2, 2),
+            5 or 6 => (3, 2),
+            7 or 8 or 9 => (3, 3),
+            _ => (0, 0), // Signals "too many for grid"
+        };
+    }
+
+    /// <summary>
+    /// Returns the number of pane output lines to show per grid cell.
+    /// </summary>
+    public int GetGridCellOutputLines()
+    {
+        return Sessions.Count switch
+        {
+            1 => 30,
+            2 => 15,
+            3 or 4 => 10,
+            5 or 6 => 5,
+            7 or 8 or 9 => 3,
+            _ => 0,
+        };
     }
 
     public void SetStatus(string message)
@@ -55,5 +90,13 @@ public class AppState
     public void ClampCursor()
     {
         CursorIndex = Sessions.Count == 0 ? 0 : Math.Clamp(CursorIndex, 0, Sessions.Count - 1);
+
+        if (ExpandedSessionIndex.HasValue)
+        {
+            if (Sessions.Count == 0)
+                ExpandedSessionIndex = null;
+            else
+                ExpandedSessionIndex = Math.Clamp(ExpandedSessionIndex.Value, 0, Sessions.Count - 1);
+        }
     }
 }

@@ -15,7 +15,8 @@ public static class Renderer
         return SpinnerFrames[index];
     }
 
-    public static IRenderable BuildLayout(AppState state, string? capturedPane)
+    public static IRenderable BuildLayout(AppState state, string? capturedPane,
+        Dictionary<string, string>? allCapturedPanes = null)
     {
         var layout = new Layout("Root")
             .SplitRows(
@@ -24,6 +25,27 @@ public static class Renderer
                 new Layout("StatusBar").Size(1));
 
         layout["Header"].Update(BuildHeader(state));
+
+        if (state.ViewMode is ViewMode.Grid or ViewMode.GridExpanded)
+        {
+            var (cols, _) = state.GetGridDimensions();
+            if (cols == 0) // Too many sessions, fall back to list
+            {
+                state.ViewMode = ViewMode.List;
+            }
+            else if (state.ViewMode == ViewMode.GridExpanded && state.ExpandedSessionIndex.HasValue)
+            {
+                layout["Main"].Update(BuildExpandedGridLayout(state, capturedPane));
+                layout["StatusBar"].Update(BuildGridExpandedStatusBar(state));
+                return layout;
+            }
+            else
+            {
+                layout["Main"].Update(BuildGridLayout(state, allCapturedPanes));
+                layout["StatusBar"].Update(BuildGridStatusBar(state));
+                return layout;
+            }
+        }
 
         layout["Main"].SplitColumns(
             new Layout("Sessions").Size(35),
@@ -99,9 +121,10 @@ public static class Renderer
             .Expand();
     }
 
-    private static Panel BuildPreviewPanel(AppState state, string? capturedPane)
+    private static Panel BuildPreviewPanel(AppState state, string? capturedPane,
+        TmuxSession? sessionOverride = null)
     {
-        var session = state.GetSelectedSession();
+        var session = sessionOverride ?? state.GetSelectedSession();
 
         if (session == null)
         {
@@ -172,16 +195,179 @@ public static class Renderer
             .Expand();
     }
 
+    private static IRenderable BuildGridLayout(AppState state, Dictionary<string, string>? allCapturedPanes)
+    {
+        var (cols, gridRows) = state.GetGridDimensions();
+        var outputLines = state.GetGridCellOutputLines();
+
+        var layoutRows = new List<Layout>();
+
+        for (var row = 0; row < gridRows; row++)
+        {
+            var layoutCols = new List<Layout>();
+
+            for (var col = 0; col < cols; col++)
+            {
+                var idx = row * cols + col;
+                var cellName = $"Cell_{row}_{col}";
+                var cellLayout = new Layout(cellName);
+
+                if (idx < state.Sessions.Count)
+                {
+                    var session = state.Sessions[idx];
+                    var isSelected = idx == state.CursorIndex;
+                    var pane = allCapturedPanes?.GetValueOrDefault(session.Name);
+                    cellLayout.Update(BuildGridCell(session, isSelected, pane, outputLines));
+                }
+                else
+                {
+                    cellLayout.Update(new Panel(new Text("")).BorderColor(Color.Grey19).Expand());
+                }
+
+                layoutCols.Add(cellLayout);
+            }
+
+            var rowLayout = new Layout($"Row_{row}");
+            rowLayout.SplitColumns(layoutCols.ToArray());
+            layoutRows.Add(rowLayout);
+        }
+
+        var grid = new Layout("Grid");
+        grid.SplitRows(layoutRows.ToArray());
+        return grid;
+    }
+
+    private static Panel BuildGridCell(TmuxSession session, bool isSelected, string? capturedPane, int outputLines)
+    {
+        var rows = new List<IRenderable>();
+
+        var spinner = Markup.Escape(GetSpinnerFrame());
+        var status = session.IsWaitingForInput ? "[yellow bold]![/]" : $"[green]{spinner}[/]";
+        var name = Markup.Escape(session.Name);
+        var branch = session.GitBranch != null ? $" [aqua]{Markup.Escape(session.GitBranch)}[/]" : "";
+        rows.Add(new Markup($" {status} [white bold]{name}[/]{branch}"));
+
+        if (session.CurrentPath != null)
+        {
+            var shortPath = ShortenPath(session.CurrentPath);
+            rows.Add(new Markup($" [grey50]{Markup.Escape(shortPath)}[/]"));
+        }
+
+        var labelColor = session.ColorTag ?? "grey50";
+        rows.Add(new Rule().RuleStyle(Style.Parse(labelColor)));
+
+        if (!string.IsNullOrWhiteSpace(capturedPane) && outputLines > 0)
+        {
+            var maxWidth = Math.Max(20, Console.WindowWidth / 2 - 6);
+            var lines = capturedPane.Split('\n');
+            var offset = Math.Max(0, lines.Length - outputLines);
+            var visible = lines.AsSpan(offset, Math.Min(outputLines, lines.Length - offset));
+
+            foreach (var line in visible)
+                rows.Add(AnsiParser.ParseLine(line, maxWidth));
+        }
+        else if (outputLines > 0)
+        {
+            rows.Add(new Markup(" [grey]No output[/]"));
+        }
+
+        var borderColor = session.ColorTag != null
+            ? Style.Parse(session.ColorTag).Foreground
+            : Color.Grey42;
+
+        if (!isSelected)
+            borderColor = new Color(
+                (byte)(borderColor.R / 2),
+                (byte)(borderColor.G / 2),
+                (byte)(borderColor.B / 2));
+
+        var headerColor = isSelected ? session.ColorTag ?? "white" : "grey50";
+        var headerName = Markup.Escape(session.Name);
+
+        return new Panel(new Rows(rows))
+            .Header($"[{headerColor} bold] {headerName} [/]")
+            .BorderColor(borderColor)
+            .Expand();
+    }
+
+    private static IRenderable BuildExpandedGridLayout(AppState state, string? capturedPane)
+    {
+        var expandedIdx = state.ExpandedSessionIndex ?? state.CursorIndex;
+        var expandedSession = expandedIdx >= 0 && expandedIdx < state.Sessions.Count
+            ? state.Sessions[expandedIdx]
+            : null;
+
+        if (expandedSession != null)
+            return BuildPreviewPanel(state, capturedPane, expandedSession);
+
+        return new Panel(new Text("No session selected"))
+            .BorderColor(Color.Grey42)
+            .Expand();
+    }
+
+    private static Markup BuildGridStatusBar(AppState state)
+    {
+        if (state.IsInputMode)
+            return BuildInputStatusBar(state);
+
+        var status = state.GetActiveStatus();
+        if (status != null)
+            return new Markup($" [yellow]{Markup.Escape(status)}[/]");
+
+        return new Markup(
+            " [grey70 bold]arrows[/][grey] navigate [/]" +
+            "[grey]│[/] " +
+            "[grey70 bold]Enter[/][grey] expand [/]" +
+            "[grey70 bold]Y[/][grey] approve [/]" +
+            "[grey70 bold]N[/][grey] reject [/]" +
+            "[grey70 bold]S[/][grey] send [/]" +
+            "[grey]│[/] " +
+            "[grey70 bold]G[/][grey] list view [/]" +
+            "[grey70 bold]q[/][grey] quit [/]");
+    }
+
+    private static Markup BuildGridExpandedStatusBar(AppState state)
+    {
+        if (state.IsInputMode)
+            return BuildInputStatusBar(state);
+
+        var status = state.GetActiveStatus();
+        if (status != null)
+            return new Markup($" [yellow]{Markup.Escape(status)}[/]");
+
+        return new Markup(
+            " [grey70 bold]up/dn[/][grey] switch session [/]" +
+            "[grey]│[/] " +
+            "[grey70 bold]Esc[/][grey] collapse [/]" +
+            "[grey70 bold]Enter[/][grey] attach [/]" +
+            "[grey70 bold]Y[/][grey] approve [/]" +
+            "[grey70 bold]N[/][grey] reject [/]" +
+            "[grey70 bold]S[/][grey] send [/]" +
+            "[grey]│[/] " +
+            "[grey70 bold]G[/][grey] list view [/]");
+    }
+
+    private static Markup BuildInputStatusBar(AppState state)
+    {
+        var target = Markup.Escape(state.InputTarget ?? "");
+        var buffer = Markup.Escape(state.InputBuffer);
+        return new Markup(
+            $" [grey70]Send to[/] [white]{target}[/][grey70]>[/] [white]{buffer}[/][grey]▌[/]" +
+            $"  [grey50]Enter[/][grey] send · [/][grey50]Esc[/][grey] cancel[/]");
+    }
+
+    private static string ShortenPath(string path)
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (path.StartsWith(home))
+            return "~" + path[home.Length..];
+        return path;
+    }
+
     private static Markup BuildStatusBar(AppState state)
     {
         if (state.IsInputMode)
-        {
-            var target = Markup.Escape(state.InputTarget ?? "");
-            var buffer = Markup.Escape(state.InputBuffer);
-            return new Markup(
-                $" [grey70]Send to[/] [white]{target}[/][grey70]>[/] [white]{buffer}[/][grey]▌[/]" +
-                $"  [grey50]Enter[/][grey] send · [/][grey50]Esc[/][grey] cancel[/]");
-        }
+            return BuildInputStatusBar(state);
 
         var status = state.GetActiveStatus();
 

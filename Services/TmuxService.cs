@@ -9,13 +9,15 @@ public abstract class TmuxService
     public static List<TmuxSession> ListSessions()
     {
         var output = RunTmux("list-sessions", "-F", "#{session_name}\t#{session_created}\t#{session_attached}\t#{session_windows}\t#{pane_current_path}");
-        if (output == null) return [];
+        if (output == null)
+            return [];
 
         var sessions = new List<TmuxSession>();
         foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var parts = line.Split('\t');
-            if (parts.Length < 4) continue;
+            if (parts.Length < 4)
+                continue;
 
             var session = new TmuxSession
             {
@@ -49,7 +51,8 @@ public abstract class TmuxService
 
     public static void DetectWaitingForInputBatch(List<TmuxSession> sessions)
     {
-        if (sessions.Count == 0) return;
+        if (sessions.Count == 0)
+            return;
 
         foreach (var session in sessions)
         {
@@ -103,10 +106,12 @@ public abstract class TmuxService
 
     private static void DetectGitInfo(TmuxSession session)
     {
-        if (session.CurrentPath == null) return;
+        if (session.CurrentPath == null)
+            return;
 
         var branch = RunGit(session.CurrentPath, "rev-parse", "--abbrev-ref", "HEAD");
-        if (branch == null) return;
+        if (branch == null)
+            return;
 
         session.GitBranch = branch;
 
@@ -138,7 +143,8 @@ public abstract class TmuxService
         // Use a login shell to ensure the user's full PATH is loaded (e.g. npm-installed claude on WSL2)
         var shell = Environment.GetEnvironmentVariable("SHELL") ?? "/bin/bash";
         var (success, error) = RunTmuxWithError("new-session", "-d", "-s", name, "-n", name, "-c", workingDirectory, $"{shell} -lc claude");
-        if (!success) return error ?? "Failed to create tmux session";
+        if (!success)
+            return error ?? "Failed to create tmux session";
         // Prevent tmux from renaming the window to the running command
         RunTmux("set-option", "-t", name, "automatic-rename", "off");
         return null;
@@ -169,7 +175,9 @@ public abstract class TmuxService
         // send-keys with -l sends literal text (no key name interpretation),
         // then a separate Enter keypress to submit
         var (success, error) = RunTmuxWithError("send-keys", "-t", sessionName, "-l", text);
-        if (!success) return error ?? "Failed to send keys";
+        if (!success)
+            return error ?? "Failed to send keys";
+        
         RunTmux("send-keys", "-t", sessionName, "Enter");
         return null;
     }
@@ -251,7 +259,8 @@ public abstract class TmuxService
                 startInfo.ArgumentList.Add(arg);
 
             var process = Process.Start(startInfo);
-            if (process == null) return null;
+            if (process == null)
+                return null;
 
             var output = process.StandardOutput.ReadToEnd();
             process.WaitForExit();
@@ -280,12 +289,14 @@ public abstract class TmuxService
                 startInfo.ArgumentList.Add(arg);
 
             var process = Process.Start(startInfo);
-            if (process == null) return (false, "Failed to start tmux");
+            if (process == null)
+                return (false, "Failed to start tmux");
 
             var stderr = process.StandardError.ReadToEnd();
             process.WaitForExit();
 
-            if (process.ExitCode == 0) return (true, null);
+            if (process.ExitCode == 0)
+                return (true, null);
 
             var error = stderr.Trim();
             return (false, string.IsNullOrEmpty(error) ? "tmux exited with an error" : error);
@@ -312,7 +323,8 @@ public abstract class TmuxService
                 startInfo.ArgumentList.Add(arg);
 
             var process = Process.Start(startInfo);
-            if (process == null) return null;
+            if (process == null)
+                return null;
 
             var output = process.StandardOutput.ReadToEnd();
             process.WaitForExit();
