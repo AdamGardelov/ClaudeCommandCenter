@@ -86,7 +86,6 @@ jobs:
           -r ${{ matrix.rid }}
           --self-contained
           -p:PublishSingleFile=true
-          -p:PublishTrimmed=true
           -p:Version=${{ needs.calculate-version.outputs.version }}
           -o publish
 
