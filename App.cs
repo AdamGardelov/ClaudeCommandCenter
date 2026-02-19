@@ -20,6 +20,7 @@ public class App
     private bool _hasSpinningSessions;
     private bool _claudeAvailable;
     private Task<string?>? _updateCheck;
+    private bool _wantsUpdate;
 
     public void Run()
     {
@@ -63,6 +64,9 @@ public class App
             Console.CursorVisible = true;
             Console.Write("\e[?1049l"); // Leave alternate screen
         }
+
+        if (_wantsUpdate)
+            RunUpdate();
     }
 
     private void MainLoop()
@@ -378,6 +382,13 @@ public class App
                 break;
             case "edit-session":
                 EditSession();
+                break;
+            case "update":
+                if (_state.LatestVersion != null)
+                {
+                    _wantsUpdate = true;
+                    _state.Running = false;
+                }
                 break;
             case "refresh":
                 LoadSessions();
@@ -804,6 +815,22 @@ public class App
         Console.CursorVisible = false;
         LoadSessions();
         _lastSelectedSession = null;
+    }
+
+    private void RunUpdate()
+    {
+        AnsiConsole.MarkupLine($"[yellow]Updating to v{_state.LatestVersion}...[/]\n");
+        var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = "bash",
+            ArgumentList =
+            {
+                "-c",
+                "curl -fsSL https://raw.githubusercontent.com/AdamGardelov/ClaudeCommandCenter/main/install.sh | bash"
+            },
+            UseShellExecute = false,
+        });
+        process?.WaitForExit();
     }
 
     private void CreateNewSession()

@@ -62,7 +62,7 @@ public static class Renderer
     {
         var versionText = $"[grey50]v{_version}[/]";
         if (state.LatestVersion != null)
-            versionText += $" [yellow bold]v{state.LatestVersion} available[/]";
+            versionText += $" [yellow bold]v{state.LatestVersion} available · u to update[/]";
 
         var left = new Markup($"[mediumpurple3 bold] Claude Command Center[/] {versionText}");
 

@@ -124,6 +124,14 @@ public static class KeyBindingService
         },
         new()
         {
+            ActionId = "update",
+            Key = "u",
+            Label = "update",
+            CanDisable = true,
+            StatusBarOrder = -1 // Shown conditionally by renderer when update available
+        },
+        new()
+        {
             ActionId = "refresh",
             Key = "r",
             Label = null,
