@@ -389,6 +389,7 @@ public class App
                     _wantsUpdate = true;
                     _state.Running = false;
                 }
+
                 break;
             case "refresh":
                 LoadSessions();
