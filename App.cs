@@ -369,7 +369,7 @@ public class App
     [
         ("Steel Blue", "SteelBlue"),
         ("Indian Red", "IndianRed"),
-        ("Medium Purple", "MediumPurple2"),
+        ("Medium Purple", "MediumPurple"),
         ("Cadet Blue", "CadetBlue"),
         ("Light Salmon", "LightSalmon3"),
         ("Dark Sea Green", "DarkSeaGreen"),
