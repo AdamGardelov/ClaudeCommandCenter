@@ -111,10 +111,8 @@ public class App
             if (_config.SessionDescriptions.TryGetValue(s.Name, out var desc))
                 s.Description = desc;
             if (_config.SessionColors.TryGetValue(s.Name, out var color))
-            {
                 s.ColorTag = color;
-                TmuxService.ApplyStatusColor(s.Name, color);
-            }
+            TmuxService.ApplyStatusColor(s.Name, color ?? "grey42");
 
             // Preserve content tracking state so sessions don't briefly flash as "working"
             if (oldSessions.TryGetValue(s.Name, out var old))
@@ -311,7 +309,7 @@ public class App
         Console.Clear();
 
         var name = AnsiConsole.Prompt(
-            new TextPrompt<string>("[darkorange]Session name[/] [grey](empty to go back)[/][darkorange]:[/]")
+            new TextPrompt<string>("[grey70]Session name[/] [grey](empty to go back)[/][grey70]:[/]")
                 .AllowEmpty()
                 .PromptStyle(new Style(Color.White)));
 
@@ -323,7 +321,7 @@ public class App
         }
 
         var description = AnsiConsole.Prompt(
-            new TextPrompt<string>("[darkorange]Description[/] [grey](optional)[/][darkorange]:[/]")
+            new TextPrompt<string>("[grey70]Description[/] [grey](optional)[/][grey70]:[/]")
                 .AllowEmpty()
                 .PromptStyle(new Style(Color.White)));
 
@@ -353,10 +351,8 @@ public class App
             if (!string.IsNullOrWhiteSpace(description))
                 ConfigService.SaveDescription(_config, name, description);
             if (color != null)
-            {
                 ConfigService.SaveColor(_config, name, color);
-                TmuxService.ApplyStatusColor(name, color);
-            }
+            TmuxService.ApplyStatusColor(name, color ?? "grey42");
             TmuxService.AttachSession(name);
         }
         else
@@ -384,8 +380,8 @@ public class App
     private static string? PickColor()
     {
         var prompt = new SelectionPrompt<string>()
-            .Title("[darkorange]Color[/] [grey](optional)[/]")
-            .HighlightStyle(new Style(Color.White, Color.DarkOrange));
+            .Title("[grey70]Color[/] [grey](optional)[/]")
+            .HighlightStyle(new Style(Color.White, Color.Grey70));
 
         prompt.AddChoice("None");
         foreach (var (label, spectreColor) in ColorPalette)
@@ -419,9 +415,9 @@ public class App
         while (true)
         {
             var prompt = new SelectionPrompt<string>()
-                .Title("[darkorange]Pick a directory[/]")
+                .Title("[grey70]Pick a directory[/]")
                 .PageSize(15)
-                .HighlightStyle(new Style(Color.White, Color.DarkOrange))
+                .HighlightStyle(new Style(Color.White, Color.Grey70))
                 .MoreChoicesText("[grey](Move up and down to reveal more)[/]");
 
             foreach (var fav in favorites)
@@ -453,7 +449,7 @@ public class App
     private static string? PromptCustomPath()
     {
         var path = AnsiConsole.Prompt(
-            new TextPrompt<string>("[darkorange]Working directory:[/]")
+            new TextPrompt<string>("[grey70]Working directory:[/]")
                 .AllowEmpty()
                 .PromptStyle(new Style(Color.White)));
 
@@ -618,17 +614,17 @@ public class App
         Console.Clear();
 
         var escapedName = Markup.Escape(session.Name);
-        AnsiConsole.MarkupLine($"[darkorange bold]Edit session[/] [white]'{escapedName}'[/] [grey](empty = keep current)[/]\n");
+        AnsiConsole.MarkupLine($"[grey70 bold]Edit session[/] [white]'{escapedName}'[/] [grey](empty = keep current)[/]\n");
 
         var newName = AnsiConsole.Prompt(
-            new TextPrompt<string>($"[darkorange]Name[/] [grey50]({escapedName})[/][darkorange]:[/]")
+            new TextPrompt<string>($"[grey70]Name[/] [grey50]({escapedName})[/][grey70]:[/]")
                 .AllowEmpty()
                 .PromptStyle(new Style(Color.White)));
 
         var currentDesc = session.Description ?? "";
         var descHint = string.IsNullOrWhiteSpace(currentDesc) ? "none" : Markup.Escape(currentDesc);
         var newDesc = AnsiConsole.Prompt(
-            new TextPrompt<string>($"[darkorange]Description[/] [grey50]({descHint})[/][darkorange]:[/]")
+            new TextPrompt<string>($"[grey70]Description[/] [grey50]({descHint})[/][grey70]:[/]")
                 .AllowEmpty()
                 .PromptStyle(new Style(Color.White)));
 

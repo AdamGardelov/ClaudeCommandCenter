@@ -41,7 +41,7 @@ public static class Renderer
 
     private static Columns BuildHeader(AppState state)
     {
-        var left = new Markup($"[darkorange bold] Claude Command Center[/] [grey50]v{Version}[/]");
+        var left = new Markup($"[grey70 bold] Claude Command Center[/] [grey50]v{Version}[/]");
         var right = new Markup($"[grey]{state.Sessions.Count} session(s)[/] ");
 
         return new Columns(left, right) { Expand = true };
@@ -81,7 +81,7 @@ public static class Renderer
             var borderColor = selected?.ColorTag != null
                 ? Style.Parse(selected.ColorTag).Foreground
                 : Color.Grey42;
-            var headerColor = selected?.ColorTag ?? "darkorange";
+            var headerColor = selected?.ColorTag ?? "grey70";
 
             return new Panel(new Rows(rows))
                 .Header($"[{headerColor}] Sessions [/]")
@@ -91,10 +91,10 @@ public static class Renderer
 
         rows.Add(new Text(""));
         rows.Add(new Markup("[grey]  No tmux sessions found[/]"));
-        rows.Add(new Markup("[grey]  Press [/][darkorange bold]n[/][grey] to create one[/]"));
+        rows.Add(new Markup("[grey]  Press [/][grey70 bold]n[/][grey] to create one[/]"));
 
         return new Panel(new Rows(rows))
-            .Header("[darkorange] Sessions [/]")
+            .Header("[grey70] Sessions [/]")
             .BorderColor(Color.Grey42)
             .Expand();
     }
@@ -111,11 +111,11 @@ public static class Renderer
             return new Panel(
                 new Rows(
                     new Text(""),
-                    CenterFiglet("Claude", panelWidth, Color.DarkOrange),
-                    CenterFiglet("Command center", panelWidth, Color.DarkOrange),
+                    CenterFiglet("Claude", panelWidth, Color.Grey70),
+                    CenterFiglet("Command center", panelWidth, Color.Grey70),
                     new Text(""),
                     Align.Center(new Markup("[grey50]Select a session to see preview[/]"))))
-                .Header("[darkorange] Live Preview [/]")
+                .Header("[grey70] Live Preview [/]")
                 .BorderColor(Color.Grey42)
                 .Expand();
         }
@@ -167,7 +167,7 @@ public static class Renderer
             ? Style.Parse(session.ColorTag).Foreground
             : Color.Grey42;
 
-        var headerColor = session.ColorTag ?? "darkorange";
+        var headerColor = session.ColorTag ?? "grey70";
         return new Panel(new Rows(rows))
             .Header($"[{headerColor} bold] Live Preview [/]")
             .BorderColor(borderColor)
@@ -181,7 +181,7 @@ public static class Renderer
             var target = Markup.Escape(state.InputTarget ?? "");
             var buffer = Markup.Escape(state.InputBuffer);
             return new Markup(
-                $" [darkorange]Send to[/] [white]{target}[/][darkorange]>[/] [white]{buffer}[/][grey]▌[/]" +
+                $" [grey70]Send to[/] [white]{target}[/][grey70]>[/] [white]{buffer}[/][grey]▌[/]" +
                 $"  [grey50]Enter[/][grey] send · [/][grey50]Esc[/][grey] cancel[/]");
         }
 
@@ -208,7 +208,7 @@ public static class Renderer
                 parts.Add("[grey]│[/]");
             prevGroup = group;
 
-            parts.Add($"[darkorange bold]{Markup.Escape(b.Key)}[/][grey] {Markup.Escape(b.Label!)} [/]");
+            parts.Add($"[grey70 bold]{Markup.Escape(b.Key)}[/][grey] {Markup.Escape(b.Label!)} [/]");
         }
 
         return new Markup(" " + string.Join(" ", parts));
