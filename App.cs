@@ -582,6 +582,13 @@ public class App
 
         if (_state.ViewMode == ViewMode.List)
         {
+            var visible = _state.GetVisibleSessions();
+            if (visible.Count < 2)
+            {
+                _state.SetStatus("Need at least 2 sessions for grid view");
+                return;
+            }
+
             var (cols, _) = _state.GetGridDimensions();
             if (cols == 0)
             {
