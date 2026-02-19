@@ -111,7 +111,10 @@ public class App
             if (_config.SessionDescriptions.TryGetValue(s.Name, out var desc))
                 s.Description = desc;
             if (_config.SessionColors.TryGetValue(s.Name, out var color))
+            {
                 s.ColorTag = color;
+                TmuxService.ApplyStatusColor(s.Name, color);
+            }
 
             // Preserve content tracking state so sessions don't briefly flash as "working"
             if (oldSessions.TryGetValue(s.Name, out var old))
@@ -350,7 +353,10 @@ public class App
             if (!string.IsNullOrWhiteSpace(description))
                 ConfigService.SaveDescription(_config, name, description);
             if (color != null)
+            {
                 ConfigService.SaveColor(_config, name, color);
+                TmuxService.ApplyStatusColor(name, color);
+            }
             TmuxService.AttachSession(name);
         }
         else
@@ -662,6 +668,7 @@ public class App
         if (newColor != null)
         {
             ConfigService.SaveColor(_config, currentName, newColor);
+            TmuxService.ApplyStatusColor(currentName, newColor);
             changed = true;
         }
 

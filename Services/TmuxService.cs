@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using ClaudeCommandCenter.Models;
+using Spectre.Console;
 
 namespace ClaudeCommandCenter.Services;
 
@@ -113,6 +114,23 @@ public abstract class TmuxService
         // so git-dir will contain "/worktrees/" for linked worktrees
         var gitDir = RunGit(session.CurrentPath, "rev-parse", "--git-dir");
         session.IsWorktree = gitDir?.Contains("/worktrees/") == true;
+    }
+
+    public static void ApplyStatusColor(string sessionName, string? spectreColor)
+    {
+        if (string.IsNullOrWhiteSpace(spectreColor))
+            return;
+
+        try
+        {
+            var color = Style.Parse(spectreColor).Foreground;
+            var hex = $"#{color.R:x2}{color.G:x2}{color.B:x2}";
+            RunTmux("set-option", "-t", sessionName, "status-style", $"bg={hex},fg=white");
+        }
+        catch
+        {
+            // Invalid color name — skip silently
+        }
     }
 
     public static string? CreateSession(string name, string workingDirectory)
