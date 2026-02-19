@@ -1,6 +1,9 @@
 # Claude Command Center (ccc)
 
-![Preview image](images/ccc.jpeg)
+
+![Start no sessions](images/1.png)
+![List view](images/2.png)
+![Grid view](images/3.png)
 
 A terminal UI for managing multiple Claude Code sessions via tmux. Lists your sessions, shows a live preview of the selected pane, and highlights sessions waiting for input.
 
@@ -76,7 +79,7 @@ The grid auto-scales based on session count:
 | 7–9 | 3x3 | ~3 lines |
 | 10+ | Falls back to list view |
 
-Press `Enter` on a grid cell to expand it full-screen with the complete live preview. Use `↑`/`↓` to cycle through sessions while expanded, and `Esc` to collapse back to the grid.
+Press `Enter` on a grid cell to attach directly to that session. Press `G` to switch back to list view.
 
 ### Keybindings
 
@@ -104,20 +107,10 @@ Press `Enter` on a grid cell to expand it full-screen with the complete live pre
 | Key | Action |
 |-----|--------|
 | `↑` `↓` `←` `→` | Navigate grid cells |
-| `Enter` | Expand selected cell full-screen |
+| `Enter` | Attach to selected session |
 | `G` | Back to list view |
 | `Y` / `N` / `S` | Approve, reject, send (same as list view) |
 | `q` | Quit |
-
-#### Grid Expanded
-
-| Key | Action |
-|-----|--------|
-| `↑` / `↓` | Cycle through sessions |
-| `Esc` | Collapse back to grid |
-| `Enter` | Attach to session |
-| `Y` / `N` / `S` | Approve, reject, send |
-| `G` | Back to list view |
 
 Arrow keys always work for navigation regardless of configuration. When you attach to a session, detach with the standard tmux prefix (`Ctrl-b d`) to return to the command center.
 
