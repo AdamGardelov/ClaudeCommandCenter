@@ -18,29 +18,36 @@ dotnet build
 
 ## Install
 
-Publish a self-contained single-file binary and copy it to your PATH:
+### From GitHub Release
 
-### Linux
+Download and install the latest release automatically:
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/AdamGardelov/ClaudeCommandCenter/main/install.sh | bash
+```
+
+This detects your platform (Linux, macOS Intel/ARM), downloads the latest release, and installs to `/usr/local/bin`. Windows users should run this inside WSL.
+
+### From Source
+
+Requires [.NET 10](https://dotnet.microsoft.com/download) SDK.
+
+```bash
+# Linux / WSL
 dotnet publish -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -o dist
-sudo cp dist/ccc /usr/local/bin/ccc
+
+# macOS Apple Silicon
+dotnet publish -c Release -r osx-arm64 --self-contained -p:PublishSingleFile=true -o dist
+
+# macOS Intel
+dotnet publish -c Release -r osx-x64 --self-contained -p:PublishSingleFile=true -o dist
 ```
 
-### macOS
+Then copy to your PATH:
 
 ```bash
-# Apple Silicon
-dotnet publish -c Release -r osx-arm64 --self-contained -p:PublishSingleFile=true -o dist
-# Intel
-dotnet publish -c Release -r osx-x64 --self-contained -p:PublishSingleFile=true -o dist
-
 sudo cp dist/ccc /usr/local/bin/ccc
 ```
-
-### Windows (WSL)
-
-tmux requires a Unix environment. Run inside WSL and follow the Linux instructions above.
 
 After installing, the `ccc` command is available from any terminal.
 
@@ -62,6 +69,7 @@ The app shows a split-panel TUI — sessions on the left, a live pane preview on
 | `J` / `K` | Scroll preview |
 | `Enter` | Attach to selected session |
 | `n` | Create new session (launches `claude` in a given directory) |
+| `f` | Open session directory in file manager |
 | `i` | Open session directory in IDE |
 | `d` | Delete session (with confirmation) |
 | `R` | Rename session |
