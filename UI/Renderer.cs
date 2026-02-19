@@ -179,6 +179,7 @@ public static class Renderer
             "[grey]│[/] " +
             "[darkorange bold]Enter[/][grey] attach [/] " +
             "[darkorange bold]n[/][grey] new [/] " +
+            "[darkorange bold]f[/][grey] folder [/] " +
             "[darkorange bold]i[/][grey] ide [/] " +
             "[darkorange bold]d[/][grey] del [/] " +
             "[darkorange bold]R[/][grey] rename [/] " +

@@ -212,6 +212,9 @@ public class App
                 LoadSessions();
                 _state.SetStatus("Refreshed");
                 break;
+            case 'f':
+                OpenFolder();
+                break;
             case 'i':
                 OpenInIde();
                 break;
@@ -359,6 +362,52 @@ public class App
                 .PromptStyle(new Style(Color.White)));
 
         return string.IsNullOrWhiteSpace(path) ? null : path;
+    }
+
+    private void OpenFolder()
+    {
+        var session = _state.GetSelectedSession();
+        if (session?.CurrentPath == null) 
+            return;
+
+        try
+        {
+            var command = GetFileManagerCommand();
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = command,
+                ArgumentList = { session.CurrentPath },
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            Process.Start(startInfo);
+            _state.SetStatus($"Opened folder: {session.CurrentPath}");
+        }
+        catch
+        {
+            _state.SetStatus("Failed to open folder");
+        }
+    }
+
+    private static string GetFileManagerCommand()
+    {
+        if (OperatingSystem.IsMacOS()) 
+            return "open";
+        
+        if (OperatingSystem.IsWindows()) 
+            return "explorer";
+
+        // Linux — check for WSL where explorer.exe is available
+        try
+        {
+            var version = File.ReadAllText("/proc/version");
+            if (version.Contains("microsoft", StringComparison.OrdinalIgnoreCase))
+                return "explorer.exe";
+        }
+        catch { /* not WSL */ }
+
+        return "xdg-open";
     }
 
     private void OpenInIde()
