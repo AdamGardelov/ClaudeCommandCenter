@@ -34,7 +34,15 @@ public static class ConfigService
         try
         {
             var json = File.ReadAllText(ConfigPath);
-            return JsonSerializer.Deserialize<CccConfig>(json, JsonOptions) ?? new CccConfig();
+            var config = JsonSerializer.Deserialize<CccConfig>(json, JsonOptions) ?? new CccConfig();
+
+            if (config.Keybindings.Count == 0)
+            {
+                config.Keybindings = KeyBindingService.GetDefaultConfigs();
+                Save(config);
+            }
+
+            return config;
         }
         catch
         {
