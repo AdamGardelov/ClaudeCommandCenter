@@ -1,5 +1,7 @@
 # Claude Command Center (ccc)
 
+![Preview image](images/ccc.jpeg)
+
 A terminal UI for managing multiple Claude Code sessions via tmux. Lists your sessions, shows a live preview of the selected pane, and highlights sessions waiting for input.
 
 ## Requirements
