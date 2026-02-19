@@ -111,8 +111,8 @@ public static class Renderer
             return new Panel(
                 new Rows(
                     new Text(""),
-                    CenterFiglet("Claude", panelWidth, Color.Grey70),
-                    CenterFiglet("Command center", panelWidth, Color.Grey70),
+                    CenterFiglet("Claude", panelWidth, Color.PaleTurquoise1),
+                    CenterFiglet("Command center", panelWidth, Color.PaleTurquoise1),
                     new Text(""),
                     Align.Center(new Markup("[grey50]Select a session to see preview[/]"))))
                 .Header("[grey70] Live Preview [/]")

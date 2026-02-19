@@ -375,14 +375,24 @@ public class App
         ("Dark Sea Green", "DarkSeaGreen"),
         ("Dark Khaki", "DarkKhaki"),
         ("Plum", "Plum4"),
+        ("Rosy Brown", "RosyBrown"),
+        ("Grey Violet", "MediumPurple4"),
+        ("Slate", "LightSlateGrey"),
+        ("Dusty Teal", "DarkCyan"),
+        ("Thistle", "Thistle3"),
     ];
 
-    private static string? PickColor()
+    private string? PickColor()
     {
         var prompt = new SelectionPrompt<string>()
             .Title("[grey70]Color[/] [grey](optional)[/]")
             .HighlightStyle(new Style(Color.White, Color.Grey70));
 
+        var usedColors = new HashSet<string>(_config.SessionColors.Values, StringComparer.OrdinalIgnoreCase);
+        var hasUnused = ColorPalette.Any(c => !usedColors.Contains(c.SpectreColor));
+
+        if (hasUnused)
+            prompt.AddChoice("[grey70]🎲  Just give me one[/]");
         prompt.AddChoice("None");
         foreach (var (label, spectreColor) in ColorPalette)
             prompt.AddChoice($"[{spectreColor}]████[/]  {label}");
@@ -392,7 +402,12 @@ public class App
         if (selected == "None")
             return null;
 
-        // Match back to palette by label suffix
+        if (selected.EndsWith("Just give me one"))
+        {
+            var unused = ColorPalette.Where(c => !usedColors.Contains(c.SpectreColor)).ToArray();
+            return unused[Random.Shared.Next(unused.Length)].SpectreColor;
+        }
+
         foreach (var (label, spectreColor) in ColorPalette)
         {
             if (selected.EndsWith(label))
