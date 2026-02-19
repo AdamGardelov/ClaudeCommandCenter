@@ -8,18 +8,22 @@ public static class KeyBindingService
     [
         new() { ActionId = "navigate-up", Key = "k", Label = null, CanDisable = false, StatusBarOrder = -1 },
         new() { ActionId = "navigate-down", Key = "j", Label = null, CanDisable = false, StatusBarOrder = -1 },
-        new() { ActionId = "approve", Key = "Y", Label = "approve", CanDisable = true, StatusBarOrder = 1 },
-        new() { ActionId = "reject", Key = "N", Label = "reject", CanDisable = true, StatusBarOrder = 2 },
-        new() { ActionId = "send-text", Key = "S", Label = "send", CanDisable = true, StatusBarOrder = 3 },
-        new() { ActionId = "attach", Key = "Enter", Label = "attach", CanDisable = true, StatusBarOrder = 5 },
-        new() { ActionId = "new-session", Key = "n", Label = "new", CanDisable = true, StatusBarOrder = 6 },
-        new() { ActionId = "new-group", Key = "g", Label = "group", CanDisable = true, StatusBarOrder = 7 },
-        new() { ActionId = "open-folder", Key = "f", Label = "folder", CanDisable = true, StatusBarOrder = 8 },
-        new() { ActionId = "open-ide", Key = "i", Label = "ide", CanDisable = true, StatusBarOrder = 9 },
-        new() { ActionId = "open-config", Key = "c", Label = "config", CanDisable = true, StatusBarOrder = 10 },
-        new() { ActionId = "delete-session", Key = "d", Label = "del", CanDisable = true, StatusBarOrder = 11 },
-        new() { ActionId = "edit-session", Key = "e", Label = "edit", CanDisable = true, StatusBarOrder = 12 },
-        new() { ActionId = "toggle-grid", Key = "G", Label = "grid", CanDisable = true, StatusBarOrder = 13 },
+        // Group 1: Interact (send input to sessions)
+        new() { ActionId = "approve", Key = "Y", Label = "approve", CanDisable = true, StatusBarOrder = 10 },
+        new() { ActionId = "reject", Key = "N", Label = "reject", CanDisable = true, StatusBarOrder = 11 },
+        new() { ActionId = "send-text", Key = "S", Label = "send", CanDisable = true, StatusBarOrder = 12 },
+        // Group 2: CRUD (create, edit, delete)
+        new() { ActionId = "new-session", Key = "n", Label = "new", CanDisable = true, StatusBarOrder = 20 },
+        new() { ActionId = "new-group", Key = "g", Label = "group", CanDisable = true, StatusBarOrder = 21 },
+        new() { ActionId = "edit-session", Key = "e", Label = "edit", CanDisable = true, StatusBarOrder = 22 },
+        new() { ActionId = "delete-session", Key = "d", Label = "del", CanDisable = true, StatusBarOrder = 23 },
+        // Group 3: Open (navigate to things)
+        new() { ActionId = "attach", Key = "Enter", Label = "attach", CanDisable = true, StatusBarOrder = 30 },
+        new() { ActionId = "open-folder", Key = "f", Label = "folder", CanDisable = true, StatusBarOrder = 31 },
+        new() { ActionId = "open-ide", Key = "i", Label = "ide", CanDisable = true, StatusBarOrder = 32 },
+        new() { ActionId = "open-config", Key = "c", Label = "config", CanDisable = true, StatusBarOrder = 33 },
+        // Group 4: View (mode + exit)
+        new() { ActionId = "toggle-grid", Key = "G", Label = "grid", CanDisable = true, StatusBarOrder = 40 },
         new() { ActionId = "refresh", Key = "r", Label = null, CanDisable = true, StatusBarOrder = -1 },
         new() { ActionId = "quit", Key = "q", Label = "quit", CanDisable = false, StatusBarOrder = 99 },
     ];

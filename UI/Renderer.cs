@@ -309,7 +309,7 @@ public static class Renderer
             rows.Add(new Markup("  [grey50]All sessions have ended[/]"));
 
         rows.Add(new Text(""));
-        rows.Add(new Markup("  [grey]Press [/][grey70 bold]Enter[/][grey] to open group grid[/]"));
+        rows.Add(new Markup("  [grey]Press [/][grey70 bold]Enter[/][grey] to open group grid · [/][grey70 bold]e[/][grey] to edit[/]"));
 
         var borderColor = !string.IsNullOrEmpty(group.Color)
             ? Style.Parse(group.Color).Foreground
@@ -507,10 +507,10 @@ public static class Renderer
 
         foreach (var b in visible)
         {
-            var group = b.StatusBarOrder < 5 ? 0 : 1;
-            if (prevGroup >= 0 && group != prevGroup)
+            var barGroup = b.StatusBarOrder / 10;
+            if (prevGroup >= 0 && barGroup != prevGroup)
                 parts.Add("[grey]│[/]");
-            prevGroup = group;
+            prevGroup = barGroup;
 
             var dimmed = onGroup && sessionOnlyActions.Contains(b.ActionId);
             var keyColor = dimmed ? "grey35" : "grey70 bold";

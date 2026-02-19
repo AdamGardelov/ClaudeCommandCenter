@@ -311,7 +311,7 @@ public class App
 
     private void DispatchAction(string actionId)
     {
-        // When Groups section is focused in list view, intercept attach and delete
+        // When Groups section is focused in list view, intercept attach, delete, and edit
         if (_state.ViewMode == ViewMode.List && _state.ActiveSection == ActiveSection.Groups)
         {
             switch (actionId)
@@ -321,6 +321,9 @@ public class App
                     return;
                 case "delete-session":
                     DeleteGroup();
+                    return;
+                case "edit-session":
+                    EditGroup();
                     return;
             }
         }
@@ -571,6 +574,164 @@ public class App
         else
         {
             _state.SetStatus("Cancelled");
+        }
+    }
+
+    private void EditGroup()
+    {
+        var group = _state.GetSelectedGroup();
+        if (group == null)
+            return;
+
+        Console.CursorVisible = true;
+        Console.Clear();
+
+        var escapedName = Markup.Escape(group.Name);
+        AnsiConsole.MarkupLine($"[grey70 bold]Edit group[/] [white]'{escapedName}'[/] [grey](empty = keep current)[/]\n");
+
+        // Edit name
+        var newName = AnsiConsole.Prompt(
+            new TextPrompt<string>($"[grey70]Name[/] [grey50]({escapedName})[/][grey70]:[/]")
+                .AllowEmpty()
+                .PromptStyle(new Style(Color.White)));
+
+        if (!string.IsNullOrWhiteSpace(newName))
+            newName = SanitizeTmuxSessionName(newName);
+
+        // Validate new name doesn't conflict
+        if (!string.IsNullOrWhiteSpace(newName) && newName != group.Name && _config.Groups.ContainsKey(newName))
+        {
+            Console.CursorVisible = false;
+            _state.SetStatus($"Group '{newName}' already exists");
+            return;
+        }
+
+        // Add more sessions
+        var currentCount = group.Sessions.Count;
+        var remaining = 8 - currentCount;
+        var newDirectories = new List<(string Dir, string Label)>();
+
+        if (remaining > 0)
+        {
+            AnsiConsole.MarkupLine($"\n[grey70]Current sessions: {currentCount}/8 — you can add {remaining} more[/]");
+
+            var addMore = AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                    .Title("[grey70]Add sessions?[/]")
+                    .HighlightStyle(new Style(Color.White, Color.Grey70))
+                    .AddChoices("Yes", "No"));
+
+            if (addMore == "Yes")
+            {
+                for (var i = 0; i < remaining; i++)
+                {
+                    AnsiConsole.MarkupLine($"\n[grey70]New session {i + 1} of {remaining}[/]");
+
+                    var dir = PickDirectory();
+                    if (dir == null)
+                        break;
+
+                    dir = ConfigService.ExpandPath(dir);
+                    if (!Directory.Exists(dir))
+                    {
+                        AnsiConsole.MarkupLine("[red]Directory not found, skipping[/]");
+                        continue;
+                    }
+
+                    var label = Path.GetFileName(dir.TrimEnd('/'));
+                    newDirectories.Add((dir, label));
+
+                    if (currentCount + newDirectories.Count >= 8)
+                        break;
+
+                    var more = AnsiConsole.Prompt(
+                        new SelectionPrompt<string>()
+                            .Title("[grey70]Add another session?[/]")
+                            .HighlightStyle(new Style(Color.White, Color.Grey70))
+                            .AddChoices("Yes", "No"));
+
+                    if (more == "No")
+                        break;
+                }
+            }
+        }
+        else
+        {
+            AnsiConsole.MarkupLine($"\n[grey50]Group is full (8/8 sessions)[/]");
+        }
+
+        Console.CursorVisible = false;
+
+        var effectiveName = !string.IsNullOrWhiteSpace(newName) && newName != group.Name ? newName : group.Name;
+        var changed = false;
+
+        // Apply name change — rename all tmux sessions and update config
+        if (effectiveName != group.Name)
+        {
+            var oldName = group.Name;
+
+            // Rename tmux sessions: old prefix → new prefix
+            var renamedSessions = new List<string>();
+            foreach (var sessionName in group.Sessions.ToList())
+            {
+                string newSessionName;
+                if (sessionName.StartsWith(oldName + "-"))
+                    newSessionName = effectiveName + sessionName[oldName.Length..];
+                else
+                    newSessionName = effectiveName + "-" + sessionName;
+
+                var renameError = TmuxService.RenameSession(sessionName, newSessionName);
+                if (renameError != null)
+                {
+                    _state.SetStatus($"Failed to rename session: {renameError}");
+                    return;
+                }
+
+                ConfigService.RenameDescription(_config, sessionName, newSessionName);
+                ConfigService.RenameColor(_config, sessionName, newSessionName);
+                renamedSessions.Add(newSessionName);
+            }
+
+            // Remove old group, create under new name
+            ConfigService.RemoveGroup(_config, oldName);
+            group.Name = effectiveName;
+            group.Sessions = renamedSessions;
+            ConfigService.SaveGroup(_config, group);
+            changed = true;
+        }
+
+        // Create new sessions
+        foreach (var (dir, label) in newDirectories)
+        {
+            var sessionName = SanitizeTmuxSessionName($"{effectiveName}-{label}");
+            var error = TmuxService.CreateSession(sessionName, dir);
+            if (error != null)
+            {
+                _state.SetStatus($"Failed to create session '{sessionName}': {error}");
+                break;
+            }
+
+            if (!string.IsNullOrEmpty(group.Color))
+            {
+                ConfigService.SaveColor(_config, sessionName, group.Color);
+                TmuxService.ApplyStatusColor(sessionName, group.Color);
+            }
+
+            group.Sessions.Add(sessionName);
+            changed = true;
+        }
+
+        if (changed)
+        {
+            ConfigService.SaveGroup(_config, group);
+            LoadSessions();
+            _state.GroupCursor = _state.Groups.FindIndex(g => g.Name == effectiveName);
+            if (_state.GroupCursor < 0) _state.GroupCursor = 0;
+            _state.SetStatus("Group updated");
+        }
+        else
+        {
+            _state.SetStatus("No changes");
         }
     }
 
@@ -831,9 +992,9 @@ public class App
 
         var directories = new List<(string Dir, string Label)>();
 
-        for (var i = 0; i < 4; i++)
+        for (var i = 0; i < 8; i++)
         {
-            AnsiConsole.MarkupLine($"\n[grey70]Session {i + 1} of 4[/]");
+            AnsiConsole.MarkupLine($"\n[grey70]Session {i + 1} of 8[/]");
 
             var dir = PickDirectory();
             if (dir == null)
@@ -858,10 +1019,10 @@ public class App
             var label = Path.GetFileName(dir.TrimEnd('/'));
             directories.Add((dir, label));
 
-            if (directories.Count >= 4)
+            if (directories.Count >= 8)
                 break;
 
-            if (directories.Count >= 1)
+            if (directories.Count >= 2)
             {
                 var more = AnsiConsole.Prompt(
                     new SelectionPrompt<string>()
@@ -874,10 +1035,10 @@ public class App
             }
         }
 
-        if (directories.Count == 0)
+        if (directories.Count < 2)
         {
             Console.CursorVisible = false;
-            _state.SetStatus("No sessions added");
+            _state.SetStatus("Groups need at least 2 sessions");
             return;
         }
 
