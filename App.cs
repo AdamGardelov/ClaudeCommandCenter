@@ -13,6 +13,7 @@ public class App
     private string? _capturedPane;
     private DateTime _lastCapture = DateTime.MinValue;
     private string? _lastSelectedSession;
+    private bool _claudeAvailable;
 
     public void Run()
     {
@@ -29,7 +30,8 @@ public class App
             return;
         }
 
-        if (!TmuxService.HasClaude())
+        _claudeAvailable = TmuxService.HasClaude();
+        if (!_claudeAvailable)
         {
             AnsiConsole.MarkupLine("[yellow]Warning: 'claude' was not found in PATH.[/]");
             AnsiConsole.MarkupLine("[grey]New sessions will fail to start. Install Claude Code: https://docs.anthropic.com/en/docs/claude-code[/]");
@@ -63,6 +65,13 @@ public class App
                 var key = Console.ReadKey(true);
                 HandleKey(key);
                 Render();
+            }
+
+            // Re-render when a status message expires
+            if (_state.HasPendingStatus)
+            {
+                if (_state.GetActiveStatus() == null)
+                    Render();
             }
 
             // Periodically capture pane content for preview
@@ -130,6 +139,12 @@ public class App
             return;
         }
 
+        if (_state.HasPendingStatus)
+        {
+            _state.ClearStatus();
+            return;
+        }
+
         switch (key.Key)
         {
             case ConsoleKey.UpArrow or ConsoleKey.K:
@@ -173,14 +188,15 @@ public class App
 
                 if (text.Length > 0 && target != null)
                 {
-                    if (TmuxService.SendKeys(target, text))
+                    var sendError = TmuxService.SendKeys(target, text);
+                    if (sendError == null)
                     {
                         _state.SetStatus($"Sent to {target}");
                         _lastSelectedSession = null;
                     }
                     else
                     {
-                        _state.SetStatus("Send failed");
+                        _state.SetStatus(sendError);
                     }
                 }
                 else
@@ -262,6 +278,12 @@ public class App
 
     private void CreateNewSession()
     {
+        if (!_claudeAvailable)
+        {
+            _state.SetStatus("'claude' not found in PATH — install Claude Code first");
+            return;
+        }
+
         Console.CursorVisible = true;
         Console.Clear();
 
@@ -300,7 +322,8 @@ public class App
             return;
         }
 
-        if (TmuxService.CreateSession(name, dir))
+        var error = TmuxService.CreateSession(name, dir);
+        if (error == null)
         {
             if (!string.IsNullOrWhiteSpace(description))
                 ConfigService.SaveDescription(_config, name, description);
@@ -308,7 +331,7 @@ public class App
         }
         else
         {
-            _state.SetStatus("Failed to create session");
+            _state.SetStatus(error);
         }
 
         Console.CursorVisible = false;
@@ -451,9 +474,16 @@ public class App
         var confirm = Console.ReadKey(true);
         if (confirm.Key == ConsoleKey.Y)
         {
-            TmuxService.KillSession(session.Name);
-            ConfigService.RemoveDescription(_config, session.Name);
-            _state.SetStatus("Session killed");
+            var killError = TmuxService.KillSession(session.Name);
+            if (killError == null)
+            {
+                ConfigService.RemoveDescription(_config, session.Name);
+                _state.SetStatus("Session killed");
+            }
+            else
+            {
+                _state.SetStatus(killError);
+            }
             LoadSessions();
         }
         else
@@ -467,14 +497,15 @@ public class App
         var session = _state.GetSelectedSession();
         if (session == null) return;
 
-        if (TmuxService.SendKeys(session.Name, key))
+        var error = TmuxService.SendKeys(session.Name, key);
+        if (error == null)
         {
             _state.SetStatus($"Sent '{key}' to {session.Name}");
             _lastSelectedSession = null; // Force pane refresh
         }
         else
         {
-            _state.SetStatus("Send failed");
+            _state.SetStatus(error);
         }
     }
 
@@ -505,7 +536,8 @@ public class App
 
         if (!string.IsNullOrWhiteSpace(newName))
         {
-            if (TmuxService.RenameSession(session.Name, newName))
+            var renameError = TmuxService.RenameSession(session.Name, newName);
+            if (renameError == null)
             {
                 ConfigService.RenameDescription(_config, session.Name, newName);
                 _state.SetStatus($"Renamed to '{newName}'");
@@ -513,7 +545,7 @@ public class App
             }
             else
             {
-                _state.SetStatus("Rename failed");
+                _state.SetStatus(renameError);
             }
         }
         else

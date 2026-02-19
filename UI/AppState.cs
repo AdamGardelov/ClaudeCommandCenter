@@ -27,14 +27,27 @@ public class AppState
         StatusMessageTime = DateTime.Now;
     }
 
+    public void ClearStatus()
+    {
+        StatusMessage = null;
+        StatusMessageTime = null;
+    }
+
+    public bool HasPendingStatus =>
+        StatusMessage != null && StatusMessageTime != null;
+
     public string? GetActiveStatus()
     {
-        if (StatusMessage == null || StatusMessageTime == null) 
+        if (StatusMessage == null || StatusMessageTime == null)
             return null;
-        
-        return (DateTime.Now - StatusMessageTime.Value).TotalSeconds > 3 
-            ? null 
-            : StatusMessage;
+
+        if ((DateTime.Now - StatusMessageTime.Value).TotalSeconds > 3)
+        {
+            ClearStatus();
+            return null;
+        }
+
+        return StatusMessage;
     }
 
     public void ClampCursor()

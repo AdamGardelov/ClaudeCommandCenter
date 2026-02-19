@@ -72,15 +72,15 @@ public abstract class TmuxService
     private static void EnableSilenceMonitoring(string sessionName, int silenceSeconds = 3) => 
         RunTmux("set-option", "-t", sessionName, "monitor-silence", silenceSeconds.ToString());
 
-    public static bool CreateSession(string name, string workingDirectory)
+    public static string? CreateSession(string name, string workingDirectory)
     {
         // Use a login shell to ensure the user's full PATH is loaded (e.g. npm-installed claude on WSL2)
         var shell = Environment.GetEnvironmentVariable("SHELL") ?? "/bin/bash";
-        var result = RunTmux("new-session", "-d", "-s", name, "-n", name, "-c", workingDirectory, $"{shell} -lc claude");
-        if (result == null) return false;
+        var (success, error) = RunTmuxWithError("new-session", "-d", "-s", name, "-n", name, "-c", workingDirectory, $"{shell} -lc claude");
+        if (!success) return error ?? "Failed to create tmux session";
         // Prevent tmux from renaming the window to the running command
         RunTmux("set-option", "-t", name, "automatic-rename", "off");
-        return true;
+        return null;
     }
 
     public static void AttachSession(string name)
@@ -103,25 +103,26 @@ public abstract class TmuxService
         }
     }
 
-    public static bool SendKeys(string sessionName, string text)
+    public static string? SendKeys(string sessionName, string text)
     {
         // send-keys with -l sends literal text (no key name interpretation),
         // then a separate Enter keypress to submit
-        var result = RunTmux("send-keys", "-t", sessionName, "-l", text);
-        if (result == null) return false;
+        var (success, error) = RunTmuxWithError("send-keys", "-t", sessionName, "-l", text);
+        if (!success) return error ?? "Failed to send keys";
         RunTmux("send-keys", "-t", sessionName, "Enter");
-        return true;
+        return null;
     }
 
-    public static void KillSession(string name)
+    public static string? KillSession(string name)
     {
-        RunTmux("kill-session", "-t", name);
+        var (success, error) = RunTmuxWithError("kill-session", "-t", name);
+        return success ? null : error ?? "Failed to kill session";
     }
 
-    public static bool RenameSession(string oldName, string newName)
+    public static string? RenameSession(string oldName, string newName)
     {
-        var result = RunTmux("rename-session", "-t", oldName, newName);
-        return result != null;
+        var (success, error) = RunTmuxWithError("rename-session", "-t", oldName, newName);
+        return success ? null : error ?? "Failed to rename session";
     }
 
     public static bool HasTmux()
@@ -199,6 +200,38 @@ public abstract class TmuxService
         catch
         {
             return null;
+        }
+    }
+
+    private static (bool Success, string? Error) RunTmuxWithError(params string[] args)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "tmux",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+
+            foreach (var arg in args)
+                startInfo.ArgumentList.Add(arg);
+
+            var process = Process.Start(startInfo);
+            if (process == null) return (false, "Failed to start tmux");
+
+            var stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            if (process.ExitCode == 0) return (true, null);
+
+            var error = stderr.Trim();
+            return (false, string.IsNullOrEmpty(error) ? "tmux exited with an error" : error);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
         }
     }
 
