@@ -41,13 +41,11 @@ public abstract class TmuxService
         return sessions.OrderByDescending(s => s.Created).ToList();
     }
 
-    public static string? CapturePaneContent(string sessionName, int lines = 500)
-    {
-        return RunTmux("capture-pane", "-t", sessionName, "-p", "-e", "-S", $"-{lines}");
-    }
+    public static string? CapturePaneContent(string sessionName, int lines = 500) =>
+        RunTmux("capture-pane", "-t", sessionName, "-p", "-e", "-S", $"-{lines}");
 
     // Number of consecutive stable polls before marking as "waiting for input"
-    private const int StableThreshold = 1;
+    private const int _stableThreshold = 1;
 
     public static void DetectWaitingForInputBatch(List<TmuxSession> sessions)
     {
@@ -69,9 +67,7 @@ public abstract class TmuxService
             var contentHash = HashContentAboveStatusBar(output);
 
             if (contentHash == session.PreviousContentHash)
-            {
                 session.StableContentCount++;
-            }
             else
             {
                 session.StableContentCount = 0;
@@ -79,7 +75,7 @@ public abstract class TmuxService
             }
 
             // Content unchanged for consecutive polls → waiting for input
-            session.IsWaitingForInput = session.StableContentCount >= StableThreshold;
+            session.IsWaitingForInput = session.StableContentCount >= _stableThreshold;
         }
     }
 
@@ -91,13 +87,11 @@ public abstract class TmuxService
         // The status bar contains a continuously updating timer, so it always changes.
         var lastNonEmpty = -1;
         for (var i = lines.Length - 1; i >= 0; i--)
-        {
             if (!string.IsNullOrWhiteSpace(lines[i]))
             {
                 lastNonEmpty = i;
                 break;
             }
-        }
 
         // Use everything above the status bar for comparison
         var end = lastNonEmpty >= 0 ? lastNonEmpty : lines.Length;
@@ -155,7 +149,12 @@ public abstract class TmuxService
         var startInfo = new ProcessStartInfo
         {
             FileName = "tmux",
-            ArgumentList = { "attach-session", "-t", name },
+            ArgumentList =
+            {
+                "attach-session",
+                "-t",
+                name
+            },
             UseShellExecute = false,
         };
 
@@ -177,7 +176,7 @@ public abstract class TmuxService
         var (success, error) = RunTmuxWithError("send-keys", "-t", sessionName, "-l", text);
         if (!success)
             return error ?? "Failed to send keys";
-        
+
         RunTmux("send-keys", "-t", sessionName, "Enter");
         return null;
     }
@@ -237,10 +236,7 @@ public abstract class TmuxService
         }
     }
 
-    public static bool IsInsideTmux()
-    {
-        return Environment.GetEnvironmentVariable("TMUX") != null;
-    }
+    public static bool IsInsideTmux() => Environment.GetEnvironmentVariable("TMUX") != null;
 
     private static string? RunGit(string workingDirectory, params string[] args)
     {

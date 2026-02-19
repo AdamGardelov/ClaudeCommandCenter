@@ -13,22 +13,20 @@ public static partial class AnsiParser
     [GeneratedRegex(@"\x1b\[([0-9;]*)([A-Za-z])")]
     private static partial Regex CsiRegex();
 
-    private static readonly Color[] BasicColors =
+    private static readonly Color[] _basicColors =
     [
         Color.Black, Color.Maroon, Color.Green, Color.Olive,
         Color.Navy, Color.Purple, Color.Teal, Color.Silver
     ];
 
-    private static readonly Color[] BrightColors =
+    private static readonly Color[] _brightColors =
     [
         Color.Grey, Color.Red, Color.Lime, Color.Yellow,
         Color.Blue, Color.Fuchsia, Color.Aqua, Color.White
     ];
 
-    public static IRenderable ParseLine(string ansiLine, int maxWidth)
-    {
-        return new AnsiLineRenderable(ansiLine, maxWidth);
-    }
+    public static IRenderable ParseLine(string ansiLine, int maxWidth) =>
+        new AnsiLineRenderable(ansiLine, maxWidth);
 
     private sealed class AnsiLineRenderable(string ansiText, int maxWidth) : IRenderable
     {
@@ -49,14 +47,16 @@ public static partial class AnsiParser
 
             foreach (Match match in CsiRegex().Matches(ansiText))
             {
-                if (visualWidth >= effectiveMax) break;
+                if (visualWidth >= effectiveMax)
+                    break;
 
                 // Text before this escape sequence
                 if (match.Index > lastEnd)
                 {
                     var text = ansiText[lastEnd..match.Index];
                     var remaining = effectiveMax - visualWidth;
-                    if (text.Length > remaining) text = text[..remaining];
+                    if (text.Length > remaining)
+                        text = text[..remaining];
                     if (text.Length > 0)
                     {
                         yield return new Segment(text, state.ToStyle());
@@ -76,7 +76,8 @@ public static partial class AnsiParser
             {
                 var text = ansiText[lastEnd..];
                 var remaining = effectiveMax - visualWidth;
-                if (text.Length > remaining) text = text[..remaining];
+                if (text.Length > remaining)
+                    text = text[..remaining];
                 if (text.Length > 0)
                     yield return new Segment(text, state.ToStyle());
             }
@@ -110,7 +111,6 @@ public static partial class AnsiParser
             codes[i] = int.TryParse(parts[i], out var v) ? v : 0;
 
         for (var i = 0; i < codes.Length; i++)
-        {
             switch (codes[i])
             {
                 case 0:
@@ -138,7 +138,7 @@ public static partial class AnsiParser
                     state.Decoration &= ~Decoration.Underline;
                     break;
                 case >= 30 and <= 37:
-                    state.Foreground = BasicColors[codes[i] - 30];
+                    state.Foreground = _basicColors[codes[i] - 30];
                     break;
                 case 38:
                     i = ParseExtendedColor(codes, i, out state.Foreground);
@@ -147,7 +147,7 @@ public static partial class AnsiParser
                     state.Foreground = null;
                     break;
                 case >= 40 and <= 47:
-                    state.Background = BasicColors[codes[i] - 40];
+                    state.Background = _basicColors[codes[i] - 40];
                     break;
                 case 48:
                     i = ParseExtendedColor(codes, i, out state.Background);
@@ -156,13 +156,12 @@ public static partial class AnsiParser
                     state.Background = null;
                     break;
                 case >= 90 and <= 97:
-                    state.Foreground = BrightColors[codes[i] - 90];
+                    state.Foreground = _brightColors[codes[i] - 90];
                     break;
                 case >= 100 and <= 107:
-                    state.Background = BrightColors[codes[i] - 100];
+                    state.Background = _brightColors[codes[i] - 100];
                     break;
             }
-        }
     }
 
     private static int ParseExtendedColor(int[] codes, int i, out Color? color)
@@ -190,24 +189,32 @@ public static partial class AnsiParser
 
     private static Color ColorFromPalette(int n)
     {
-        // 0-7: standard colors
-        if (n < 8) return BasicColors[n];
-        // 8-15: bright colors
-        if (n < 16) return BrightColors[n - 8];
-        // 16-231: 6x6x6 RGB cube
-        if (n < 232)
+        switch (n)
         {
-            var idx = n - 16;
-            var b = idx % 6;
-            var g = (idx / 6) % 6;
-            var r = idx / 36;
-            return new Color(
-                (byte)(r == 0 ? 0 : 55 + 40 * r),
-                (byte)(g == 0 ? 0 : 55 + 40 * g),
-                (byte)(b == 0 ? 0 : 55 + 40 * b));
+            // 0-7: standard colors
+            case < 8:
+                return _basicColors[n];
+            // 8-15: bright colors
+            case < 16:
+                return _brightColors[n - 8];
+            // 16-231: 6x6x6 RGB cube
+            case < 232:
+            {
+                var idx = n - 16;
+                var b = idx % 6;
+                var g = (idx / 6) % 6;
+                var r = idx / 36;
+                return new Color(
+                    (byte)(r == 0 ? 0 : 55 + 40 * r),
+                    (byte)(g == 0 ? 0 : 55 + 40 * g),
+                    (byte)(b == 0 ? 0 : 55 + 40 * b));
+            }
+            default:
+            {
+                // 232-255: grayscale ramp
+                var grey = (byte)(8 + 10 * (n - 232));
+                return new Color(grey, grey, grey);
+            }
         }
-        // 232-255: grayscale ramp
-        var grey = (byte)(8 + 10 * (n - 232));
-        return new Color(grey, grey, grey);
     }
 }

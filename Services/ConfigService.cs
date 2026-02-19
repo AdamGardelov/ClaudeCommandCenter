@@ -5,14 +5,14 @@ namespace ClaudeCommandCenter.Services;
 
 public static class ConfigService
 {
-    private static readonly string ConfigDir = Path.Combine(
+    private static readonly string _configDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ccc");
 
-    private static readonly string ConfigPath = Path.Combine(ConfigDir, "config.json");
+    private static readonly string _configPath = Path.Combine(_configDir, "config.json");
 
-    public static string GetConfigPath() => ConfigPath;
+    public static string GetConfigPath() => _configPath;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
@@ -21,7 +21,7 @@ public static class ConfigService
 
     public static CccConfig Load()
     {
-        if (!File.Exists(ConfigPath))
+        if (!File.Exists(_configPath))
         {
             var config = new CccConfig
             {
@@ -33,8 +33,8 @@ public static class ConfigService
 
         try
         {
-            var json = File.ReadAllText(ConfigPath);
-            var config = JsonSerializer.Deserialize<CccConfig>(json, JsonOptions) ?? new CccConfig();
+            var json = File.ReadAllText(_configPath);
+            var config = JsonSerializer.Deserialize<CccConfig>(json, _jsonOptions) ?? new CccConfig();
 
             if (BackfillKeybindings(config))
                 Save(config);
@@ -122,9 +122,9 @@ public static class ConfigService
 
     private static void Save(CccConfig config)
     {
-        Directory.CreateDirectory(ConfigDir);
-        var json = JsonSerializer.Serialize(config, JsonOptions);
-        File.WriteAllText(ConfigPath, json);
+        Directory.CreateDirectory(_configDir);
+        var json = JsonSerializer.Serialize(config, _jsonOptions);
+        File.WriteAllText(_configPath, json);
     }
 
     public static void SaveGroup(CccConfig config, SessionGroup group)

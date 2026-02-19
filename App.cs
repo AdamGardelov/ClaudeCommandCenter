@@ -747,7 +747,8 @@ public class App
             ConfigService.SaveGroup(_config, group);
             LoadSessions();
             _state.GroupCursor = _state.Groups.FindIndex(g => g.Name == effectiveName);
-            if (_state.GroupCursor < 0) _state.GroupCursor = 0;
+            if (_state.GroupCursor < 0)
+                _state.GroupCursor = 0;
             _state.SetStatus("Group updated");
         }
         else
@@ -893,10 +894,10 @@ public class App
             var modePrompt = new SelectionPrompt<string>()
                 .Title("[grey70]Create group from[/]")
                 .HighlightStyle(new Style(Color.White, Color.Grey70))
-                .AddChoices("Worktree feature", "Manual (pick directories)", CancelChoice);
+                .AddChoices("Worktree feature", "Manual (pick directories)", _cancelChoice);
 
             var mode = AnsiConsole.Prompt(modePrompt);
-            if (mode == CancelChoice)
+            if (mode == _cancelChoice)
             {
                 Console.CursorVisible = false;
                 _state.SetStatus("Cancelled");
@@ -929,7 +930,7 @@ public class App
             .Title("[grey70]Select a worktree feature[/]")
             .HighlightStyle(new Style(Color.White, Color.Grey70));
 
-        prompt.AddChoice(CancelChoice);
+        prompt.AddChoice(_cancelChoice);
         foreach (var f in available)
         {
             var repos = string.Join(", ", f.Repos.Keys);
@@ -937,7 +938,7 @@ public class App
         }
 
         var selected = AnsiConsole.Prompt(prompt);
-        if (selected == CancelChoice)
+        if (selected == _cancelChoice)
         {
             Console.CursorVisible = false;
             _state.SetStatus("Cancelled");
@@ -1105,7 +1106,8 @@ public class App
         LoadSessions();
         _state.ActiveSection = ActiveSection.Groups;
         _state.GroupCursor = _state.Groups.FindIndex(g => g.Name == groupName);
-        if (_state.GroupCursor < 0) _state.GroupCursor = 0;
+        if (_state.GroupCursor < 0)
+            _state.GroupCursor = 0;
         _state.EnterGroupGrid(groupName);
         _lastSelectedSession = null;
     }
@@ -1175,7 +1177,7 @@ public class App
         return features;
     }
 
-    private static readonly (string Label, string SpectreColor)[] ColorPalette =
+    private static readonly (string Label, string SpectreColor)[] _colorPalette =
     [
         ("Steel Blue", "SteelBlue"),
         ("Indian Red", "IndianRed"),
@@ -1199,12 +1201,12 @@ public class App
             .HighlightStyle(new Style(Color.White, Color.Grey70));
 
         var usedColors = new HashSet<string>(_config.SessionColors.Values, StringComparer.OrdinalIgnoreCase);
-        var hasUnused = ColorPalette.Any(c => !usedColors.Contains(c.SpectreColor));
+        var hasUnused = _colorPalette.Any(c => !usedColors.Contains(c.SpectreColor));
 
         if (hasUnused)
             prompt.AddChoice("[grey70]🎲  Just give me one[/]");
         prompt.AddChoice("None");
-        foreach (var (label, spectreColor) in ColorPalette)
+        foreach (var (label, spectreColor) in _colorPalette)
             prompt.AddChoice($"[{spectreColor}]████[/]  {label}");
 
         var selected = AnsiConsole.Prompt(prompt);
@@ -1214,19 +1216,19 @@ public class App
 
         if (selected.Contains("Just give me one"))
         {
-            var unused = ColorPalette.Where(c => !usedColors.Contains(c.SpectreColor)).ToArray();
+            var unused = _colorPalette.Where(c => !usedColors.Contains(c.SpectreColor)).ToArray();
             return unused[Random.Shared.Next(unused.Length)].SpectreColor;
         }
 
-        foreach (var (label, spectreColor) in ColorPalette)
+        foreach (var (label, spectreColor) in _colorPalette)
             if (selected.EndsWith(label))
                 return spectreColor;
 
         return null;
     }
 
-    private const string CustomPathChoice = "Custom path...";
-    private const string CancelChoice = "Cancel";
+    private const string _customPathChoice = "Custom path...";
+    private const string _cancelChoice = "Cancel";
 
     private string? PickDirectory()
     {
@@ -1246,20 +1248,21 @@ public class App
             foreach (var fav in favorites)
                 prompt.AddChoice($"{fav.Name}  [grey50]{fav.Path}[/]");
 
-            prompt.AddChoice(CustomPathChoice);
-            prompt.AddChoice(CancelChoice);
+            prompt.AddChoice(_customPathChoice);
+            prompt.AddChoice(_cancelChoice);
 
             var selected = AnsiConsole.Prompt(prompt);
-
-            if (selected == CancelChoice)
-                return null;
-
-            if (selected == CustomPathChoice)
+            switch (selected)
             {
-                var custom = PromptCustomPath();
-                if (custom != null)
-                    return custom;
-                continue; // empty input → back to picker
+                case _cancelChoice:
+                    return null;
+                case _customPathChoice:
+                {
+                    var custom = PromptCustomPath();
+                    if (custom != null)
+                        return custom;
+                    continue; // empty input → back to picker
+                }
             }
 
             // Match back to the favorite by prefix (name before the spacing)
@@ -1291,7 +1294,10 @@ public class App
             var startInfo = new ProcessStartInfo
             {
                 FileName = command,
-                ArgumentList = { session.CurrentPath },
+                ArgumentList =
+                {
+                    session.CurrentPath
+                },
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -1339,7 +1345,10 @@ public class App
             var startInfo = new ProcessStartInfo
             {
                 FileName = _config.IdeCommand,
-                ArgumentList = { session.CurrentPath },
+                ArgumentList =
+                {
+                    session.CurrentPath
+                },
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -1361,7 +1370,10 @@ public class App
             var startInfo = new ProcessStartInfo
             {
                 FileName = _config.IdeCommand,
-                ArgumentList = { configPath },
+                ArgumentList =
+                {
+                    configPath
+                },
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,

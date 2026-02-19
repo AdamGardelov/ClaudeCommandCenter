@@ -4,13 +4,18 @@ namespace ClaudeCommandCenter.Services;
 
 public static class UpdateChecker
 {
-    private static readonly string CurrentVersion =
+    private static readonly string _currentVersion =
         typeof(UpdateChecker).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
-    private static readonly HttpClient Http = new()
+    private static readonly HttpClient _http = new()
     {
         Timeout = TimeSpan.FromSeconds(5),
-        DefaultRequestHeaders = { { "User-Agent", "ClaudeCommandCenter" } },
+        DefaultRequestHeaders =
+        {
+            {
+                "User-Agent", "ClaudeCommandCenter"
+            }
+        },
     };
 
     /// <summary>
@@ -21,7 +26,7 @@ public static class UpdateChecker
     {
         try
         {
-            var json = await Http.GetStringAsync(
+            var json = await _http.GetStringAsync(
                 "https://api.github.com/repos/AdamGardelov/ClaudeCommandCenter/releases/latest");
 
             using var doc = JsonDocument.Parse(json);
@@ -30,7 +35,7 @@ public static class UpdateChecker
 
             if (latest != null
                 && Version.TryParse(latest, out var latestV)
-                && Version.TryParse(CurrentVersion, out var currentV)
+                && Version.TryParse(_currentVersion, out var currentV)
                 && latestV > currentV)
                 return latest;
 

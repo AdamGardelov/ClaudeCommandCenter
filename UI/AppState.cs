@@ -153,8 +153,7 @@ public class AppState
         CursorIndex = visible.Count == 0 ? 0 : Math.Clamp(CursorIndex, 0, visible.Count - 1);
     }
 
-    public void ClampGroupCursor()
-    {
-        GroupCursor = Groups.Count == 0 ? 0 : Math.Clamp(GroupCursor, 0, Groups.Count - 1);
-    }
+    public void ClampGroupCursor() => GroupCursor = Groups.Count == 0
+            ? 0
+            : Math.Clamp(GroupCursor, 0, Groups.Count - 1);
 }

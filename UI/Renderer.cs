@@ -6,13 +6,13 @@ namespace ClaudeCommandCenter.UI;
 
 public static class Renderer
 {
-    private static readonly IReadOnlyList<string> SpinnerFrames = Spinner.Known.Dots.Frames;
-    private static readonly TimeSpan SpinnerInterval = Spinner.Known.Dots.Interval;
+    private static readonly IReadOnlyList<string> _spinnerFrames = Spinner.Known.Dots.Frames;
+    private static readonly TimeSpan _spinnerInterval = Spinner.Known.Dots.Interval;
 
     public static string GetSpinnerFrame()
     {
-        var index = (int)(DateTime.Now.Ticks / SpinnerInterval.Ticks % SpinnerFrames.Count);
-        return SpinnerFrames[index];
+        var index = (int)(DateTime.Now.Ticks / _spinnerInterval.Ticks % _spinnerFrames.Count);
+        return _spinnerFrames[index];
     }
 
     public static IRenderable BuildLayout(AppState state, string? capturedPane,
@@ -55,12 +55,12 @@ public static class Renderer
         return layout;
     }
 
-    private static readonly string Version =
+    private static readonly string _version =
         typeof(Renderer).Assembly.GetName().Version?.ToString(3) ?? "?";
 
     private static Columns BuildHeader(AppState state)
     {
-        var versionText = $"[grey50]v{Version}[/]";
+        var versionText = $"[grey50]v{_version}[/]";
         if (state.LatestVersion != null)
             versionText += $" [yellow bold]v{state.LatestVersion} available[/]";
 
@@ -88,18 +88,14 @@ public static class Renderer
         rows.Add(new Markup($" [{sessionsHeaderColor}]Sessions[/]"));
 
         if (standalone.Count == 0)
-        {
             rows.Add(new Markup("  [grey]No standalone sessions[/]"));
-        }
         else
-        {
             for (var i = 0; i < standalone.Count; i++)
             {
                 var session = standalone[i];
                 var isSelected = sessionsFocused && i == state.CursorIndex;
                 rows.Add(BuildSessionRow(session, isSelected));
             }
-        }
 
         // Separator
         rows.Add(new Rule().RuleStyle(Style.Parse("grey27")));
@@ -109,18 +105,14 @@ public static class Renderer
         rows.Add(new Markup($" [{groupsHeaderColor}]Groups[/]"));
 
         if (groups.Count == 0)
-        {
             rows.Add(new Markup("  [grey]No groups · press [/][grey70 bold]g[/][grey] to create[/]"));
-        }
         else
-        {
             for (var i = 0; i < groups.Count; i++)
             {
                 var group = groups[i];
                 var isSelected = groupsFocused && i == state.GroupCursor;
                 rows.Add(BuildGroupRow(group, isSelected, state));
             }
-        }
 
         // Panel border color based on focused section
         Color borderColor;
@@ -175,9 +167,6 @@ public static class Renderer
     {
         var name = Markup.Escape(group.Name);
         var totalSessions = group.Sessions.Count;
-        var configSessions = state.Sessions.Count > 0
-            ? group.Sessions.Count
-            : 0;
 
         // Check if any session in the group is waiting for input
         var groupSessionNames = new HashSet<string>(group.Sessions);
@@ -221,12 +210,12 @@ public static class Renderer
             var panelWidth = Math.Max(20, Console.WindowWidth - 35 - 4);
 
             return new Panel(
-                new Rows(
-                    new Text(""),
-                    CenterFiglet("Claude", panelWidth, Color.MediumPurple3),
-                    CenterFiglet("Command center", panelWidth, Color.MediumPurple3),
-                    new Text(""),
-                    Align.Center(new Markup("[grey50]Select a session to see preview[/]"))))
+                    new Rows(
+                        new Text(""),
+                        CenterFiglet("Claude", panelWidth, Color.MediumPurple3),
+                        CenterFiglet("Command center", panelWidth, Color.MediumPurple3),
+                        new Text(""),
+                        Align.Center(new Markup("[grey50]Select a session to see preview[/]"))))
                 .Header("[grey70] Live Preview [/]")
                 .BorderColor(Color.Grey42)
                 .Expand();
@@ -284,12 +273,13 @@ public static class Renderer
     private static Panel BuildGroupPreviewPanel(SessionGroup group, AppState state)
     {
         var colorTag = !string.IsNullOrEmpty(group.Color) ? group.Color : "grey50";
-        var rows = new List<IRenderable>();
-
-        rows.Add(new Markup($" [{colorTag}]Group:[/]     [white bold]{Markup.Escape(group.Name)}[/]"));
-        rows.Add(new Markup($" [{colorTag}]Feature:[/]   [grey70]{Markup.Escape(group.Description)}[/]"));
-        rows.Add(new Markup($" [{colorTag}]Sessions:[/]  [white]{group.Sessions.Count}[/]"));
-        rows.Add(new Rule().RuleStyle(Style.Parse(colorTag)));
+        var rows = new List<IRenderable>
+        {
+            new Markup($" [{colorTag}]Group:[/]     [white bold]{Markup.Escape(group.Name)}[/]"),
+            new Markup($" [{colorTag}]Feature:[/]   [grey70]{Markup.Escape(group.Description)}[/]"),
+            new Markup($" [{colorTag}]Sessions:[/]  [white]{group.Sessions.Count}[/]"),
+            new Rule().RuleStyle(Style.Parse(colorTag))
+        };
 
         // Show each session in the group with its status
         var groupSessionNames = new HashSet<string>(group.Sessions);
