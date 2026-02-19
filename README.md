@@ -72,7 +72,7 @@ The app shows a split-panel TUI — sessions on the left, a live pane preview on
 | `i` | Open session directory in IDE |
 | `c` | Open config file in IDE |
 | `d` | Delete session (with confirmation) |
-| `R` | Rename session |
+| `e` | Edit session (name, description, color) |
 | `r` | Refresh session list |
 | `Y` | Approve — sends `y` to the selected session |
 | `N` | Reject — sends `n` to the selected session |
@@ -142,7 +142,7 @@ Each override supports three optional fields:
 | `open-ide` | `i` | ide | Yes |
 | `open-config` | `c` | config | Yes |
 | `delete-session` | `d` | del | Yes |
-| `rename-session` | `R` | rename | Yes |
+| `edit-session` | `e` | edit | Yes |
 | `refresh` | `r` | (hidden) | Yes |
 | `quit` | `q` | quit | No |
 

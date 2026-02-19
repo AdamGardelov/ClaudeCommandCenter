@@ -30,13 +30,10 @@ public abstract class TmuxService
             sessions.Add(session);
         }
 
-        // Enable silence monitoring, detect input state, and detect git info
+        // Detect input state and git info
         foreach (var session in sessions)
-        {
-            EnableSilenceMonitoring(session.Name);
-            DetectWaitingForInput(session);
             DetectGitInfo(session);
-        }
+        DetectWaitingForInputBatch(sessions);
 
         return sessions.OrderByDescending(s => s.Created).ToList();
     }
@@ -46,12 +43,61 @@ public abstract class TmuxService
         return RunTmux("capture-pane", "-t", sessionName, "-p", "-e", "-S", $"-{lines}");
     }
 
-    public static void DetectWaitingForInput(TmuxSession session)
+    // Number of consecutive stable polls before marking as "waiting for input"
+    private const int StableThreshold = 1;
+
+    public static void DetectWaitingForInputBatch(List<TmuxSession> sessions)
     {
-        // Use tmux's monitor-silence flag: when a pane has no output for N seconds,
-        // silence_flag = 1. This means Claude is done working and waiting for input.
-        var output = RunTmux("list-windows", "-t", session.Name, "-F", "#{window_silence_flag}");
-        session.IsWaitingForInput = output?.Trim() == "1";
+        if (sessions.Count == 0) return;
+
+        foreach (var session in sessions)
+        {
+            // Capture last 20 lines without ANSI codes
+            var output = RunTmux("capture-pane", "-t", session.Name, "-p", "-S", "-20");
+            if (output == null)
+            {
+                session.IsWaitingForInput = true;
+                continue;
+            }
+
+            // Strip the status bar (last non-empty line contains the timer that
+            // updates continuously). Compare everything above it between polls.
+            var contentHash = HashContentAboveStatusBar(output);
+
+            if (contentHash == session.PreviousContentHash)
+            {
+                session.StableContentCount++;
+            }
+            else
+            {
+                session.StableContentCount = 0;
+                session.PreviousContentHash = contentHash;
+            }
+
+            // Content unchanged for consecutive polls → waiting for input
+            session.IsWaitingForInput = session.StableContentCount >= StableThreshold;
+        }
+    }
+
+    private static string HashContentAboveStatusBar(string paneOutput)
+    {
+        var lines = paneOutput.Split('\n');
+
+        // Find the last non-empty line (the status bar) and exclude it.
+        // The status bar contains a continuously updating timer, so it always changes.
+        var lastNonEmpty = -1;
+        for (var i = lines.Length - 1; i >= 0; i--)
+        {
+            if (!string.IsNullOrWhiteSpace(lines[i]))
+            {
+                lastNonEmpty = i;
+                break;
+            }
+        }
+
+        // Use everything above the status bar for comparison
+        var end = lastNonEmpty >= 0 ? lastNonEmpty : lines.Length;
+        return string.Join('\n', lines.AsSpan(0, end));
     }
 
     private static void DetectGitInfo(TmuxSession session)
@@ -68,9 +114,6 @@ public abstract class TmuxService
         var gitDir = RunGit(session.CurrentPath, "rev-parse", "--git-dir");
         session.IsWorktree = gitDir?.Contains("/worktrees/") == true;
     }
-
-    private static void EnableSilenceMonitoring(string sessionName, int silenceSeconds = 3) => 
-        RunTmux("set-option", "-t", sessionName, "monitor-silence", silenceSeconds.ToString());
 
     public static string? CreateSession(string name, string workingDirectory)
     {

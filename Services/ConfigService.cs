@@ -36,11 +36,8 @@ public static class ConfigService
             var json = File.ReadAllText(ConfigPath);
             var config = JsonSerializer.Deserialize<CccConfig>(json, JsonOptions) ?? new CccConfig();
 
-            if (config.Keybindings.Count == 0)
-            {
-                config.Keybindings = KeyBindingService.GetDefaultConfigs();
+            if (BackfillKeybindings(config))
                 Save(config);
-            }
 
             return config;
         }
@@ -96,6 +93,36 @@ public static class ConfigService
     {
         if (config.SessionColors.Remove(sessionName))
             Save(config);
+    }
+
+    private static bool BackfillKeybindings(CccConfig config)
+    {
+        var defaults = KeyBindingService.GetDefaultConfigs();
+        var validIds = KeyBindingService.GetValidActionIds();
+        var changed = false;
+
+        // Add missing actions
+        foreach (var (id, def) in defaults)
+        {
+            if (!config.Keybindings.ContainsKey(id))
+            {
+                config.Keybindings[id] = def;
+                changed = true;
+            }
+        }
+
+        // Remove stale actions
+        var staleKeys = config.Keybindings.Keys
+            .Where(id => !validIds.Contains(id))
+            .ToList();
+
+        foreach (var key in staleKeys)
+        {
+            config.Keybindings.Remove(key);
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static void Save(CccConfig config)

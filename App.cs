@@ -15,6 +15,7 @@ public class App
     private DateTime _lastCapture = DateTime.MinValue;
     private string? _lastSelectedSession;
     private string? _lastSpinnerFrame;
+    private bool _hasSpinningSessions;
     private bool _claudeAvailable;
 
     public void Run()
@@ -80,12 +81,12 @@ public class App
                     Render();
             }
 
-            // Re-render when spinner frame advances (for attached session indicators)
+            // Re-render when spinner frame advances (only if sessions were spinning at last poll)
             var spinnerFrame = Renderer.GetSpinnerFrame();
             if (spinnerFrame != _lastSpinnerFrame)
             {
                 _lastSpinnerFrame = spinnerFrame;
-                if (_state.Sessions.Any(s => !s.IsWaitingForInput))
+                if (_hasSpinningSessions)
                     Render();
             }
 
@@ -103,6 +104,7 @@ public class App
 
     private void LoadSessions()
     {
+        var oldSessions = _state.Sessions.ToDictionary(s => s.Name);
         _state.Sessions = TmuxService.ListSessions();
         foreach (var s in _state.Sessions)
         {
@@ -110,15 +112,23 @@ public class App
                 s.Description = desc;
             if (_config.SessionColors.TryGetValue(s.Name, out var color))
                 s.ColorTag = color;
+
+            // Preserve content tracking state so sessions don't briefly flash as "working"
+            if (oldSessions.TryGetValue(s.Name, out var old))
+            {
+                s.PreviousContentHash = old.PreviousContentHash;
+                s.StableContentCount = old.StableContentCount;
+                s.IsWaitingForInput = old.IsWaitingForInput;
+            }
         }
         _state.ClampCursor();
     }
 
     private bool UpdateCapturedPane()
     {
-        // Refresh waiting-for-input status on all sessions
-        foreach (var s in _state.Sessions)
-            TmuxService.DetectWaitingForInput(s);
+        // Refresh waiting-for-input status on all sessions (single tmux call)
+        TmuxService.DetectWaitingForInputBatch(_state.Sessions);
+        _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput);
 
         var session = _state.GetSelectedSession();
         var sessionName = session?.Name;
@@ -204,7 +214,7 @@ public class App
             case "open-ide":        OpenInIde(); break;
             case "open-config":     OpenConfig(); break;
             case "delete-session":  DeleteSession(); break;
-            case "rename-session":  RenameSession(); break;
+            case "edit-session":    EditSession(); break;
             case "refresh":
                 LoadSessions();
                 _state.SetStatus("Refreshed");
@@ -593,7 +603,7 @@ public class App
         _state.InputTarget = session.Name;
     }
 
-    private void RenameSession()
+    private void EditSession()
     {
         var session = _state.GetSelectedSession();
         if (session == null) return;
@@ -601,31 +611,68 @@ public class App
         Console.CursorVisible = true;
         Console.Clear();
 
+        var escapedName = Markup.Escape(session.Name);
+        AnsiConsole.MarkupLine($"[darkorange bold]Edit session[/] [white]'{escapedName}'[/] [grey](empty = keep current)[/]\n");
+
         var newName = AnsiConsole.Prompt(
-            new TextPrompt<string>($"[darkorange]Rename[/] [white]'{Markup.Escape(session.Name)}'[/] [darkorange]to:[/]")
+            new TextPrompt<string>($"[darkorange]Name[/] [grey50]({escapedName})[/][darkorange]:[/]")
                 .AllowEmpty()
                 .PromptStyle(new Style(Color.White)));
 
+        var currentDesc = session.Description ?? "";
+        var descHint = string.IsNullOrWhiteSpace(currentDesc) ? "none" : Markup.Escape(currentDesc);
+        var newDesc = AnsiConsole.Prompt(
+            new TextPrompt<string>($"[darkorange]Description[/] [grey50]({descHint})[/][darkorange]:[/]")
+                .AllowEmpty()
+                .PromptStyle(new Style(Color.White)));
+
+        var newColor = PickColor();
+
         Console.CursorVisible = false;
 
-        if (!string.IsNullOrWhiteSpace(newName))
+        var currentName = session.Name;
+        var changed = false;
+
+        // Apply name change
+        if (!string.IsNullOrWhiteSpace(newName) && newName != currentName)
         {
-            var renameError = TmuxService.RenameSession(session.Name, newName);
+            var renameError = TmuxService.RenameSession(currentName, newName);
             if (renameError == null)
             {
-                ConfigService.RenameDescription(_config, session.Name, newName);
-                ConfigService.RenameColor(_config, session.Name, newName);
-                _state.SetStatus($"Renamed to '{newName}'");
-                LoadSessions();
+                ConfigService.RenameDescription(_config, currentName, newName);
+                ConfigService.RenameColor(_config, currentName, newName);
+                currentName = newName;
+                changed = true;
             }
             else
             {
                 _state.SetStatus(renameError);
+                return;
             }
+        }
+
+        // Apply description change
+        if (!string.IsNullOrWhiteSpace(newDesc))
+        {
+            ConfigService.SaveDescription(_config, currentName, newDesc);
+            changed = true;
+        }
+
+        // Apply color change
+        if (newColor != null)
+        {
+            ConfigService.SaveColor(_config, currentName, newColor);
+            changed = true;
+        }
+
+        if (changed)
+        {
+            LoadSessions();
+            _state.SetStatus("Session updated");
         }
         else
         {
-            _state.SetStatus("Cancelled");
+            _state.SetStatus("No changes");
         }
     }
 }

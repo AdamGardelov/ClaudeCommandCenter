@@ -17,7 +17,7 @@ public static class KeyBindingService
         new() { ActionId = "open-ide",       Key = "i",     Label = "ide",     CanDisable = true,  StatusBarOrder = 8 },
         new() { ActionId = "open-config",    Key = "c",     Label = "config",  CanDisable = true,  StatusBarOrder = 9 },
         new() { ActionId = "delete-session", Key = "d",     Label = "del",     CanDisable = true,  StatusBarOrder = 10 },
-        new() { ActionId = "rename-session", Key = "R",     Label = "rename",  CanDisable = true,  StatusBarOrder = 11 },
+        new() { ActionId = "edit-session",   Key = "e",     Label = "edit",    CanDisable = true,  StatusBarOrder = 11 },
         new() { ActionId = "refresh",        Key = "r",     Label = null,      CanDisable = true,  StatusBarOrder = -1 },
         new() { ActionId = "quit",           Key = "q",     Label = "quit",    CanDisable = false, StatusBarOrder = 99 },
     ];
@@ -71,6 +71,11 @@ public static class KeyBindingService
             };
         }
         return result;
+    }
+
+    public static HashSet<string> GetValidActionIds()
+    {
+        return Defaults.Select(d => d.ActionId).ToHashSet();
     }
 
     public static Dictionary<string, string> BuildKeyMap(List<KeyBinding> bindings)
