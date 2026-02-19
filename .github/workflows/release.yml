@@ -6,31 +6,28 @@ on:
   workflow_dispatch:
 
 jobs:
-  version-and-release:
+  calculate-version:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     outputs:
-      version: ${{ steps.bump.outputs.version }}
-      should_release: ${{ steps.bump.outputs.should_release }}
+      version: ${{ steps.version.outputs.version }}
+      should_release: ${{ steps.version.outputs.should_release }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Determine version bump from commits
-        id: bump
+      - name: Calculate next version from git tags and commits
+        id: version
         run: |
-          CURRENT=$(grep -oP '<Version>\K[^<]+' ClaudeCommandCenter.csproj)
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-
-          # Get the latest version tag
+          # Get the latest version tag, or default to 0.0.0
           LAST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
 
           if [ -z "$LAST_TAG" ]; then
-            # No tags yet — use all commits
+            MAJOR=0; MINOR=0; PATCH=0
             COMMITS=$(git log --format="%s" --no-merges)
           else
+            VERSION="${LAST_TAG#v}"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
             COMMITS=$(git log "${LAST_TAG}..HEAD" --format="%s" --no-merges)
           fi
 
@@ -56,24 +53,14 @@ jobs:
 
           echo "Commits since ${LAST_TAG:-beginning}:"
           echo "$COMMITS"
-          echo "Bump type: $BUMP ($CURRENT -> $NEW_VERSION)"
+          echo "Bump type: $BUMP (${LAST_TAG:-v0.0.0} -> v${NEW_VERSION})"
 
-          sed -i "s|<Version>${CURRENT}</Version>|<Version>${NEW_VERSION}</Version>|" ClaudeCommandCenter.csproj
           echo "version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
           echo "should_release=true" >> "$GITHUB_OUTPUT"
 
-      - name: Commit version bump
-        if: steps.bump.outputs.should_release == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add ClaudeCommandCenter.csproj
-          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }}"
-          git push
-
   build:
-    needs: version-and-release
-    if: needs.version-and-release.outputs.should_release == 'true'
+    needs: calculate-version
+    if: needs.calculate-version.outputs.should_release == 'true'
     strategy:
       matrix:
         include:
@@ -86,8 +73,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -102,6 +87,7 @@ jobs:
           --self-contained
           -p:PublishSingleFile=true
           -p:PublishTrimmed=true
+          -p:Version=${{ needs.calculate-version.outputs.version }}
           -o publish
 
       - name: Package
@@ -114,7 +100,7 @@ jobs:
           path: ccc-${{ matrix.rid }}.tar.gz
 
   release:
-    needs: [version-and-release, build]
+    needs: [calculate-version, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -130,7 +116,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="v${{ needs.version-and-release.outputs.version }}"
+          VERSION="v${{ needs.calculate-version.outputs.version }}"
           git tag "$VERSION"
           git push origin "$VERSION"
           gh release create "$VERSION" \
