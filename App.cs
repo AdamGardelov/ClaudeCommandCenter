@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using ClaudeCommandCenter.Models;
 using ClaudeCommandCenter.Services;
 using ClaudeCommandCenter.UI;
@@ -136,7 +137,25 @@ public class App
             }
         }
 
+        LoadGroups();
         _state.ClampCursor();
+    }
+
+    private void LoadGroups()
+    {
+        var liveSessionNames = new HashSet<string>(_state.Sessions.Select(s => s.Name));
+        _state.Groups = _config.Groups.Values
+            .Select(g => new SessionGroup
+            {
+                Name = g.Name,
+                Description = g.Description,
+                Color = g.Color,
+                WorktreePath = g.WorktreePath,
+                // Only include sessions that are still alive in tmux
+                Sessions = g.Sessions.Where(s => liveSessionNames.Contains(s)).ToList(),
+            })
+            .ToList();
+        _state.ClampGroupCursor();
     }
 
     private bool UpdateCapturedPane()
@@ -145,7 +164,7 @@ public class App
         TmuxService.DetectWaitingForInputBatch(_state.Sessions);
         _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput);
 
-        // In grid mode, capture panes for all sessions
+        // In grid mode, capture panes for visible sessions (all or group-filtered)
         if (_state.ViewMode == ViewMode.Grid)
             return UpdateAllCapturedPanes();
 
@@ -176,8 +195,9 @@ public class App
     {
         var changed = false;
         var newPanes = new Dictionary<string, string>();
+        var visibleSessions = _state.GetVisibleSessions();
 
-        foreach (var session in _state.Sessions)
+        foreach (var session in visibleSessions)
         {
             var content = TmuxService.CapturePaneContent(session.Name);
             if (content != null)
@@ -215,7 +235,26 @@ public class App
             return;
         }
 
-        // Grid/expanded mode arrow key handling
+        // Escape from group grid returns to list
+        if (key.Key == ConsoleKey.Escape && _state.ActiveGroup != null)
+        {
+            _state.LeaveGroupGrid();
+            _lastSelectedSession = null;
+            return;
+        }
+
+        // Tab switches between Sessions and Groups sections in list view
+        if (key.Key == ConsoleKey.Tab && _state.ViewMode == ViewMode.List && _state.ActiveGroup == null)
+        {
+            if (_state.ActiveSection == ActiveSection.Sessions && _state.Groups.Count > 0)
+                _state.ActiveSection = ActiveSection.Groups;
+            else
+                _state.ActiveSection = ActiveSection.Sessions;
+            _lastSelectedSession = null;
+            return;
+        }
+
+        // Grid mode arrow key handling (both regular grid and group grid)
         if (_state.ViewMode == ViewMode.Grid)
         {
             switch (key.Key)
@@ -240,10 +279,16 @@ public class App
             switch (key.Key)
             {
                 case ConsoleKey.UpArrow:
-                    MoveCursor(-1);
+                    if (_state.ActiveSection == ActiveSection.Groups)
+                        MoveGroupCursor(-1);
+                    else
+                        MoveCursor(-1);
                     return;
                 case ConsoleKey.DownArrow:
-                    MoveCursor(1);
+                    if (_state.ActiveSection == ActiveSection.Groups)
+                        MoveGroupCursor(1);
+                    else
+                        MoveCursor(1);
                     return;
             }
         }
@@ -266,6 +311,27 @@ public class App
 
     private void DispatchAction(string actionId)
     {
+        // When Groups section is focused in list view, intercept attach and delete
+        if (_state.ViewMode == ViewMode.List && _state.ActiveSection == ActiveSection.Groups)
+        {
+            switch (actionId)
+            {
+                case "attach":
+                    OpenGroup();
+                    return;
+                case "delete-session":
+                    DeleteGroup();
+                    return;
+            }
+        }
+
+        // When in group grid, delete removes session from group
+        if (_state.ActiveGroup != null && actionId == "delete-session")
+        {
+            DeleteSessionFromGroup();
+            return;
+        }
+
         switch (actionId)
         {
             case "navigate-up":
@@ -291,6 +357,9 @@ public class App
                 break;
             case "new-session":
                 CreateNewSession();
+                break;
+            case "new-group":
+                CreateNewGroup();
                 break;
             case "open-folder":
                 OpenFolder();
@@ -367,15 +436,17 @@ public class App
 
     private void MoveCursor(int delta)
     {
-        if (_state.Sessions.Count == 0)
+        var visible = _state.GetVisibleSessions();
+        if (visible.Count == 0)
             return;
-        _state.CursorIndex = Math.Clamp(_state.CursorIndex + delta, 0, _state.Sessions.Count - 1);
+        _state.CursorIndex = Math.Clamp(_state.CursorIndex + delta, 0, visible.Count - 1);
         _lastSelectedSession = null; // Force pane recapture
     }
 
     private void MoveGridCursor(int dx, int dy)
     {
-        if (_state.Sessions.Count == 0)
+        var visible = _state.GetVisibleSessions();
+        if (visible.Count == 0)
             return;
 
         var (cols, rows) = _state.GetGridDimensions();
@@ -399,15 +470,116 @@ public class App
             row = 0;
 
         var newIndex = row * cols + col;
-        if (newIndex < _state.Sessions.Count)
+        if (newIndex < visible.Count)
         {
             _state.CursorIndex = newIndex;
             _lastSelectedSession = null;
         }
     }
 
+    private void MoveGroupCursor(int delta)
+    {
+        if (_state.Groups.Count == 0)
+            return;
+        _state.GroupCursor = Math.Clamp(_state.GroupCursor + delta, 0, _state.Groups.Count - 1);
+    }
+
+    private void OpenGroup()
+    {
+        var group = _state.GetSelectedGroup();
+        if (group == null)
+            return;
+
+        if (group.Sessions.Count == 0)
+        {
+            // Stale group — offer to remove
+            _state.SetStatus($"Group '{group.Name}' has no live sessions. Press d to remove.");
+            return;
+        }
+
+        _state.EnterGroupGrid(group.Name);
+        _lastSelectedSession = null;
+    }
+
+    private void DeleteGroup()
+    {
+        var group = _state.GetSelectedGroup();
+        if (group == null)
+            return;
+
+        var liveCount = group.Sessions.Count;
+        var msg = liveCount > 0
+            ? $"Kill group '{group.Name}' and {liveCount} session(s)? (y/n)"
+            : $"Remove stale group '{group.Name}'? (y/n)";
+
+        _state.SetStatus(msg);
+        Render();
+
+        var confirm = Console.ReadKey(true);
+        if (confirm.Key == ConsoleKey.Y)
+        {
+            foreach (var sessionName in group.Sessions.ToList())
+            {
+                TmuxService.KillSession(sessionName);
+                ConfigService.RemoveDescription(_config, sessionName);
+                ConfigService.RemoveColor(_config, sessionName);
+            }
+
+            ConfigService.RemoveGroup(_config, group.Name);
+            LoadSessions();
+            _state.SetStatus("Group deleted");
+        }
+        else
+        {
+            _state.SetStatus("Cancelled");
+        }
+    }
+
+    private void DeleteSessionFromGroup()
+    {
+        var session = _state.GetSelectedSession();
+        if (session == null || _state.ActiveGroup == null)
+            return;
+
+        _state.SetStatus($"Kill '{session.Name}' from group? (y/n)");
+        Render();
+
+        var confirm = Console.ReadKey(true);
+        if (confirm.Key == ConsoleKey.Y)
+        {
+            TmuxService.KillSession(session.Name);
+            ConfigService.RemoveDescription(_config, session.Name);
+            ConfigService.RemoveColor(_config, session.Name);
+            ConfigService.RemoveSessionFromGroup(_config, _state.ActiveGroup, session.Name);
+            LoadSessions();
+
+            // If group is now empty, leave grid
+            var group = _state.Groups.FirstOrDefault(g => g.Name == _state.ActiveGroup);
+            if (group == null || group.Sessions.Count == 0)
+            {
+                _state.LeaveGroupGrid();
+                _state.SetStatus("Group removed (last session killed)");
+            }
+            else
+            {
+                _state.CursorIndex = Math.Clamp(_state.CursorIndex, 0, group.Sessions.Count - 1);
+                _state.SetStatus("Session killed");
+            }
+
+            _lastSelectedSession = null;
+        }
+        else
+        {
+            _state.SetStatus("Cancelled");
+        }
+    }
+
     private void ToggleGridView()
     {
+        // If in group grid, Escape handles exit — G should not toggle
+        if (_state.ActiveGroup != null)
+            return;
+
         if (_state.ViewMode == ViewMode.List)
         {
             var (cols, _) = _state.GetGridDimensions();
@@ -510,6 +682,168 @@ public class App
         Console.CursorVisible = false;
         LoadSessions();
         _lastSelectedSession = null;
+    }
+
+    private void CreateNewGroup()
+    {
+        if (!_claudeAvailable)
+        {
+            _state.SetStatus("'claude' not found in PATH — install Claude Code first");
+            return;
+        }
+
+        var basePath = ConfigService.ExpandPath(_config.WorktreeBasePath);
+        if (!Directory.Exists(basePath))
+        {
+            _state.SetStatus($"Worktree path not found: {basePath}");
+            return;
+        }
+
+        // Scan for .feature-context.json files
+        var features = ScanWorktreeFeatures(basePath);
+        if (features.Count == 0)
+        {
+            _state.SetStatus("No worktrees found");
+            return;
+        }
+
+        // Filter out already-active groups
+        var activeGroupNames = new HashSet<string>(_config.Groups.Keys);
+        var available = features.Where(f => !activeGroupNames.Contains(f.Name)).ToList();
+        if (available.Count == 0)
+        {
+            _state.SetStatus("All worktrees already have active groups");
+            return;
+        }
+
+        Console.CursorVisible = true;
+        Console.Clear();
+
+        // Pick a feature
+        var prompt = new SelectionPrompt<string>()
+            .Title("[grey70]Select a worktree feature to create a group from[/]")
+            .HighlightStyle(new Style(Color.White, Color.Grey70));
+
+        prompt.AddChoice(CancelChoice);
+        foreach (var f in available)
+        {
+            var repos = string.Join(", ", f.Repos.Keys);
+            prompt.AddChoice($"{f.Name} - {f.Description} ({repos})");
+        }
+
+        var selected = AnsiConsole.Prompt(prompt);
+        if (selected == CancelChoice)
+        {
+            Console.CursorVisible = false;
+            _state.SetStatus("Cancelled");
+            return;
+        }
+
+        // Match selection back to feature
+        var selectedName = selected.Split(" - ")[0];
+        var feature = available.FirstOrDefault(f => f.Name == selectedName);
+        if (feature == null)
+        {
+            Console.CursorVisible = false;
+            _state.SetStatus("Feature not found");
+            return;
+        }
+
+        // Pick a color
+        var color = PickColor();
+
+        Console.CursorVisible = false;
+
+        // Create tmux sessions for each repo
+        var sessionNames = new List<string>();
+        foreach (var (repoName, repoPath) in feature.Repos)
+        {
+            var sessionName = SanitizeTmuxSessionName($"{feature.Name}-{repoName}");
+            var error = TmuxService.CreateSession(sessionName, repoPath);
+            if (error != null)
+            {
+                _state.SetStatus($"Failed to create session '{sessionName}': {error}");
+                return;
+            }
+
+            if (color != null)
+            {
+                ConfigService.SaveColor(_config, sessionName, color);
+                TmuxService.ApplyStatusColor(sessionName, color);
+            }
+
+            sessionNames.Add(sessionName);
+        }
+
+        // Save group to config
+        var group = new SessionGroup
+        {
+            Name = feature.Name,
+            Description = feature.Description,
+            Color = color ?? "",
+            WorktreePath = feature.WorktreePath,
+            Sessions = sessionNames,
+        };
+        ConfigService.SaveGroup(_config, group);
+
+        LoadSessions();
+
+        // Switch to group grid view
+        _state.ActiveSection = ActiveSection.Groups;
+        _state.GroupCursor = _state.Groups.FindIndex(g => g.Name == feature.Name);
+        if (_state.GroupCursor < 0) _state.GroupCursor = 0;
+        _state.EnterGroupGrid(feature.Name);
+        _lastSelectedSession = null;
+    }
+
+    private static string SanitizeTmuxSessionName(string name)
+    {
+        // tmux silently replaces dots and colons with underscores in session names
+        return name.Replace('.', '_').Replace(':', '_');
+    }
+
+    private record WorktreeFeature(string Name, string Description, string WorktreePath, Dictionary<string, string> Repos);
+
+    private static List<WorktreeFeature> ScanWorktreeFeatures(string basePath)
+    {
+        var features = new List<WorktreeFeature>();
+
+        foreach (var dir in Directory.GetDirectories(basePath))
+        {
+            var contextFile = Path.Combine(dir, ".feature-context.json");
+            if (!File.Exists(contextFile))
+                continue;
+
+            try
+            {
+                var json = File.ReadAllText(contextFile);
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                var name = root.GetProperty("feature").GetString() ?? "";
+                var description = root.GetProperty("description").GetString() ?? "";
+
+                var repos = new Dictionary<string, string>();
+                if (root.TryGetProperty("repos", out var reposEl))
+                {
+                    foreach (var repo in reposEl.EnumerateObject())
+                    {
+                        var worktreePath = repo.Value.GetProperty("worktree").GetString();
+                        if (worktreePath != null && Directory.Exists(worktreePath))
+                            repos[repo.Name] = worktreePath;
+                    }
+                }
+
+                if (repos.Count > 0)
+                    features.Add(new WorktreeFeature(name, description, dir, repos));
+            }
+            catch
+            {
+                // Skip malformed context files
+            }
+        }
+
+        return features;
     }
 
     private static readonly (string Label, string SpectreColor)[] ColorPalette =

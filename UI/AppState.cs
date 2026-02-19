@@ -14,11 +14,76 @@ public class AppState
     private string? StatusMessage { get; set; }
     private DateTime? StatusMessageTime { get; set; }
 
+    // Group state
+    public List<SessionGroup> Groups { get; set; } = [];
+    public ActiveSection ActiveSection { get; set; } = ActiveSection.Sessions;
+    public int GroupCursor { get; set; }
+    public string? ActiveGroup { get; set; }
+    private int _savedCursorIndex;
+
     public TmuxSession? GetSelectedSession()
     {
-        if (CursorIndex >= 0 && CursorIndex < Sessions.Count)
-            return Sessions[CursorIndex];
+        // When groups section is focused in list view, no session is selected
+        if (ViewMode == ViewMode.List && ActiveGroup == null && ActiveSection == ActiveSection.Groups)
+            return null;
+
+        var sessions = GetVisibleSessions();
+        if (CursorIndex >= 0 && CursorIndex < sessions.Count)
+            return sessions[CursorIndex];
         return null;
+    }
+
+    public SessionGroup? GetSelectedGroup()
+    {
+        if (GroupCursor >= 0 && GroupCursor < Groups.Count)
+            return Groups[GroupCursor];
+        return null;
+    }
+
+    public List<TmuxSession> GetVisibleSessions()
+    {
+        // Group grid: show only group's sessions
+        if (ActiveGroup != null)
+        {
+            var group = Groups.FirstOrDefault(g => g.Name == ActiveGroup);
+            if (group != null)
+            {
+                var groupSessionNames = new HashSet<string>(group.Sessions);
+                return Sessions.Where(s => groupSessionNames.Contains(s.Name)).ToList();
+            }
+        }
+
+        // Global grid view (G key): show all sessions
+        if (ViewMode == ViewMode.Grid)
+            return Sessions;
+
+        // List view, sessions section: show only standalone sessions
+        if (ActiveSection == ActiveSection.Sessions)
+            return GetStandaloneSessions();
+
+        return Sessions;
+    }
+
+    public List<TmuxSession> GetStandaloneSessions()
+    {
+        var groupedNames = new HashSet<string>(Groups.SelectMany(g => g.Sessions));
+        return Sessions.Where(s => !groupedNames.Contains(s.Name)).ToList();
+    }
+
+    public void EnterGroupGrid(string groupName)
+    {
+        _savedCursorIndex = CursorIndex;
+        ActiveGroup = groupName;
+        ViewMode = ViewMode.Grid;
+        CursorIndex = 0;
+    }
+
+    public void LeaveGroupGrid()
+    {
+        ActiveGroup = null;
+        ViewMode = ViewMode.List;
+        CursorIndex = _savedCursorIndex;
+        ClampCursor();
     }
 
     /// <summary>
@@ -26,7 +91,8 @@ public class AppState
     /// </summary>
     public (int Cols, int Rows) GetGridDimensions()
     {
-        return Sessions.Count switch
+        var count = GetVisibleSessions().Count;
+        return count switch
         {
             0 => (1, 1),
             1 => (1, 1),
@@ -43,7 +109,8 @@ public class AppState
     /// </summary>
     public int GetGridCellOutputLines()
     {
-        return Sessions.Count switch
+        var count = GetVisibleSessions().Count;
+        return count switch
         {
             1 => 30,
             2 => 15,
@@ -89,6 +156,12 @@ public class AppState
 
     public void ClampCursor()
     {
-        CursorIndex = Sessions.Count == 0 ? 0 : Math.Clamp(CursorIndex, 0, Sessions.Count - 1);
+        var visible = GetVisibleSessions();
+        CursorIndex = visible.Count == 0 ? 0 : Math.Clamp(CursorIndex, 0, visible.Count - 1);
+    }
+
+    public void ClampGroupCursor()
+    {
+        GroupCursor = Groups.Count == 0 ? 0 : Math.Clamp(GroupCursor, 0, Groups.Count - 1);
     }
 }

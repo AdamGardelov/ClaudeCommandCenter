@@ -36,7 +36,10 @@ public static class Renderer
             else
             {
                 layout["Main"].Update(BuildGridLayout(state, allCapturedPanes));
-                layout["StatusBar"].Update(BuildGridStatusBar(state));
+                layout["StatusBar"].Update(
+                    state.ActiveGroup != null
+                        ? BuildGroupGridStatusBar(state)
+                        : BuildGridStatusBar(state));
                 return layout;
             }
         }
@@ -62,61 +65,141 @@ public static class Renderer
             versionText += $" [yellow bold]v{state.LatestVersion} available[/]";
 
         var left = new Markup($"[mediumpurple3 bold] Claude Command Center[/] {versionText}");
-        var right = new Markup($"[grey]{state.Sessions.Count} session(s)[/] ");
+
+        var groupInfo = state.ActiveGroup != null
+            ? $" [grey]│[/] [mediumpurple3]{Markup.Escape(state.ActiveGroup)}[/]"
+            : "";
+        var right = new Markup($"[grey]{state.Sessions.Count} session(s)[/]{groupInfo} ");
 
         return new Columns(left, right) { Expand = true };
     }
 
-    private static Panel BuildSessionPanel(AppState state)
+    private static IRenderable BuildSessionPanel(AppState state)
     {
+        var standalone = state.GetStandaloneSessions();
+        var groups = state.Groups;
+        var sessionsFocused = state.ActiveSection == ActiveSection.Sessions;
+        var groupsFocused = state.ActiveSection == ActiveSection.Groups;
+
         var rows = new List<IRenderable>();
 
-        for (var i = 0; i < state.Sessions.Count; i++)
+        // Sessions section header
+        var sessionsHeaderColor = sessionsFocused ? "white bold" : "grey50";
+        rows.Add(new Markup($" [{sessionsHeaderColor}]Sessions[/]"));
+
+        if (standalone.Count == 0)
         {
-            var session = state.Sessions[i];
-            var isSelected = i == state.CursorIndex;
-            var time = session.Created?.ToString("HH:mm") ?? "     ";
-            var name = Markup.Escape(session.Name);
-
-            var spinner = Markup.Escape(GetSpinnerFrame());
-            var isWorking = !session.IsWaitingForInput;
-            var status = isWorking ? spinner : "!";
-
-            if (isSelected)
+            rows.Add(new Markup("  [grey]No standalone sessions[/]"));
+        }
+        else
+        {
+            for (var i = 0; i < standalone.Count; i++)
             {
-                var bg = session.ColorTag ?? "grey37";
-                rows.Add(new Markup($"[white on {bg}] {status} {name,-18} {time} [/]"));
+                var session = standalone[i];
+                var isSelected = sessionsFocused && i == state.CursorIndex;
+                rows.Add(BuildSessionRow(session, isSelected));
             }
-            else if (isWorking)
-                rows.Add(new Markup($" [green]{spinner}[/] [navajowhite1]{name,-18}[/] [grey50]{time}[/]"));
-            else if (session.IsWaitingForInput)
-                rows.Add(new Markup($" [yellow bold]![/] [navajowhite1]{name,-18}[/] [grey50]{time}[/]"));
-            else
-                rows.Add(new Markup($"   [grey70]{name,-18}[/] [grey42]{time}[/]"));
         }
 
-        if (rows.Count != 0)
+        // Separator
+        rows.Add(new Rule().RuleStyle(Style.Parse("grey27")));
+
+        // Groups section header
+        var groupsHeaderColor = groupsFocused ? "white bold" : "grey50";
+        rows.Add(new Markup($" [{groupsHeaderColor}]Groups[/]"));
+
+        if (groups.Count == 0)
+        {
+            rows.Add(new Markup("  [grey]No groups · press [/][grey70 bold]g[/][grey] to create[/]"));
+        }
+        else
+        {
+            for (var i = 0; i < groups.Count; i++)
+            {
+                var group = groups[i];
+                var isSelected = groupsFocused && i == state.GroupCursor;
+                rows.Add(BuildGroupRow(group, isSelected, state));
+            }
+        }
+
+        // Panel border color based on focused section
+        Color borderColor;
+        if (sessionsFocused)
         {
             var selected = state.GetSelectedSession();
-            var borderColor = selected?.ColorTag != null
+            borderColor = selected?.ColorTag != null
                 ? Style.Parse(selected.ColorTag).Foreground
                 : Color.Grey42;
-            var headerColor = selected?.ColorTag ?? "grey70";
-
-            return new Panel(new Rows(rows))
-                .Header($"[{headerColor}] Sessions [/]")
-                .BorderColor(borderColor)
-                .Expand();
+        }
+        else if (groupsFocused)
+        {
+            var selected = state.GetSelectedGroup();
+            borderColor = !string.IsNullOrEmpty(selected?.Color)
+                ? Style.Parse(selected.Color).Foreground
+                : Color.Grey42;
+        }
+        else
+        {
+            borderColor = Color.Grey42;
         }
 
-        rows.Add(new Text(""));
-        rows.Add(new Markup("[grey]  No tmux sessions found[/]"));
-        rows.Add(new Markup("[grey]  Press [/][grey70 bold]n[/][grey] to create one[/]"));
-
         return new Panel(new Rows(rows))
-            .Header("[grey70] Sessions [/]")
-            .BorderColor(Color.Grey42)
+            .Header("[grey70] Claude Sessions [/]")
+            .BorderColor(borderColor)
             .Expand();
+    }
+
+    private static Markup BuildSessionRow(TmuxSession session, bool isSelected)
+    {
+        var time = session.Created?.ToString("HH:mm") ?? "     ";
+        var name = Markup.Escape(session.Name);
+        var spinner = Markup.Escape(GetSpinnerFrame());
+        var isWorking = !session.IsWaitingForInput;
+        var status = isWorking ? spinner : "!";
+
+        if (isSelected)
+        {
+            var bg = session.ColorTag ?? "grey37";
+            return new Markup($"[white on {bg}] {status} {name,-18} {time} [/]");
+        }
+
+        if (isWorking)
+            return new Markup($" [green]{spinner}[/] [navajowhite1]{name,-18}[/] [grey50]{time}[/]");
+        if (session.IsWaitingForInput)
+            return new Markup($" [yellow bold]![/] [navajowhite1]{name,-18}[/] [grey50]{time}[/]");
+
+        return new Markup($"   [grey70]{name,-18}[/] [grey42]{time}[/]");
+    }
+
+    private static Markup BuildGroupRow(SessionGroup group, bool isSelected, AppState state)
+    {
+        var name = Markup.Escape(group.Name);
+        var totalSessions = group.Sessions.Count;
+        var configSessions = state.Sessions.Count > 0
+            ? group.Sessions.Count
+            : 0;
+
+        // Check if any session in the group is waiting for input
+        var groupSessionNames = new HashSet<string>(group.Sessions);
+        var anyWaiting = state.Sessions
+            .Where(s => groupSessionNames.Contains(s.Name))
+            .Any(s => s.IsWaitingForInput);
+
+        var spinner = Markup.Escape(GetSpinnerFrame());
+        var status = totalSessions == 0 ? "[grey50]x[/]" : anyWaiting ? "[yellow bold]![/]" : $"[green]{spinner}[/]";
+        var countLabel = $"({totalSessions})";
+        var colorTag = !string.IsNullOrEmpty(group.Color) ? group.Color : "grey50";
+
+        if (isSelected)
+        {
+            var bg = !string.IsNullOrEmpty(group.Color) ? group.Color : "grey37";
+            return new Markup($"[white on {bg}] {status} {name,-14} {countLabel,-4} [/]");
+        }
+
+        if (totalSessions == 0)
+            return new Markup($" {status} [grey50 strikethrough]{name,-14}[/] [grey42]{countLabel}[/]");
+
+        return new Markup($" {status} [{colorTag}]{name,-14}[/] [grey50]{countLabel}[/]");
     }
 
     private static Panel BuildPreviewPanel(AppState state, string? capturedPane,
@@ -126,6 +209,14 @@ public static class Renderer
 
         if (session == null)
         {
+            // If groups section is focused, show group info instead of figlet
+            if (state.ActiveSection == ActiveSection.Groups)
+            {
+                var group = state.GetSelectedGroup();
+                if (group != null)
+                    return BuildGroupPreviewPanel(group, state);
+            }
+
             // Panel width = terminal - session panel (35) - panel borders (4)
             var panelWidth = Math.Max(20, Console.WindowWidth - 35 - 4);
 
@@ -193,8 +284,50 @@ public static class Renderer
             .Expand();
     }
 
+    private static Panel BuildGroupPreviewPanel(SessionGroup group, AppState state)
+    {
+        var colorTag = !string.IsNullOrEmpty(group.Color) ? group.Color : "grey50";
+        var rows = new List<IRenderable>();
+
+        rows.Add(new Markup($" [{colorTag}]Group:[/]     [white bold]{Markup.Escape(group.Name)}[/]"));
+        rows.Add(new Markup($" [{colorTag}]Feature:[/]   [grey70]{Markup.Escape(group.Description)}[/]"));
+        rows.Add(new Markup($" [{colorTag}]Worktree:[/]  [white]{Markup.Escape(group.WorktreePath)}[/]"));
+        rows.Add(new Markup($" [{colorTag}]Sessions:[/]  [white]{group.Sessions.Count}[/]"));
+        rows.Add(new Rule().RuleStyle(Style.Parse(colorTag)));
+
+        // Show each session in the group with its status
+        var groupSessionNames = new HashSet<string>(group.Sessions);
+        var groupSessions = state.Sessions.Where(s => groupSessionNames.Contains(s.Name)).ToList();
+
+        foreach (var session in groupSessions)
+        {
+            var spinner = Markup.Escape(GetSpinnerFrame());
+            var status = session.IsWaitingForInput ? "[yellow bold]![/]" : $"[green]{spinner}[/]";
+            var name = Markup.Escape(session.Name);
+            var branch = session.GitBranch != null ? $" [aqua]{Markup.Escape(session.GitBranch)}[/]" : "";
+            var path = session.CurrentPath != null ? $" [grey50]{Markup.Escape(ShortenPath(session.CurrentPath))}[/]" : "";
+            rows.Add(new Markup($"  {status} [white]{name}[/]{branch}{path}"));
+        }
+
+        if (groupSessions.Count == 0)
+            rows.Add(new Markup("  [grey50]All sessions have ended[/]"));
+
+        rows.Add(new Text(""));
+        rows.Add(new Markup("  [grey]Press [/][grey70 bold]Enter[/][grey] to open group grid[/]"));
+
+        var borderColor = !string.IsNullOrEmpty(group.Color)
+            ? Style.Parse(group.Color).Foreground
+            : Color.Grey42;
+
+        return new Panel(new Rows(rows))
+            .Header($"[{colorTag} bold] {Markup.Escape(group.Name)} [/]")
+            .BorderColor(borderColor)
+            .Expand();
+    }
+
     private static IRenderable BuildGridLayout(AppState state, Dictionary<string, string>? allCapturedPanes)
     {
+        var visibleSessions = state.GetVisibleSessions();
         var (cols, gridRows) = state.GetGridDimensions();
         var outputLines = state.GetGridCellOutputLines();
 
@@ -210,9 +343,9 @@ public static class Renderer
                 var cellName = $"Cell_{row}_{col}";
                 var cellLayout = new Layout(cellName);
 
-                if (idx < state.Sessions.Count)
+                if (idx < visibleSessions.Count)
                 {
-                    var session = state.Sessions[idx];
+                    var session = visibleSessions[idx];
                     var isSelected = idx == state.CursorIndex;
                     var pane = allCapturedPanes?.GetValueOrDefault(session.Name);
                     cellLayout.Update(BuildGridCell(session, isSelected, pane, outputLines));
@@ -289,6 +422,31 @@ public static class Renderer
             .Expand();
     }
 
+    private static Markup BuildGroupGridStatusBar(AppState state)
+    {
+        if (state.IsInputMode)
+            return BuildInputStatusBar(state);
+
+        var status = state.GetActiveStatus();
+        if (status != null)
+            return new Markup($" [yellow]{Markup.Escape(status)}[/]");
+
+        var groupName = state.ActiveGroup != null ? Markup.Escape(state.ActiveGroup) : "group";
+
+        return new Markup(
+            $" [mediumpurple3]{groupName}[/] [grey]│[/] " +
+            "[grey70 bold]arrows[/][grey] navigate [/]" +
+            "[grey]│[/] " +
+            "[grey70 bold]Enter[/][grey] attach [/]" +
+            "[grey70 bold]Y[/][grey] approve [/]" +
+            "[grey70 bold]N[/][grey] reject [/]" +
+            "[grey70 bold]S[/][grey] send [/]" +
+            "[grey70 bold]d[/][grey] kill [/]" +
+            "[grey]│[/] " +
+            "[grey70 bold]Esc[/][grey] back [/]" +
+            "[grey70 bold]q[/][grey] quit [/]");
+    }
+
     private static Markup BuildGridStatusBar(AppState state)
     {
         if (state.IsInputMode)
@@ -356,6 +514,13 @@ public static class Renderer
             prevGroup = group;
 
             parts.Add($"[grey70 bold]{Markup.Escape(b.Key)}[/][grey] {Markup.Escape(b.Label!)} [/]");
+        }
+
+        // Tab hint when groups exist
+        if (state.Groups.Count > 0)
+        {
+            parts.Add("[grey]│[/]");
+            parts.Add("[grey70 bold]Tab[/][grey] switch section [/]");
         }
 
         return new Markup(" " + string.Join(" ", parts));

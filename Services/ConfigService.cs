@@ -127,6 +127,31 @@ public static class ConfigService
         File.WriteAllText(ConfigPath, json);
     }
 
+    public static void SaveGroup(CccConfig config, SessionGroup group)
+    {
+        config.Groups[group.Name] = group;
+        Save(config);
+    }
+
+    public static void RemoveGroup(CccConfig config, string groupName)
+    {
+        if (config.Groups.Remove(groupName))
+            Save(config);
+    }
+
+    public static void RemoveSessionFromGroup(CccConfig config, string groupName, string sessionName)
+    {
+        if (!config.Groups.TryGetValue(groupName, out var group))
+            return;
+
+        group.Sessions.Remove(sessionName);
+
+        if (group.Sessions.Count == 0)
+            config.Groups.Remove(groupName);
+
+        Save(config);
+    }
+
     public static string ExpandPath(string path)
     {
         if (path.StartsWith('~'))
