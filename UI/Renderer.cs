@@ -41,7 +41,7 @@ public static class Renderer
 
     private static Columns BuildHeader(AppState state)
     {
-        var left = new Markup($"[grey70 bold] Claude Command Center[/] [grey50]v{Version}[/]");
+        var left = new Markup($"[mediumpurple3 bold] Claude Command Center[/] [grey50]v{Version}[/]");
         var right = new Markup($"[grey]{state.Sessions.Count} session(s)[/] ");
 
         return new Columns(left, right) { Expand = true };
@@ -111,8 +111,8 @@ public static class Renderer
             return new Panel(
                 new Rows(
                     new Text(""),
-                    CenterFiglet("Claude", panelWidth, Color.PaleTurquoise1),
-                    CenterFiglet("Command center", panelWidth, Color.PaleTurquoise1),
+                    CenterFiglet("Claude", panelWidth, Color.MediumPurple3),
+                    CenterFiglet("Command center", panelWidth, Color.MediumPurple3),
                     new Text(""),
                     Align.Center(new Markup("[grey50]Select a session to see preview[/]"))))
                 .Header("[grey70] Live Preview [/]")
