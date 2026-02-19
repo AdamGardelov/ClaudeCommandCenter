@@ -7,8 +7,6 @@ public class AppState
     public List<TmuxSession> Sessions { get; set; } = [];
     public int CursorIndex { get; set; }
     public ViewMode ViewMode { get; set; } = ViewMode.List;
-    public int? ExpandedSessionIndex { get; set; }
-
     public bool Running { get; set; } = true;
     public bool IsInputMode { get; set; }
     public string InputBuffer { get; set; } = "";
@@ -92,13 +90,5 @@ public class AppState
     public void ClampCursor()
     {
         CursorIndex = Sessions.Count == 0 ? 0 : Math.Clamp(CursorIndex, 0, Sessions.Count - 1);
-
-        if (ExpandedSessionIndex.HasValue)
-        {
-            if (Sessions.Count == 0)
-                ExpandedSessionIndex = null;
-            else
-                ExpandedSessionIndex = Math.Clamp(ExpandedSessionIndex.Value, 0, Sessions.Count - 1);
-        }
     }
 }

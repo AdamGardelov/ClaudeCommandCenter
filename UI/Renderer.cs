@@ -26,18 +26,12 @@ public static class Renderer
 
         layout["Header"].Update(BuildHeader(state));
 
-        if (state.ViewMode is ViewMode.Grid or ViewMode.GridExpanded)
+        if (state.ViewMode == ViewMode.Grid)
         {
             var (cols, _) = state.GetGridDimensions();
             if (cols == 0) // Too many sessions, fall back to list
             {
                 state.ViewMode = ViewMode.List;
-            }
-            else if (state.ViewMode == ViewMode.GridExpanded && state.ExpandedSessionIndex.HasValue)
-            {
-                layout["Main"].Update(BuildExpandedGridLayout(state, capturedPane));
-                layout["StatusBar"].Update(BuildGridExpandedStatusBar(state));
-                return layout;
             }
             else
             {
@@ -294,21 +288,6 @@ public static class Renderer
             .Expand();
     }
 
-    private static IRenderable BuildExpandedGridLayout(AppState state, string? capturedPane)
-    {
-        var expandedIdx = state.ExpandedSessionIndex ?? state.CursorIndex;
-        var expandedSession = expandedIdx >= 0 && expandedIdx < state.Sessions.Count
-            ? state.Sessions[expandedIdx]
-            : null;
-
-        if (expandedSession != null)
-            return BuildPreviewPanel(state, capturedPane, expandedSession);
-
-        return new Panel(new Text("No session selected"))
-            .BorderColor(Color.Grey42)
-            .Expand();
-    }
-
     private static Markup BuildGridStatusBar(AppState state)
     {
         if (state.IsInputMode)
@@ -321,34 +300,13 @@ public static class Renderer
         return new Markup(
             " [grey70 bold]arrows[/][grey] navigate [/]" +
             "[grey]│[/] " +
-            "[grey70 bold]Enter[/][grey] expand [/]" +
+            "[grey70 bold]Enter[/][grey] attach [/]" +
             "[grey70 bold]Y[/][grey] approve [/]" +
             "[grey70 bold]N[/][grey] reject [/]" +
             "[grey70 bold]S[/][grey] send [/]" +
             "[grey]│[/] " +
             "[grey70 bold]G[/][grey] list view [/]" +
             "[grey70 bold]q[/][grey] quit [/]");
-    }
-
-    private static Markup BuildGridExpandedStatusBar(AppState state)
-    {
-        if (state.IsInputMode)
-            return BuildInputStatusBar(state);
-
-        var status = state.GetActiveStatus();
-        if (status != null)
-            return new Markup($" [yellow]{Markup.Escape(status)}[/]");
-
-        return new Markup(
-            " [grey70 bold]up/dn[/][grey] switch session [/]" +
-            "[grey]│[/] " +
-            "[grey70 bold]Esc[/][grey] collapse [/]" +
-            "[grey70 bold]Enter[/][grey] attach [/]" +
-            "[grey70 bold]Y[/][grey] approve [/]" +
-            "[grey70 bold]N[/][grey] reject [/]" +
-            "[grey70 bold]S[/][grey] send [/]" +
-            "[grey]│[/] " +
-            "[grey70 bold]G[/][grey] list view [/]");
     }
 
     private static Markup BuildInputStatusBar(AppState state)

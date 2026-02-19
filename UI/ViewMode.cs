@@ -4,5 +4,4 @@ public enum ViewMode
 {
     List,
     Grid,
-    GridExpanded
 }

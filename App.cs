@@ -146,7 +146,7 @@ public class App
         _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput);
 
         // In grid mode, capture panes for all sessions
-        if (_state.ViewMode is ViewMode.Grid or ViewMode.GridExpanded)
+        if (_state.ViewMode == ViewMode.Grid)
             return UpdateAllCapturedPanes();
 
         var session = _state.GetSelectedSession();
@@ -177,9 +177,6 @@ public class App
         var changed = false;
         var newPanes = new Dictionary<string, string>();
 
-        // In expanded mode, also update _capturedPane for the expanded session
-        var expandedIdx = _state.ExpandedSessionIndex ?? _state.CursorIndex;
-
         foreach (var session in _state.Sessions)
         {
             var content = TmuxService.CapturePaneContent(session.Name);
@@ -195,14 +192,6 @@ public class App
         }
 
         _allCapturedPanes = newPanes;
-
-        // Keep _capturedPane in sync for the expanded session
-        if (_state.ViewMode != ViewMode.GridExpanded || expandedIdx < 0 || expandedIdx >= _state.Sessions.Count)
-            return changed;
-
-        var expandedName = _state.Sessions[expandedIdx].Name;
-        _capturedPane = newPanes.GetValueOrDefault(expandedName);
-
         return changed;
     }
 
@@ -242,21 +231,6 @@ public class App
                     return;
                 case ConsoleKey.RightArrow:
                     MoveGridCursor(1, 0);
-                    return;
-            }
-        }
-        else if (_state.ViewMode == ViewMode.GridExpanded)
-        {
-            switch (key.Key)
-            {
-                case ConsoleKey.UpArrow:
-                    CycleExpandedSession(-1);
-                    return;
-                case ConsoleKey.DownArrow:
-                    CycleExpandedSession(1);
-                    return;
-                case ConsoleKey.Escape:
-                    CollapseGrid();
                     return;
             }
         }
@@ -310,10 +284,7 @@ public class App
                 SendText();
                 break;
             case "attach":
-                if (_state.ViewMode == ViewMode.Grid)
-                    ExpandGridCell();
-                else // List or GridExpanded — attach
-                    AttachToSession();
+                AttachToSession();
                 break;
             case "toggle-grid":
                 ToggleGridView();
@@ -451,56 +422,9 @@ public class App
         else
         {
             _state.ViewMode = ViewMode.List;
-            _state.ExpandedSessionIndex = null;
         }
 
         _lastSelectedSession = null;
-    }
-
-    private void ExpandGridCell()
-    {
-        if (_state.Sessions.Count == 0)
-            return;
-        _state.ViewMode = ViewMode.GridExpanded;
-        _state.ExpandedSessionIndex = _state.CursorIndex;
-        _lastSelectedSession = null;
-
-        // Update capturedPane for the expanded session
-        var session = _state.Sessions[_state.CursorIndex];
-        _capturedPane = TmuxService.CapturePaneContent(session.Name);
-    }
-
-    private void CollapseGrid()
-    {
-        _state.ViewMode = ViewMode.Grid;
-        // Restore cursor to the previously expanded session
-        if (_state.ExpandedSessionIndex.HasValue)
-            _state.CursorIndex = _state.ExpandedSessionIndex.Value;
-        _state.ExpandedSessionIndex = null;
-        _lastSelectedSession = null;
-    }
-
-    private void CycleExpandedSession(int delta)
-    {
-        if (_state.Sessions.Count == 0)
-            return;
-
-        var idx = _state.ExpandedSessionIndex ?? _state.CursorIndex;
-        idx += delta;
-
-        // Wrap around
-        if (idx < 0)
-            idx = _state.Sessions.Count - 1;
-        if (idx >= _state.Sessions.Count)
-            idx = 0;
-
-        _state.ExpandedSessionIndex = idx;
-        _state.CursorIndex = idx;
-        _lastSelectedSession = null;
-
-        // Immediately update capturedPane for the newly expanded session
-        var session = _state.Sessions[idx];
-        _capturedPane = TmuxService.CapturePaneContent(session.Name);
     }
 
     private void AttachToSession()
