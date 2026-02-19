@@ -10,6 +10,7 @@ public class App
 {
     private readonly AppState _state = new();
     private readonly CccConfig _config = ConfigService.Load();
+    private Dictionary<string, string> _keyMap = new();
     private string? _capturedPane;
     private DateTime _lastCapture = DateTime.MinValue;
     private string? _lastSelectedSession;
@@ -37,6 +38,10 @@ public class App
             AnsiConsole.MarkupLine("[yellow]Warning: 'claude' was not found in PATH.[/]");
             AnsiConsole.MarkupLine("[grey]New sessions will fail to start. Install Claude Code: https://docs.anthropic.com/en/docs/claude-code[/]");
         }
+
+        var bindings = KeyBindingService.Resolve(_config);
+        _keyMap = KeyBindingService.BuildKeyMap(bindings);
+        _state.Keybindings = bindings;
 
         LoadSessions();
 
@@ -157,27 +162,55 @@ public class App
             return;
         }
 
+        // Arrow keys are hardcoded fallbacks — always work
         switch (key.Key)
         {
-            case ConsoleKey.UpArrow or ConsoleKey.K:
+            case ConsoleKey.UpArrow:
                 MoveCursor(-1);
-                break;
-
-            case ConsoleKey.DownArrow or ConsoleKey.J:
+                return;
+            case ConsoleKey.DownArrow:
                 MoveCursor(1);
+                return;
+        }
+
+        var keyId = ResolveKeyId(key);
+        if (_keyMap.TryGetValue(keyId, out var actionId))
+            DispatchAction(actionId);
+    }
+
+    private static string ResolveKeyId(ConsoleKeyInfo key)
+    {
+        return key.Key switch
+        {
+            ConsoleKey.Enter => "Enter",
+            ConsoleKey.UpArrow => "UpArrow",
+            ConsoleKey.DownArrow => "DownArrow",
+            _ => key.KeyChar.ToString(),
+        };
+    }
+
+    private void DispatchAction(string actionId)
+    {
+        switch (actionId)
+        {
+            case "navigate-up":     MoveCursor(-1); break;
+            case "navigate-down":   MoveCursor(1); break;
+            case "approve":         SendQuickKey("y"); break;
+            case "reject":          SendQuickKey("n"); break;
+            case "send-text":       SendText(); break;
+            case "attach":          AttachToSession(); break;
+            case "new-session":     CreateNewSession(); break;
+            case "open-folder":     OpenFolder(); break;
+            case "open-ide":        OpenInIde(); break;
+            case "open-config":     OpenConfig(); break;
+            case "delete-session":  DeleteSession(); break;
+            case "rename-session":  RenameSession(); break;
+            case "refresh":
+                LoadSessions();
+                _state.SetStatus("Refreshed");
                 break;
-
-
-            case ConsoleKey.Enter:
-                AttachToSession();
-                break;
-
-            case ConsoleKey.Q:
+            case "quit":
                 _state.Running = false;
-                break;
-
-            default:
-                HandleCharKey(key.KeyChar);
                 break;
         }
     }
@@ -225,44 +258,6 @@ public class App
             default:
                 if (key.KeyChar >= ' ')
                     _state.InputBuffer += key.KeyChar;
-                break;
-        }
-    }
-
-    private void HandleCharKey(char c)
-    {
-        switch (c)
-        {
-            case 'n':
-                CreateNewSession();
-                break;
-            case 'd':
-                DeleteSession();
-                break;
-            case 'R':
-                RenameSession();
-                break;
-            case 'r':
-                LoadSessions();
-                _state.SetStatus("Refreshed");
-                break;
-            case 'f':
-                OpenFolder();
-                break;
-            case 'i':
-                OpenInIde();
-                break;
-            case 'Y':
-                SendQuickKey("y");
-                break;
-            case 'N':
-                SendQuickKey("n");
-                break;
-            case 'c':
-                OpenConfig();
-                break;
-            case 'S':
-                SendText();
                 break;
         }
     }

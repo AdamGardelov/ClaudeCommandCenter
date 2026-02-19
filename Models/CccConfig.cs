@@ -6,4 +6,5 @@ public class CccConfig
     public string IdeCommand { get; set; } = "";
     public Dictionary<string, string> SessionDescriptions { get; set; } = new();
     public Dictionary<string, string> SessionColors { get; set; } = new();
+    public Dictionary<string, KeyBindingConfig> Keybindings { get; set; } = new();
 }

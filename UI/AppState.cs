@@ -50,6 +50,8 @@ public class AppState
         return StatusMessage;
     }
 
+    public List<KeyBinding> Keybindings { get; set; } = [];
+
     public void ClampCursor()
     {
         CursorIndex = Sessions.Count == 0 ? 0 : Math.Clamp(CursorIndex, 0, Sessions.Count - 1);

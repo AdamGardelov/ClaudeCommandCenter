@@ -66,20 +66,20 @@ The app shows a split-panel TUI — sessions on the left, a live pane preview on
 | Key | Action |
 |-----|--------|
 | `j` / `k` / arrows | Navigate sessions |
-| `J` / `K` | Scroll preview |
 | `Enter` | Attach to selected session |
 | `n` | Create new session (launches `claude` in a given directory) |
 | `f` | Open session directory in file manager |
 | `i` | Open session directory in IDE |
+| `c` | Open config file in IDE |
 | `d` | Delete session (with confirmation) |
 | `R` | Rename session |
 | `r` | Refresh session list |
-| `y` | Approve — sends `y` to the selected session |
+| `Y` | Approve — sends `y` to the selected session |
 | `N` | Reject — sends `n` to the selected session |
-| `s` | Send — type a message and send it to the selected session |
+| `S` | Send — type a message and send it to the selected session |
 | `q` | Quit |
 
-When you attach to a session, detach with the standard tmux prefix (`Ctrl-b d`) to return to the command center.
+Arrow keys always work for navigation regardless of configuration. When you attach to a session, detach with the standard tmux prefix (`Ctrl-b d`) to return to the command center.
 
 ### Configuration
 
@@ -99,5 +99,53 @@ Create `~/.ccc/config.json` to configure favorite folders. When creating a new s
 |---------|---------|-------------|
 | `favoriteFolders` | `[]` | Quick-pick directories when creating sessions |
 | `ideCommand` | `` | Command to run when pressing `i` (e.g. `rider`, `code`, `cursor`) |
+| `sessionDescriptions` | `{}` | Display names shown under sessions in the preview panel |
+| `sessionColors` | `{}` | Spectre Console color names for session panel borders |
+| `keybindings` | `{}` | Keybinding overrides (see below) |
 
 The config file is created automatically on first run. Tilde (`~`) paths are expanded automatically.
+
+#### Keybinding Configuration
+
+Override default keybindings by adding a `keybindings` object to your config. Only include the actions you want to change — missing entries keep their defaults.
+
+```json
+{
+  "keybindings": {
+    "approve": { "key": "y", "label": "yes" },
+    "delete-session": { "enabled": false },
+    "open-ide": { "key": "e", "label": "editor" }
+  }
+}
+```
+
+Each override supports three optional fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `key` | `string` | Single char (`"n"`) or special key (`"Enter"`) |
+| `enabled` | `bool` | `false` to disable the action (ignored for non-disableable actions) |
+| `label` | `string` | Status bar text; empty string hides from the bar |
+
+**Available actions:**
+
+| Action ID | Default Key | Default Label | Can Disable |
+|-----------|-------------|---------------|-------------|
+| `navigate-up` | `k` | (hidden) | No |
+| `navigate-down` | `j` | (hidden) | No |
+| `approve` | `Y` | approve | Yes |
+| `reject` | `N` | reject | Yes |
+| `send-text` | `S` | send | Yes |
+| `attach` | `Enter` | attach | Yes |
+| `new-session` | `n` | new | Yes |
+| `open-folder` | `f` | folder | Yes |
+| `open-ide` | `i` | ide | Yes |
+| `open-config` | `c` | config | Yes |
+| `delete-session` | `d` | del | Yes |
+| `rename-session` | `R` | rename | Yes |
+| `refresh` | `r` | (hidden) | Yes |
+| `quit` | `q` | quit | No |
+
+Arrow keys always work for navigation regardless of configuration.
+
+**Adding a new keybinding (developer guide):** Add a default entry in `KeyBindingService.Defaults` and a case in `App.DispatchAction()`.

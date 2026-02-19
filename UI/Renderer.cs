@@ -179,19 +179,28 @@ public static class Renderer
         if (status != null)
             return new Markup($" [yellow]{Markup.Escape(status)}[/]");
 
-        return new Markup(
-            " [darkorange bold]Y[/][grey] approve [/] " +
-            "[darkorange bold]N[/][grey] reject [/] " +
-            "[darkorange bold]S[/][grey] send [/] " +
-            "[grey]│[/] " +
-            "[darkorange bold]Enter[/][grey] attach [/] " +
-            "[darkorange bold]n[/][grey] new [/] " +
-            "[darkorange bold]f[/][grey] folder [/] " +
-            "[darkorange bold]i[/][grey] ide [/] " +
-            "[darkorange bold]c[/][grey] config [/] " +
-            "[darkorange bold]d[/][grey] del [/] " +
-            "[darkorange bold]R[/][grey] rename [/] " +
-            "[darkorange bold]q[/][grey] quit[/]");
+        var visible = state.Keybindings
+            .Where(b => b.Enabled && b.Label != null && b.StatusBarOrder >= 0)
+            .OrderBy(b => b.StatusBarOrder)
+            .ToList();
+
+        if (visible.Count == 0)
+            return new Markup(" ");
+
+        var parts = new List<string>();
+        var prevGroup = -1;
+
+        foreach (var b in visible)
+        {
+            var group = b.StatusBarOrder < 5 ? 0 : 1;
+            if (prevGroup >= 0 && group != prevGroup)
+                parts.Add("[grey]│[/]");
+            prevGroup = group;
+
+            parts.Add($"[darkorange bold]{Markup.Escape(b.Key)}[/][grey] {Markup.Escape(b.Label!)} [/]");
+        }
+
+        return new Markup(" " + string.Join(" ", parts));
     }
 
     private static Padder CenterFiglet(string text, int availableWidth, Color color)

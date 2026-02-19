@@ -23,7 +23,10 @@ public static class ConfigService
     {
         if (!File.Exists(ConfigPath))
         {
-            var config = new CccConfig();
+            var config = new CccConfig
+            {
+                Keybindings = KeyBindingService.GetDefaultConfigs(),
+            };
             Save(config);
             return config;
         }
