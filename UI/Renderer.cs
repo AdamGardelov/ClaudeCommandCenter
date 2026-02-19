@@ -76,10 +76,18 @@ public static class Renderer
         }
 
         if (rows.Count != 0)
+        {
+            var selected = state.GetSelectedSession();
+            var borderColor = selected?.ColorTag != null
+                ? Style.Parse(selected.ColorTag).Foreground
+                : Color.Grey42;
+            var headerColor = selected?.ColorTag ?? "darkorange";
+
             return new Panel(new Rows(rows))
-                .Header("[darkorange] Sessions [/]")
-                .BorderColor(Color.Grey42)
+                .Header($"[{headerColor}] Sessions [/]")
+                .BorderColor(borderColor)
                 .Expand();
+        }
 
         rows.Add(new Text(""));
         rows.Add(new Markup("[grey]  No tmux sessions found[/]"));
