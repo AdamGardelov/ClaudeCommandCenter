@@ -549,7 +549,7 @@ public class App
         if (selected == "None")
             return null;
 
-        if (selected.EndsWith("Just give me one"))
+        if (selected.Contains("Just give me one"))
         {
             var unused = ColorPalette.Where(c => !usedColors.Contains(c.SpectreColor)).ToArray();
             return unused[Random.Shared.Next(unused.Length)].SpectreColor;
