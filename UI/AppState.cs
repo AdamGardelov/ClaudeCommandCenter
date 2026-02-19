@@ -53,15 +53,8 @@ public class AppState
             }
         }
 
-        // Global grid view (G key): show all sessions
-        if (ViewMode == ViewMode.Grid)
-            return Sessions;
-
-        // List view, sessions section: show only standalone sessions
-        if (ActiveSection == ActiveSection.Sessions)
-            return GetStandaloneSessions();
-
-        return Sessions;
+        // Standalone sessions only (list view sessions section + global grid)
+        return GetStandaloneSessions();
     }
 
     public List<TmuxSession> GetStandaloneSessions()
