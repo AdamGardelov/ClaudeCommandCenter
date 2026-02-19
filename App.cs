@@ -608,12 +608,12 @@ public class App
 
         // Add more sessions
         var currentCount = group.Sessions.Count;
-        var remaining = 8 - currentCount;
+        var remaining = 9 - currentCount;
         var newDirectories = new List<(string Dir, string Label)>();
 
         if (remaining > 0)
         {
-            AnsiConsole.MarkupLine($"\n[grey70]Current sessions: {currentCount}/8 — you can add {remaining} more[/]");
+            AnsiConsole.MarkupLine($"\n[grey70]Current sessions: {currentCount}/9 — you can add {remaining} more[/]");
 
             var addMore = AnsiConsole.Prompt(
                 new SelectionPrompt<string>()
@@ -641,7 +641,7 @@ public class App
                     var label = Path.GetFileName(dir.TrimEnd('/'));
                     newDirectories.Add((dir, label));
 
-                    if (currentCount + newDirectories.Count >= 8)
+                    if (currentCount + newDirectories.Count >= 9)
                         break;
 
                     var more = AnsiConsole.Prompt(
@@ -657,7 +657,7 @@ public class App
         }
         else
         {
-            AnsiConsole.MarkupLine($"\n[grey50]Group is full (8/8 sessions)[/]");
+            AnsiConsole.MarkupLine($"\n[grey50]Group is full (9/9 sessions)[/]");
         }
 
         Console.CursorVisible = false;
@@ -994,9 +994,9 @@ public class App
 
         var directories = new List<(string Dir, string Label)>();
 
-        for (var i = 0; i < 8; i++)
+        for (var i = 0; i < 9; i++)
         {
-            AnsiConsole.MarkupLine($"\n[grey70]Session {i + 1} of 8[/]");
+            AnsiConsole.MarkupLine($"\n[grey70]Session {i + 1} of 9[/]");
 
             var dir = PickDirectory();
             if (dir == null)
@@ -1021,7 +1021,7 @@ public class App
             var label = Path.GetFileName(dir.TrimEnd('/'));
             directories.Add((dir, label));
 
-            if (directories.Count >= 8)
+            if (directories.Count >= 9)
                 break;
 
             if (directories.Count >= 2)
