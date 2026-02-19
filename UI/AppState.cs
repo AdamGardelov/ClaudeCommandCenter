@@ -85,6 +85,8 @@ public class AppState
         return StatusMessage;
     }
 
+    public string? LatestVersion { get; set; }
+
     public List<KeyBinding> Keybindings { get; set; } = [];
 
     public void ClampCursor()

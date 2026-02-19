@@ -63,7 +63,11 @@ public static class Renderer
 
     private static Columns BuildHeader(AppState state)
     {
-        var left = new Markup($"[mediumpurple3 bold] Claude Command Center[/] [grey50]v{Version}[/]");
+        var versionText = $"[grey50]v{Version}[/]";
+        if (state.LatestVersion != null)
+            versionText += $" [yellow bold]v{state.LatestVersion} available[/]";
+
+        var left = new Markup($"[mediumpurple3 bold] Claude Command Center[/] {versionText}");
         var right = new Markup($"[grey]{state.Sessions.Count} session(s)[/] ");
 
         return new Columns(left, right) { Expand = true };

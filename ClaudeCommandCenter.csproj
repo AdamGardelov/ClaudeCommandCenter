@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>ClaudeCommandCenter</RootNamespace>
     <AssemblyName>ccc</AssemblyName>
-    <Version>2.0.0</Version>
+    <Version>2.13.0</Version>
     <Authors>Adam Gärdelöv</Authors>
     <Description>A terminal dashboard for managing multiple Claude Code tmux sessions</Description>
     <Copyright>Copyright © 2025 Adam Gärdelöv</Copyright>

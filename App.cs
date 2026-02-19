@@ -18,6 +18,7 @@ public class App
     private string? _lastSpinnerFrame;
     private bool _hasSpinningSessions;
     private bool _claudeAvailable;
+    private Task<string?>? _updateCheck;
 
     public void Run()
     {
@@ -46,6 +47,7 @@ public class App
         _state.Keybindings = bindings;
 
         LoadSessions();
+        _updateCheck = UpdateChecker.CheckForUpdateAsync();
 
         try
         {
@@ -73,6 +75,18 @@ public class App
                 var key = Console.ReadKey(true);
                 HandleKey(key);
                 Render();
+            }
+
+            // Check if update check completed
+            if (_updateCheck is { IsCompleted: true })
+            {
+                var latest = _updateCheck.Result;
+                _updateCheck = null;
+                if (latest != null)
+                {
+                    _state.LatestVersion = latest;
+                    Render();
+                }
             }
 
             // Re-render when a status message expires
