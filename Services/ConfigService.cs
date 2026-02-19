@@ -63,6 +63,30 @@ public static class ConfigService
             Save(config);
     }
 
+    public static void SaveColor(CccConfig config, string sessionName, string? color)
+    {
+        if (string.IsNullOrWhiteSpace(color))
+            config.SessionColors.Remove(sessionName);
+        else
+            config.SessionColors[sessionName] = color;
+        Save(config);
+    }
+
+    public static void RenameColor(CccConfig config, string oldName, string newName)
+    {
+        if (config.SessionColors.Remove(oldName, out var color))
+        {
+            config.SessionColors[newName] = color;
+            Save(config);
+        }
+    }
+
+    public static void RemoveColor(CccConfig config, string sessionName)
+    {
+        if (config.SessionColors.Remove(sessionName))
+            Save(config);
+    }
+
     private static void Save(CccConfig config)
     {
         Directory.CreateDirectory(ConfigDir);

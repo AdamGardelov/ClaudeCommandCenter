@@ -9,7 +9,7 @@ public static class Renderer
     private static readonly IReadOnlyList<string> SpinnerFrames = Spinner.Known.Dots.Frames;
     private static readonly TimeSpan SpinnerInterval = Spinner.Known.Dots.Interval;
 
-    private static string GetSpinnerFrame()
+    public static string GetSpinnerFrame()
     {
         var index = (int)(DateTime.Now.Ticks / SpinnerInterval.Ticks % SpinnerFrames.Count);
         return SpinnerFrames[index];
@@ -59,14 +59,15 @@ public static class Renderer
             var name = Markup.Escape(session.Name);
 
             var spinner = Markup.Escape(GetSpinnerFrame());
-            var status = session.IsWaitingForInput ? "!" : session.IsAttached ? spinner : " ";
+            var isWorking = !session.IsWaitingForInput;
+            var status = isWorking ? spinner : "!";
 
             if (isSelected)
                 rows.Add(new Markup($"[white on darkorange] {status} {name,-18} {time} [/]"));
+            else if (isWorking)
+                rows.Add(new Markup($" [green]{spinner}[/] [navajowhite1]{name,-18}[/] [grey50]{time}[/]"));
             else if (session.IsWaitingForInput)
                 rows.Add(new Markup($" [yellow bold]![/] [navajowhite1]{name,-18}[/] [grey50]{time}[/]"));
-            else if (session.IsAttached)
-                rows.Add(new Markup($" [green]{spinner}[/] [navajowhite1]{name,-18}[/] [grey50]{time}[/]"));
             else
                 rows.Add(new Markup($"   [grey70]{name,-18}[/] [grey42]{time}[/]"));
         }
@@ -108,25 +109,26 @@ public static class Renderer
                 .Expand();
         }
 
+        var labelColor = session.ColorTag ?? "grey50";
         var rows = new List<IRenderable>
         {
-            new Markup($" [grey50]Session:[/]  [white]{Markup.Escape(session.Name)}[/]"),
+            new Markup($" [{labelColor}]Session:[/]  [white]{Markup.Escape(session.Name)}[/]"),
         };
 
         if (!string.IsNullOrWhiteSpace(session.Description))
-            rows.Add(new Markup($" [grey50]Desc:[/]     [italic grey70]{Markup.Escape(session.Description)}[/]"));
+            rows.Add(new Markup($" [{labelColor}]Desc:[/]     [italic grey70]{Markup.Escape(session.Description)}[/]"));
 
-        rows.Add(new Markup($" [grey50]Path:[/]     [white]{Markup.Escape(session.CurrentPath ?? "unknown")}[/]"));
+        rows.Add(new Markup($" [{labelColor}]Path:[/]     [white]{Markup.Escape(session.CurrentPath ?? "unknown")}[/]"));
 
         if (session.GitBranch != null)
-            rows.Add(new Markup($" [grey50]Branch:[/]   [aqua]{Markup.Escape(session.GitBranch)}[/]"));
+            rows.Add(new Markup($" [{labelColor}]Branch:[/]   [aqua]{Markup.Escape(session.GitBranch)}[/]"));
 
         if (session.IsWorktree)
-            rows.Add(new Markup(" [grey50]Worktree:[/] [mediumpurple2]yes[/]"));
+            rows.Add(new Markup($" [{labelColor}]Worktree:[/] [mediumpurple2]yes[/]"));
 
-        rows.Add(new Markup($" [grey50]Created:[/]  [white]{session.Created?.ToString("yyyy-MM-dd HH:mm:ss") ?? "unknown"}[/]"));
-        rows.Add(new Markup($" [grey50]Status:[/]   {StatusLabel(session)}"));
-        rows.Add(new Rule().RuleStyle(Style.Parse("grey42")));
+        rows.Add(new Markup($" [{labelColor}]Created:[/]  [white]{session.Created?.ToString("yyyy-MM-dd HH:mm:ss") ?? "unknown"}[/]"));
+        rows.Add(new Markup($" [{labelColor}]Status:[/]   {StatusLabel(session)}"));
+        rows.Add(new Rule().RuleStyle(Style.Parse(session.ColorTag ?? "grey42")));
 
         if (!string.IsNullOrWhiteSpace(capturedPane))
         {
@@ -150,9 +152,14 @@ public static class Renderer
             rows.Add(new Markup("[grey] No pane content available[/]"));
         }
 
+        var borderColor = session.ColorTag != null
+            ? Style.Parse(session.ColorTag).Foreground
+            : Color.Grey42;
+
+        var headerColor = session.ColorTag ?? "darkorange";
         return new Panel(new Rows(rows))
-            .Header("[darkorange] Live Preview [/]")
-            .BorderColor(Color.Grey42)
+            .Header($"[{headerColor} bold] Live Preview [/]")
+            .BorderColor(borderColor)
             .Expand();
     }
 

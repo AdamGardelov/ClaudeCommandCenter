@@ -13,6 +13,7 @@ public class App
     private string? _capturedPane;
     private DateTime _lastCapture = DateTime.MinValue;
     private string? _lastSelectedSession;
+    private string? _lastSpinnerFrame;
     private bool _claudeAvailable;
 
     public void Run()
@@ -74,6 +75,15 @@ public class App
                     Render();
             }
 
+            // Re-render when spinner frame advances (for attached session indicators)
+            var spinnerFrame = Renderer.GetSpinnerFrame();
+            if (spinnerFrame != _lastSpinnerFrame)
+            {
+                _lastSpinnerFrame = spinnerFrame;
+                if (_state.Sessions.Any(s => !s.IsWaitingForInput))
+                    Render();
+            }
+
             // Periodically capture pane content for preview
             if ((DateTime.Now - _lastCapture).TotalMilliseconds > 500)
             {
@@ -93,6 +103,8 @@ public class App
         {
             if (_config.SessionDescriptions.TryGetValue(s.Name, out var desc))
                 s.Description = desc;
+            if (_config.SessionColors.TryGetValue(s.Name, out var color))
+                s.ColorTag = color;
         }
         _state.ClampCursor();
     }
@@ -307,6 +319,8 @@ public class App
                 .AllowEmpty()
                 .PromptStyle(new Style(Color.White)));
 
+        var color = PickColor();
+
         var dir = PickDirectory();
 
         if (dir == null)
@@ -330,6 +344,8 @@ public class App
         {
             if (!string.IsNullOrWhiteSpace(description))
                 ConfigService.SaveDescription(_config, name, description);
+            if (color != null)
+                ConfigService.SaveColor(_config, name, color);
             TmuxService.AttachSession(name);
         }
         else
@@ -340,6 +356,43 @@ public class App
         Console.CursorVisible = false;
         LoadSessions();
         _lastSelectedSession = null;
+    }
+
+    private static readonly (string Label, string SpectreColor)[] ColorPalette =
+    [
+        ("Steel Blue", "SteelBlue"),
+        ("Indian Red", "IndianRed"),
+        ("Medium Purple", "MediumPurple2"),
+        ("Cadet Blue", "CadetBlue"),
+        ("Light Salmon", "LightSalmon3"),
+        ("Dark Sea Green", "DarkSeaGreen"),
+        ("Dark Khaki", "DarkKhaki"),
+        ("Plum", "Plum4"),
+    ];
+
+    private static string? PickColor()
+    {
+        var prompt = new SelectionPrompt<string>()
+            .Title("[darkorange]Color[/] [grey](optional)[/]")
+            .HighlightStyle(new Style(Color.White, Color.DarkOrange));
+
+        prompt.AddChoice("None");
+        foreach (var (label, spectreColor) in ColorPalette)
+            prompt.AddChoice($"[{spectreColor}]████[/]  {label}");
+
+        var selected = AnsiConsole.Prompt(prompt);
+
+        if (selected == "None")
+            return null;
+
+        // Match back to palette by label suffix
+        foreach (var (label, spectreColor) in ColorPalette)
+        {
+            if (selected.EndsWith(label))
+                return spectreColor;
+        }
+
+        return null;
     }
 
     private const string CustomPathChoice = "Custom path...";
@@ -503,6 +556,7 @@ public class App
             if (killError == null)
             {
                 ConfigService.RemoveDescription(_config, session.Name);
+                ConfigService.RemoveColor(_config, session.Name);
                 _state.SetStatus("Session killed");
             }
             else
@@ -565,6 +619,7 @@ public class App
             if (renameError == null)
             {
                 ConfigService.RenameDescription(_config, session.Name, newName);
+                ConfigService.RenameColor(_config, session.Name, newName);
                 _state.SetStatus($"Renamed to '{newName}'");
                 LoadSessions();
             }

@@ -41,7 +41,7 @@ public class AppState
         if (StatusMessage == null || StatusMessageTime == null)
             return null;
 
-        if ((DateTime.Now - StatusMessageTime.Value).TotalSeconds > 3)
+        if ((DateTime.Now - StatusMessageTime.Value).TotalSeconds > 2)
         {
             ClearStatus();
             return null;
