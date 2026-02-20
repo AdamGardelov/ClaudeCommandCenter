@@ -14,4 +14,5 @@ public class TmuxSession
     public int StableContentCount { get; set; }
     public string? GitBranch { get; set; }
     public bool IsWorktree { get; set; }
+    public bool IsExcluded { get; set; }
 }

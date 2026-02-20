@@ -69,7 +69,9 @@ public static class Renderer
         var groupInfo = state.ActiveGroup != null
             ? $" [grey]│[/] [mediumpurple3]{Markup.Escape(state.ActiveGroup)}[/]"
             : "";
-        var right = new Markup($"[grey]{state.Sessions.Count} session(s)[/]{groupInfo} ");
+        var excludedCount = state.Sessions.Count(s => s.IsExcluded);
+        var excludedInfo = excludedCount > 0 ? $" [grey50]· {excludedCount} excluded[/]" : "";
+        var right = new Markup($"[grey]{state.Sessions.Count} session(s)[/]{excludedInfo}{groupInfo} ");
 
         return new Columns(left, right) { Expand = true };
     }
@@ -148,6 +150,13 @@ public static class Renderer
         var spinner = Markup.Escape(GetSpinnerFrame());
         var isWorking = !session.IsWaitingForInput;
         var status = isWorking ? spinner : "!";
+
+        if (session.IsExcluded)
+        {
+            if (isSelected)
+                return new Markup($"[grey50 on grey19] - {name,-18} {time} [/]");
+            return new Markup($" [grey35]-[/] [grey35]{name,-18}[/] [grey27]{time}[/]");
+        }
 
         if (isSelected)
         {
@@ -313,7 +322,7 @@ public static class Renderer
 
     private static IRenderable BuildGridLayout(AppState state, Dictionary<string, string>? allCapturedPanes)
     {
-        var visibleSessions = state.GetVisibleSessions();
+        var visibleSessions = state.GetGridSessions();
         var (cols, gridRows) = state.GetGridDimensions();
         var outputLines = state.GetGridCellOutputLines();
 
@@ -439,6 +448,7 @@ public static class Renderer
             "[grey70 bold]N[/][grey] reject [/]" +
             "[grey70 bold]S[/][grey] send [/]" +
             "[grey70 bold]d[/][grey] kill [/]" +
+            "[grey70 bold]x[/][grey] hide [/]" +
             "[grey]│[/] " +
             "[grey70 bold]Esc[/][grey] back [/]" +
             "[grey70 bold]q[/][grey] quit [/]");
@@ -461,6 +471,7 @@ public static class Renderer
             "[grey70 bold]N[/][grey] reject [/]" +
             "[grey70 bold]S[/][grey] send [/]" +
             "[grey]│[/] " +
+            "[grey70 bold]x[/][grey] hide [/]" +
             "[grey70 bold]G[/][grey] list view [/]" +
             "[grey70 bold]q[/][grey] quit [/]");
     }

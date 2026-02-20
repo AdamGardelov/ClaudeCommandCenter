@@ -27,7 +27,7 @@ public class AppState
         if (ViewMode == ViewMode.List && ActiveGroup == null && ActiveSection == ActiveSection.Groups)
             return null;
 
-        var sessions = GetVisibleSessions();
+        var sessions = ViewMode == ViewMode.Grid ? GetGridSessions() : GetVisibleSessions();
         if (CursorIndex >= 0 && CursorIndex < sessions.Count)
             return sessions[CursorIndex];
         return null;
@@ -63,6 +63,11 @@ public class AppState
         return Sessions.Where(s => !groupedNames.Contains(s.Name)).ToList();
     }
 
+    public List<TmuxSession> GetGridSessions()
+    {
+        return GetVisibleSessions().Where(s => !s.IsExcluded).ToList();
+    }
+
     public void EnterGroupGrid(string groupName)
     {
         _savedCursorIndex = CursorIndex;
@@ -84,7 +89,7 @@ public class AppState
     /// </summary>
     public (int Cols, int Rows) GetGridDimensions()
     {
-        var count = GetVisibleSessions().Count;
+        var count = GetGridSessions().Count;
         return count switch
         {
             0 => (1, 1),

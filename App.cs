@@ -130,6 +130,7 @@ public class App
                 s.Description = desc;
             if (_config.SessionColors.TryGetValue(s.Name, out var color))
                 s.ColorTag = color;
+            s.IsExcluded = _config.ExcludedSessions.Contains(s.Name);
             TmuxService.ApplyStatusColor(s.Name, color ?? "grey42");
 
             // Preserve content tracking state so sessions don't briefly flash as "working"
@@ -199,7 +200,7 @@ public class App
     {
         var changed = false;
         var newPanes = new Dictionary<string, string>();
-        var visibleSessions = _state.GetVisibleSessions();
+        var visibleSessions = _state.GetGridSessions();
 
         foreach (var session in visibleSessions)
         {
@@ -383,6 +384,9 @@ public class App
             case "edit-session":
                 EditSession();
                 break;
+            case "toggle-exclude":
+                ToggleExclude();
+                break;
             case "update":
                 if (_state.LatestVersion != null)
                 {
@@ -460,7 +464,7 @@ public class App
 
     private void MoveGridCursor(int dx, int dy)
     {
-        var visible = _state.GetVisibleSessions();
+        var visible = _state.GetGridSessions();
         if (visible.Count == 0)
             return;
 
@@ -538,6 +542,7 @@ public class App
                 TmuxService.KillSession(sessionName);
                 ConfigService.RemoveDescription(_config, sessionName);
                 ConfigService.RemoveColor(_config, sessionName);
+                ConfigService.RemoveExcluded(_config, sessionName);
             }
 
             ConfigService.RemoveGroup(_config, group.Name);
@@ -565,6 +570,7 @@ public class App
             TmuxService.KillSession(session.Name);
             ConfigService.RemoveDescription(_config, session.Name);
             ConfigService.RemoveColor(_config, session.Name);
+            ConfigService.RemoveExcluded(_config, session.Name);
             ConfigService.RemoveSessionFromGroup(_config, _state.ActiveGroup, session.Name);
             LoadSessions();
 
@@ -777,10 +783,10 @@ public class App
 
         if (_state.ViewMode == ViewMode.List)
         {
-            var visible = _state.GetVisibleSessions();
-            if (visible.Count < 2)
+            var gridSessions = _state.GetGridSessions();
+            if (gridSessions.Count < 2)
             {
-                _state.SetStatus("Need at least 2 sessions for grid view");
+                _state.SetStatus("Need at least 2 non-excluded sessions for grid view");
                 return;
             }
 
@@ -1432,6 +1438,7 @@ public class App
             {
                 ConfigService.RemoveDescription(_config, session.Name);
                 ConfigService.RemoveColor(_config, session.Name);
+                ConfigService.RemoveExcluded(_config, session.Name);
                 _state.SetStatus("Session killed");
             }
             else
@@ -1445,6 +1452,35 @@ public class App
         {
             _state.SetStatus("Cancelled");
         }
+    }
+
+    private void ToggleExclude()
+    {
+        var session = _state.GetSelectedSession();
+        if (session == null)
+            return;
+
+        ConfigService.ToggleExcluded(_config, session.Name);
+        session.IsExcluded = !session.IsExcluded;
+
+        if (_state.ViewMode == ViewMode.Grid && session.IsExcluded)
+        {
+            // Session just got excluded from grid — clamp cursor
+            var gridSessions = _state.GetGridSessions();
+            if (gridSessions.Count < 2)
+            {
+                // Not enough sessions for grid, switch to list
+                _state.ViewMode = ViewMode.List;
+            }
+            else
+            {
+                _state.CursorIndex = Math.Clamp(_state.CursorIndex, 0, gridSessions.Count - 1);
+            }
+        }
+
+        var label = session.IsExcluded ? "Excluded from grid" : "Restored to grid";
+        _state.SetStatus(label);
+        _lastSelectedSession = null;
     }
 
     private void SendQuickKey(string key)
@@ -1515,6 +1551,7 @@ public class App
             {
                 ConfigService.RenameDescription(_config, currentName, newName);
                 ConfigService.RenameColor(_config, currentName, newName);
+                ConfigService.RenameExcluded(_config, currentName, newName);
                 currentName = newName;
                 changed = true;
             }

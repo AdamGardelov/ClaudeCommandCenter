@@ -80,6 +80,14 @@ public static class KeyBindingService
             CanDisable = true,
             StatusBarOrder = 23
         },
+        new()
+        {
+            ActionId = "toggle-exclude",
+            Key = "x",
+            Label = "hide",
+            CanDisable = true,
+            StatusBarOrder = 24
+        },
         // Group 3: Open (navigate to things)
         new()
         {

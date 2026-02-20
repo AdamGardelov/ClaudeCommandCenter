@@ -8,5 +8,6 @@ public class CccConfig
     public Dictionary<string, string> SessionColors { get; set; } = new();
     public Dictionary<string, KeyBindingConfig> Keybindings { get; set; } = new();
     public Dictionary<string, SessionGroup> Groups { get; set; } = new();
+    public HashSet<string> ExcludedSessions { get; set; } = [];
     public string WorktreeBasePath { get; set; } = "~/Dev/Wint/worktrees/";
 }

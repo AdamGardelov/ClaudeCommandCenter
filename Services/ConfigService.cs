@@ -95,6 +95,28 @@ public static class ConfigService
             Save(config);
     }
 
+    public static void ToggleExcluded(CccConfig config, string sessionName)
+    {
+        if (!config.ExcludedSessions.Remove(sessionName))
+            config.ExcludedSessions.Add(sessionName);
+        Save(config);
+    }
+
+    public static void RemoveExcluded(CccConfig config, string sessionName)
+    {
+        if (config.ExcludedSessions.Remove(sessionName))
+            Save(config);
+    }
+
+    public static void RenameExcluded(CccConfig config, string oldName, string newName)
+    {
+        if (config.ExcludedSessions.Remove(oldName))
+        {
+            config.ExcludedSessions.Add(newName);
+            Save(config);
+        }
+    }
+
     private static bool BackfillKeybindings(CccConfig config)
     {
         var defaults = KeyBindingService.GetDefaultConfigs();
