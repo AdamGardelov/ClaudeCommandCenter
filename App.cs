@@ -1268,9 +1268,6 @@ public class App
     {
         var favorites = _config.FavoriteFolders;
 
-        if (favorites.Count == 0)
-            return PromptCustomPath();
-
         while (true)
         {
             var prompt = new SelectionPrompt<string>()
@@ -1374,6 +1371,12 @@ public class App
         if (session?.CurrentPath == null)
             return;
 
+        if (string.IsNullOrWhiteSpace(_config.IdeCommand))
+        {
+            _state.SetStatus("Set ideCommand in config first (press c)");
+            return;
+        }
+
         try
         {
             var startInfo = new ProcessStartInfo
@@ -1399,6 +1402,32 @@ public class App
     private void OpenConfig()
     {
         var configPath = ConfigService.GetConfigPath();
+
+        if (string.IsNullOrWhiteSpace(_config.IdeCommand))
+        {
+            // No IDE configured — fall back to platform default
+            try
+            {
+                var opener = OperatingSystem.IsMacOS() ? "open" :
+                    OperatingSystem.IsWindows() ? "explorer" : "xdg-open";
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = opener,
+                    ArgumentList = { configPath },
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                });
+                _state.SetStatus($"Opened config with {opener}");
+            }
+            catch
+            {
+                _state.SetStatus($"Config at: {configPath}");
+            }
+
+            return;
+        }
+
         try
         {
             var startInfo = new ProcessStartInfo
