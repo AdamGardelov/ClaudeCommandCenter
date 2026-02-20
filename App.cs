@@ -209,6 +209,9 @@ public class App
         var newPanes = new Dictionary<string, string>();
         var visibleSessions = _state.GetGridSessions();
 
+        // Resize tmux panes to match grid cell dimensions so TUIs render at the correct width
+        ResizePanesForGrid(visibleSessions);
+
         foreach (var session in visibleSessions)
         {
             var content = TmuxService.CapturePaneContent(session.Name);
@@ -225,6 +228,19 @@ public class App
 
         _allCapturedPanes = newPanes;
         return changed;
+    }
+
+    private void ResizePanesForGrid(List<TmuxSession> sessions)
+    {
+        var (cols, gridRows) = _state.GetGridDimensions();
+        if (cols == 0 || gridRows == 0)
+            return;
+
+        var targetWidth = Math.Max(20, Console.WindowWidth / cols - 4);
+        var targetHeight = (Console.WindowHeight - 2) / gridRows;
+
+        foreach (var session in sessions)
+            TmuxService.ResizePane(session.Name, targetWidth, targetHeight);
     }
 
     private void Render()
@@ -529,6 +545,7 @@ public class App
         }
 
         _state.EnterGroupGrid(group.Name);
+        ResizePanesForGrid(_state.GetGridSessions());
         _lastSelectedSession = null;
     }
 
@@ -810,6 +827,7 @@ public class App
             }
 
             _state.ViewMode = ViewMode.Grid;
+            ResizePanesForGrid(_state.GetGridSessions());
         }
         else
         {
@@ -1155,6 +1173,7 @@ public class App
         if (_state.GroupCursor < 0)
             _state.GroupCursor = 0;
         _state.EnterGroupGrid(groupName);
+        ResizePanesForGrid(_state.GetGridSessions());
         _lastSelectedSession = null;
     }
 
