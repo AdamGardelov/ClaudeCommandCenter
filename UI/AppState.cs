@@ -60,7 +60,11 @@ public class AppState
     public List<TmuxSession> GetStandaloneSessions()
     {
         var groupedNames = new HashSet<string>(Groups.SelectMany(g => g.Sessions));
-        return Sessions.Where(s => !groupedNames.Contains(s.Name)).ToList();
+        return Sessions
+            .Where(s => !groupedNames.Contains(s.Name))
+            .OrderByDescending(s => s.IsWaitingForInput)
+            .ThenBy(s => s.Name)
+            .ToList();
     }
 
     public List<TmuxSession> GetGridSessions()
@@ -161,4 +165,32 @@ public class AppState
     public void ClampGroupCursor() => GroupCursor = Groups.Count == 0
             ? 0
             : Math.Clamp(GroupCursor, 0, Groups.Count - 1);
+
+    public void SortGroupsByStatus()
+    {
+        if (Groups.Count <= 1) return;
+
+        var selectedGroup = GetSelectedGroup();
+        var sessionLookup = Sessions.ToDictionary(s => s.Name);
+
+        Groups.Sort((a, b) =>
+        {
+            var aWaiting = a.Sessions.Any(name =>
+                sessionLookup.TryGetValue(name, out var s) && s.IsWaitingForInput);
+            var bWaiting = b.Sessions.Any(name =>
+                sessionLookup.TryGetValue(name, out var s) && s.IsWaitingForInput);
+
+            if (aWaiting != bWaiting)
+                return bWaiting.CompareTo(aWaiting); // waiting first
+
+            return string.Compare(a.Name, b.Name, StringComparison.Ordinal);
+        });
+
+        // Follow the cursor to the group's new position
+        if (selectedGroup != null)
+        {
+            var newIndex = Groups.FindIndex(g => g.Name == selectedGroup.Name);
+            if (newIndex >= 0) GroupCursor = newIndex;
+        }
+    }
 }

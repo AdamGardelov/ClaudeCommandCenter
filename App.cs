@@ -149,6 +149,7 @@ public class App
     private void LoadGroups()
     {
         var liveSessionNames = new HashSet<string>(_state.Sessions.Select(s => s.Name));
+        var sessionLookup = _state.Sessions.ToDictionary(s => s.Name);
         _state.Groups = _config.Groups.Values
             .Select(g => new SessionGroup
             {
@@ -159,6 +160,9 @@ public class App
                 // Only include sessions that are still alive in tmux
                 Sessions = g.Sessions.Where(s => liveSessionNames.Contains(s)).ToList(),
             })
+            .OrderByDescending(g => g.Sessions.Any(name =>
+                sessionLookup.TryGetValue(name, out var s) && s.IsWaitingForInput))
+            .ThenBy(g => g.Name)
             .ToList();
         _state.ClampGroupCursor();
     }
@@ -168,6 +172,9 @@ public class App
         // Refresh waiting-for-input status on all sessions (single tmux call)
         TmuxService.DetectWaitingForInputBatch(_state.Sessions);
         _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput);
+
+        // Re-sort groups so those needing input stay at the top
+        _state.SortGroupsByStatus();
 
         // In grid mode, capture panes for visible sessions (all or group-filtered)
         if (_state.ViewMode == ViewMode.Grid)
@@ -330,6 +337,8 @@ public class App
                 case "edit-session":
                     EditGroup();
                     return;
+                case "move-to-group":
+                    return; // Not applicable when focused on groups
             }
         }
 
@@ -386,6 +395,9 @@ public class App
                 break;
             case "toggle-exclude":
                 ToggleExclude();
+                break;
+            case "move-to-group":
+                MoveSessionToGroup();
                 break;
             case "update":
                 if (_state.LatestVersion != null)
@@ -447,7 +459,7 @@ public class App
                 break;
 
             default:
-                if (key.KeyChar >= ' ')
+                if (key.KeyChar >= ' ' && _state.InputBuffer.Length < 500)
                     _state.InputBuffer += key.KeyChar;
                 break;
         }
@@ -1536,6 +1548,67 @@ public class App
         var label = session.IsExcluded ? "Excluded from grid" : "Restored to grid";
         _state.SetStatus(label);
         _lastSelectedSession = null;
+    }
+
+    private void MoveSessionToGroup()
+    {
+        var session = _state.GetSelectedSession();
+        if (session == null)
+            return;
+
+        // Find groups that don't already contain this session
+        var eligible = _state.Groups
+            .Where(g => !g.Sessions.Contains(session.Name))
+            .ToList();
+
+        if (eligible.Count == 0)
+        {
+            _state.SetStatus("No groups available");
+            return;
+        }
+
+        Console.CursorVisible = true;
+        Console.Clear();
+
+        var prompt = new SelectionPrompt<string>()
+            .Title($"[grey70]Move[/] [white]'{Markup.Escape(session.Name)}'[/] [grey70]to group[/]")
+            .HighlightStyle(new Style(Color.White, Color.Grey70));
+
+        prompt.AddChoice(_cancelChoice);
+        foreach (var g in eligible)
+            prompt.AddChoice($"{Markup.Escape(g.Name)} ({g.Sessions.Count} sessions)");
+
+        var selected = AnsiConsole.Prompt(prompt);
+        Console.CursorVisible = false;
+
+        if (selected == _cancelChoice)
+        {
+            _state.SetStatus("Cancelled");
+            return;
+        }
+
+        // Extract group name from the selection (everything before the last " (N sessions)")
+        var groupName = selected[..selected.LastIndexOf(" (")];
+        var group = _state.Groups.FirstOrDefault(g => g.Name == groupName);
+        if (group == null)
+        {
+            _state.SetStatus("Group not found");
+            return;
+        }
+
+        group.Sessions.Add(session.Name);
+        ConfigService.SaveGroup(_config, group);
+
+        // Apply group color to the session if it doesn't have one
+        if (!string.IsNullOrEmpty(group.Color) && !_config.SessionColors.ContainsKey(session.Name))
+        {
+            ConfigService.SaveColor(_config, session.Name, group.Color);
+            TmuxService.ApplyStatusColor(session.Name, group.Color);
+        }
+
+        LoadSessions();
+        _lastSelectedSession = null;
+        _state.SetStatus($"Moved to '{groupName}'");
     }
 
     private void SendQuickKey(string key)

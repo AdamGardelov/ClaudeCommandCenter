@@ -91,11 +91,14 @@ Press `Enter` on a grid cell to attach directly to that session. Press `G` to sw
 | `Enter` | Attach to selected session |
 | `G` | Toggle grid view |
 | `n` | Create new session (launches `claude` in a given directory) |
+| `g` | Create new group |
 | `f` | Open session directory in file manager |
 | `i` | Open session directory in IDE |
 | `c` | Open config file in IDE |
 | `d` | Delete session (with confirmation) |
 | `e` | Edit session (name, description, color) |
+| `x` | Exclude/restore session from grid view |
+| `m` | Move standalone session to a group |
 | `r` | Refresh session list |
 | `Y` | Approve — sends `y` to the selected session |
 | `N` | Reject — sends `n` to the selected session |
@@ -171,11 +174,14 @@ Each override supports three optional fields:
 | `send-text` | `S` | send | Yes |
 | `attach` | `Enter` | attach | Yes |
 | `new-session` | `n` | new | Yes |
+| `new-group` | `g` | group | Yes |
 | `open-folder` | `f` | folder | Yes |
 | `open-ide` | `i` | ide | Yes |
 | `open-config` | `c` | config | Yes |
 | `delete-session` | `d` | del | Yes |
 | `edit-session` | `e` | edit | Yes |
+| `toggle-exclude` | `x` | hide | Yes |
+| `move-to-group` | `m` | move | Yes |
 | `toggle-grid` | `G` | grid | Yes |
 | `refresh` | `r` | (hidden) | Yes |
 | `quit` | `q` | quit | No |

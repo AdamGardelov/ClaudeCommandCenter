@@ -88,6 +88,14 @@ public static class KeyBindingService
             CanDisable = true,
             StatusBarOrder = 24
         },
+        new()
+        {
+            ActionId = "move-to-group",
+            Key = "m",
+            Label = "move",
+            CanDisable = true,
+            StatusBarOrder = 25
+        },
         // Group 3: Open (navigate to things)
         new()
         {

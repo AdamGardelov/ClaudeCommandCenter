@@ -145,7 +145,6 @@ public static class Renderer
 
     private static Markup BuildSessionRow(TmuxSession session, bool isSelected)
     {
-        var time = session.Created?.ToString("HH:mm") ?? "     ";
         var name = Markup.Escape(session.Name);
         var spinner = Markup.Escape(GetSpinnerFrame());
         var isWorking = !session.IsWaitingForInput;
@@ -153,23 +152,24 @@ public static class Renderer
 
         if (session.IsExcluded)
         {
+            var excludedStatus = session.IsWaitingForInput ? "[grey42]![/]" : $"[grey35]{spinner}[/]";
             if (isSelected)
-                return new Markup($"[grey50 on grey19] - {name,-18} {time} [/]");
-            return new Markup($" [grey35]-[/] [grey35]{name,-18}[/] [grey27]{time}[/]");
+                return new Markup($"[grey50 on grey19] {excludedStatus} {name,-22} [/]");
+            return new Markup($" {excludedStatus} [grey35]{name,-22}[/]");
         }
 
         if (isSelected)
         {
             var bg = session.ColorTag ?? "grey37";
-            return new Markup($"[white on {bg}] {status} {name,-18} {time} [/]");
+            return new Markup($"[white on {bg}] {status} {name,-22} [/]");
         }
 
         if (isWorking)
-            return new Markup($" [green]{spinner}[/] [navajowhite1]{name,-18}[/] [grey50]{time}[/]");
+            return new Markup($" [green]{spinner}[/] [navajowhite1]{name,-22}[/]");
         if (session.IsWaitingForInput)
-            return new Markup($" [yellow bold]![/] [navajowhite1]{name,-18}[/] [grey50]{time}[/]");
+            return new Markup($" [yellow bold]![/] [navajowhite1]{name,-22}[/]");
 
-        return new Markup($"   [grey70]{name,-18}[/] [grey42]{time}[/]");
+        return new Markup($"   [grey70]{name,-22}[/]");
     }
 
     private static Markup BuildGroupRow(SessionGroup group, bool isSelected, AppState state)
@@ -480,8 +480,11 @@ public static class Renderer
     {
         var target = Markup.Escape(state.InputTarget ?? "");
         var buffer = Markup.Escape(state.InputBuffer);
+        var limit = state.InputBuffer.Length >= 450
+            ? $" [grey50]({state.InputBuffer.Length}/500)[/]"
+            : "";
         return new Markup(
-            $" [grey70]Send to[/] [white]{target}[/][grey70]>[/] [white]{buffer}[/][grey]▌[/]" +
+            $" [grey70]Send to[/] [white]{target}[/][grey70]>[/] [white]{buffer}[/][grey]▌[/]{limit}" +
             $"  [grey50]Enter[/][grey] send · [/][grey50]Esc[/][grey] cancel[/]");
     }
 
@@ -512,13 +515,17 @@ public static class Renderer
             return new Markup(" ");
 
         var sessionOnlyActions = new HashSet<string> { "approve", "reject", "send-text" };
+        var hiddenWhenNoGroups = new HashSet<string> { "move-to-group" };
         var onGroup = state.ActiveSection == ActiveSection.Groups;
+        var hasGroups = state.Groups.Count > 0;
 
         var parts = new List<string>();
         var prevGroup = -1;
 
         foreach (var b in visible)
         {
+            if (!hasGroups && hiddenWhenNoGroups.Contains(b.ActionId))
+                continue;
             var barGroup = b.StatusBarOrder / 10;
             if (prevGroup >= 0 && barGroup != prevGroup)
                 parts.Add("[grey]│[/]");
