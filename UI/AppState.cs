@@ -62,7 +62,8 @@ public class AppState
         var groupedNames = new HashSet<string>(Groups.SelectMany(g => g.Sessions));
         return Sessions
             .Where(s => !groupedNames.Contains(s.Name))
-            .OrderByDescending(s => s.IsWaitingForInput)
+            .OrderByDescending(s => s.IsWaitingForInput && !s.IsExcluded)
+            .ThenByDescending(s => s.IsWaitingForInput && s.IsExcluded)
             .ThenBy(s => s.Name)
             .ToList();
     }
