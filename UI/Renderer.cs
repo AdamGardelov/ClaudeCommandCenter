@@ -334,7 +334,7 @@ public static class Renderer
                     var session = visibleSessions[idx];
                     var isSelected = idx == state.CursorIndex;
                     var pane = allCapturedPanes?.GetValueOrDefault(session.Name);
-                    cellLayout.Update(BuildGridCell(session, isSelected, pane, outputLines));
+                    cellLayout.Update(BuildGridCell(session, isSelected, pane, outputLines, cols));
                 }
                 else
                 {
@@ -354,10 +354,33 @@ public static class Renderer
         return grid;
     }
 
-    private static Panel BuildGridCell(TmuxSession session, bool isSelected, string? capturedPane, int outputLines)
+    private static Panel BuildGridCell(TmuxSession session, bool isSelected, string? capturedPane, int outputLines, int gridCols)
     {
         var rows = new List<IRenderable>();
 
+        // Collect output lines from pane
+        var outputRows = new List<IRenderable>();
+        if (!string.IsNullOrWhiteSpace(capturedPane) && outputLines > 0)
+        {
+            var maxWidth = Math.Max(20, Console.WindowWidth / gridCols - 4);
+            var lines = capturedPane.Split('\n');
+            var offset = Math.Max(0, lines.Length - outputLines);
+            var visible = lines.AsSpan(offset, Math.Min(outputLines, lines.Length - offset));
+
+            foreach (var line in visible)
+                outputRows.Add(AnsiParser.ParseLine(line, maxWidth));
+        }
+        else if (outputLines > 0)
+        {
+            outputRows.Add(new Markup(" [grey]No output[/]"));
+        }
+
+        // Pad with empty lines to push content to the bottom of the cell
+        var padding = Math.Max(0, outputLines - outputRows.Count);
+        for (var i = 0; i < padding; i++)
+            rows.Add(new Text(""));
+
+        // Header: name + branch
         var spinner = Markup.Escape(GetSpinnerFrame());
         var status = session.IsWaitingForInput ? "[yellow bold]![/]" : $"[green]{spinner}[/]";
         var name = Markup.Escape(session.Name);
@@ -373,20 +396,8 @@ public static class Renderer
         var labelColor = session.ColorTag ?? "grey50";
         rows.Add(new Rule().RuleStyle(Style.Parse(labelColor)));
 
-        if (!string.IsNullOrWhiteSpace(capturedPane) && outputLines > 0)
-        {
-            var maxWidth = Math.Max(20, Console.WindowWidth / 2 - 6);
-            var lines = capturedPane.Split('\n');
-            var offset = Math.Max(0, lines.Length - outputLines);
-            var visible = lines.AsSpan(offset, Math.Min(outputLines, lines.Length - offset));
-
-            foreach (var line in visible)
-                rows.Add(AnsiParser.ParseLine(line, maxWidth));
-        }
-        else if (outputLines > 0)
-        {
-            rows.Add(new Markup(" [grey]No output[/]"));
-        }
+        // Pane output
+        rows.AddRange(outputRows);
 
         var sessionColor = session.ColorTag != null
             ? Style.Parse(session.ColorTag).Foreground

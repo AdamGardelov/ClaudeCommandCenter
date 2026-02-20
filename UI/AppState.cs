@@ -98,20 +98,20 @@ public class AppState
     }
 
     /// <summary>
-    /// Returns the number of pane output lines to show per grid cell.
+    /// Returns the number of pane output lines to show per grid cell,
+    /// calculated dynamically based on available terminal height.
     /// </summary>
     public int GetGridCellOutputLines()
     {
-        var count = GetVisibleSessions().Count;
-        return count switch
-        {
-            1 => 30,
-            2 => 15,
-            3 or 4 => 10,
-            5 or 6 => 5,
-            7 or 8 or 9 => 3,
-            _ => 0,
-        };
+        var (_, gridRows) = GetGridDimensions();
+        if (gridRows == 0) return 0;
+
+        var terminalHeight = Console.WindowHeight;
+        // Each row gets an equal share of: terminal height - app header (1) - status bar (1)
+        var rowHeight = (terminalHeight - 2) / gridRows;
+        // Subtract cell overhead: panel border (2) + name line (1) + path line (1) + rule (1)
+        var outputLines = rowHeight - 5;
+        return Math.Max(1, outputLines);
     }
 
     public void SetStatus(string message)
