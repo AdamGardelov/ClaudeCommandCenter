@@ -44,6 +44,11 @@ public abstract class TmuxService
     public static string? CapturePaneContent(string sessionName, int lines = 500) =>
         RunTmux("capture-pane", "-t", sessionName, "-p", "-e", "-S", $"-{lines}");
 
+    public static void ResetWindowSize(string sessionName)
+    {
+        RunTmux("set-option", "-u", "-t", sessionName, "window-size");
+    }
+
     // Number of consecutive stable polls before marking as "waiting for input"
     private const int _stableThreshold = 1;
 

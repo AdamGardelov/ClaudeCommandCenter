@@ -828,6 +828,7 @@ public class App
         Console.CursorVisible = true;
         Console.Clear();
 
+        TmuxService.ResetWindowSize(session.Name);
         TmuxService.AttachSession(session.Name);
 
         // User detached - back to ClaudeCommandCenter
