@@ -1377,26 +1377,10 @@ public class App
             return;
         }
 
-        try
-        {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = _config.IdeCommand,
-                ArgumentList =
-                {
-                    session.CurrentPath
-                },
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            };
-            Process.Start(startInfo);
+        if (LaunchWithIde(_config.IdeCommand, session.CurrentPath))
             _state.SetStatus($"Opened in {_config.IdeCommand}");
-        }
-        catch
-        {
+        else
             _state.SetStatus($"Failed to run '{_config.IdeCommand}'");
-        }
     }
 
     private void OpenConfig()
@@ -1428,25 +1412,50 @@ public class App
             return;
         }
 
+        if (LaunchWithIde(_config.IdeCommand, configPath))
+            _state.SetStatus($"Opened config in {_config.IdeCommand}");
+        else
+            _state.SetStatus($"Failed to run '{_config.IdeCommand}'");
+    }
+
+    private static bool LaunchWithIde(string command, string path)
+    {
+        // On macOS, app names like "rider" aren't on PATH — use "open -a" to launch by app name
+        if (OperatingSystem.IsMacOS() && !command.StartsWith('/') && !command.Contains('/'))
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "open",
+                    ArgumentList = { "-a", command, path },
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                });
+                return true;
+            }
+            catch
+            {
+                // Fall through to direct launch
+            }
+        }
+
         try
         {
-            var startInfo = new ProcessStartInfo
+            Process.Start(new ProcessStartInfo
             {
-                FileName = _config.IdeCommand,
-                ArgumentList =
-                {
-                    configPath
-                },
+                FileName = command,
+                ArgumentList = { path },
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-            };
-            Process.Start(startInfo);
-            _state.SetStatus($"Opened config in {_config.IdeCommand}");
+            });
+            return true;
         }
         catch
         {
-            _state.SetStatus($"Failed to run '{_config.IdeCommand}'");
+            return false;
         }
     }
 
