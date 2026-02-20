@@ -1176,35 +1176,52 @@ public class App
         foreach (var dir in Directory.GetDirectories(basePath))
         {
             var contextFile = Path.Combine(dir, ".feature-context.json");
-            if (!File.Exists(contextFile))
-                continue;
-
-            try
+            if (File.Exists(contextFile))
             {
-                var json = File.ReadAllText(contextFile);
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-
-                var name = root.GetProperty("feature").GetString() ?? "";
-                var description = root.GetProperty("description").GetString() ?? "";
-
-                var repos = new Dictionary<string, string>();
-                if (root.TryGetProperty("repos", out var reposEl))
+                try
                 {
-                    foreach (var repo in reposEl.EnumerateObject())
+                    var json = File.ReadAllText(contextFile);
+                    using var doc = JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+
+                    var name = root.GetProperty("feature").GetString() ?? "";
+                    var description = root.GetProperty("description").GetString() ?? "";
+
+                    var repos = new Dictionary<string, string>();
+                    if (root.TryGetProperty("repos", out var reposEl))
                     {
-                        var worktreePath = repo.Value.GetProperty("worktree").GetString();
-                        if (worktreePath != null && Directory.Exists(worktreePath))
-                            repos[repo.Name] = worktreePath;
+                        foreach (var repo in reposEl.EnumerateObject())
+                        {
+                            var worktreePath = repo.Value.GetProperty("worktree").GetString();
+                            if (worktreePath != null && Directory.Exists(worktreePath))
+                                repos[repo.Name] = worktreePath;
+                        }
                     }
+
+                    if (repos.Count > 0)
+                        features.Add(new WorktreeFeature(name, description, dir, repos));
+                }
+                catch
+                {
+                    // Skip malformed context files
+                }
+            }
+            else
+            {
+                // No context file — detect git worktree subdirectories
+                var repos = new Dictionary<string, string>();
+                foreach (var subDir in Directory.GetDirectories(dir))
+                {
+                    var gitFile = Path.Combine(subDir, ".git");
+                    if (File.Exists(gitFile) || Directory.Exists(gitFile))
+                        repos[Path.GetFileName(subDir)] = subDir;
                 }
 
                 if (repos.Count > 0)
-                    features.Add(new WorktreeFeature(name, description, dir, repos));
-            }
-            catch
-            {
-                // Skip malformed context files
+                {
+                    var name = Path.GetFileName(dir);
+                    features.Add(new WorktreeFeature(name, "", dir, repos));
+                }
             }
         }
 
