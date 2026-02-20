@@ -64,6 +64,8 @@ public class AppState
             .Where(s => !groupedNames.Contains(s.Name))
             .OrderByDescending(s => s.IsWaitingForInput && !s.IsExcluded)
             .ThenByDescending(s => s.IsWaitingForInput && s.IsExcluded)
+            .ThenByDescending(s => !s.IsWaitingForInput && !s.IsExcluded)
+            .ThenByDescending(s => !s.IsWaitingForInput && s.IsExcluded)
             .ThenBy(s => s.Name)
             .ToList();
     }
