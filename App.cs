@@ -21,6 +21,8 @@ public class App
     private bool _claudeAvailable;
     private Task<string?>? _updateCheck;
     private bool _wantsUpdate;
+    private int _lastGridWidth;
+    private int _lastGridHeight;
 
     public void Run()
     {
@@ -111,6 +113,7 @@ public class App
             // Periodically capture pane content for preview
             if ((DateTime.Now - _lastCapture).TotalMilliseconds > 500)
             {
+                ResizeGridPanes();
                 if (UpdateCapturedPane())
                     Render();
                 _lastCapture = DateTime.Now;
@@ -227,6 +230,34 @@ public class App
         return changed;
     }
 
+    private void ResizeGridPanes()
+    {
+        if (_state.ViewMode != ViewMode.Grid)
+            return;
+
+        var sessions = _state.GetGridSessions();
+        if (sessions.Count == 0)
+            return;
+
+        var (cols, gridRows) = _state.GetGridDimensions();
+        if (cols == 0 || gridRows == 0)
+            return;
+
+        // Width matches grid cell so Claude Code wraps content to fit.
+        // Full terminal height so Claude Code isn't vertically cramped.
+        var targetWidth = Math.Max(20, Console.WindowWidth / cols - 4);
+        var targetHeight = Console.WindowHeight;
+
+        if (targetWidth == _lastGridWidth && targetHeight == _lastGridHeight)
+            return;
+
+        _lastGridWidth = targetWidth;
+        _lastGridHeight = targetHeight;
+
+        foreach (var session in sessions)
+            TmuxService.ResizeWindow(session.Name, targetWidth, targetHeight);
+    }
+
     private void Render()
     {
         Console.SetCursorPosition(0, 0);
@@ -252,6 +283,8 @@ public class App
         {
             _state.LeaveGroupGrid();
             _lastSelectedSession = null;
+            _lastGridWidth = 0;
+            _lastGridHeight = 0;
             return;
         }
 
@@ -530,6 +563,7 @@ public class App
 
         _state.EnterGroupGrid(group.Name);
         _lastSelectedSession = null;
+        ResizeGridPanes();
     }
 
     private void DeleteGroup()
@@ -600,6 +634,8 @@ public class App
             }
 
             _lastSelectedSession = null;
+            _lastGridWidth = 0;
+            _lastGridHeight = 0;
         }
         else
         {
@@ -810,10 +846,13 @@ public class App
             }
 
             _state.ViewMode = ViewMode.Grid;
+            ResizeGridPanes();
         }
         else
         {
             _state.ViewMode = ViewMode.List;
+            _lastGridWidth = 0;
+            _lastGridHeight = 0;
         }
 
         _lastSelectedSession = null;
@@ -1157,6 +1196,7 @@ public class App
             _state.GroupCursor = 0;
         _state.EnterGroupGrid(groupName);
         _lastSelectedSession = null;
+        ResizeGridPanes();
     }
 
     private static string SanitizeTmuxSessionName(string name)

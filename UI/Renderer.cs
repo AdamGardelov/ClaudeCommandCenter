@@ -366,12 +366,12 @@ public static class Renderer
     private static Panel BuildGridCell(TmuxSession session, bool isSelected, string? capturedPane, int outputLines, int gridCols)
     {
         var rows = new List<IRenderable>();
+        var maxWidth = Math.Max(20, Console.WindowWidth / gridCols - 4);
 
         // Collect output lines from pane
         var outputRows = new List<IRenderable>();
         if (!string.IsNullOrWhiteSpace(capturedPane) && outputLines > 0)
         {
-            var maxWidth = Math.Max(20, Console.WindowWidth / gridCols - 4);
             var lines = capturedPane.Split('\n');
             var offset = Math.Max(0, lines.Length - outputLines);
             var visible = lines.AsSpan(offset, Math.Min(outputLines, lines.Length - offset));
@@ -389,16 +389,44 @@ public static class Renderer
         for (var i = 0; i < padding; i++)
             rows.Add(new Text(""));
 
-        // Header: name + branch
+        // Header: name + branch (truncated to prevent wrapping)
         var spinner = Markup.Escape(GetSpinnerFrame());
         var status = session.IsWaitingForInput ? "[yellow bold]![/]" : $"[green]{spinner}[/]";
-        var name = Markup.Escape(session.Name);
-        var branch = session.GitBranch != null ? $" [aqua]{Markup.Escape(session.GitBranch)}[/]" : "";
+        var nameStr = session.Name;
+        var branchStr = session.GitBranch;
+        var prefixLen = 3; // " X " visible chars before name
+
+        if (branchStr != null)
+        {
+            var avail = maxWidth - prefixLen - 1; // -1 for space between name and branch
+            if (nameStr.Length + branchStr.Length > avail)
+            {
+                var branchAvail = avail - nameStr.Length;
+                if (branchAvail >= 6)
+                    branchStr = branchStr[..(branchAvail - 2)] + "..";
+                else if (nameStr.Length > avail)
+                {
+                    nameStr = nameStr[..Math.Max(4, avail - 2)] + "..";
+                    branchStr = null;
+                }
+                else
+                    branchStr = null;
+            }
+        }
+        else if (nameStr.Length > maxWidth - prefixLen)
+        {
+            nameStr = nameStr[..Math.Max(4, maxWidth - prefixLen - 2)] + "..";
+        }
+
+        var name = Markup.Escape(nameStr);
+        var branch = branchStr != null ? $" [aqua]{Markup.Escape(branchStr)}[/]" : "";
         rows.Add(new Markup($" {status} [white bold]{name}[/]{branch}"));
 
         if (session.CurrentPath != null)
         {
             var shortPath = ShortenPath(session.CurrentPath);
+            if (shortPath.Length > maxWidth - 1)
+                shortPath = shortPath[..(maxWidth - 3)] + "..";
             rows.Add(new Markup($" [grey50]{Markup.Escape(shortPath)}[/]"));
         }
 

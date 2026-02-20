@@ -49,6 +49,11 @@ public abstract class TmuxService
         RunTmux("set-option", "-u", "-t", sessionName, "window-size");
     }
 
+    public static void ResizeWindow(string sessionName, int width, int height)
+    {
+        RunTmux("resize-window", "-t", sessionName, "-x", width.ToString(), "-y", height.ToString());
+    }
+
     // Number of consecutive stable polls before marking as "waiting for input"
     private const int _stableThreshold = 1;
 
