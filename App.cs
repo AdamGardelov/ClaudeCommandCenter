@@ -922,16 +922,9 @@ public class App
         Console.Clear();
 
         var name = AnsiConsole.Prompt(
-            new TextPrompt<string>("[grey70]Session name[/] [grey](empty to go back)[/][grey70]:[/]")
+            new TextPrompt<string>("[grey70]Session name[/] [grey](empty = use folder name)[/][grey70]:[/]")
                 .AllowEmpty()
                 .PromptStyle(new Style(Color.White)));
-
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus("Cancelled");
-            return;
-        }
 
         var description = AnsiConsole.Prompt(
             new TextPrompt<string>("[grey70]Description[/] [grey](optional)[/][grey70]:[/]")
@@ -940,7 +933,8 @@ public class App
 
         var color = PickColor();
 
-        var dir = PickDirectory(worktreeBranchHint: name);
+        var worktreeHint = string.IsNullOrWhiteSpace(name) ? null : name;
+        var dir = PickDirectory(worktreeBranchHint: worktreeHint);
 
         if (dir == null)
         {
@@ -957,6 +951,9 @@ public class App
             _state.SetStatus("Invalid directory");
             return;
         }
+
+        if (string.IsNullOrWhiteSpace(name))
+            name = SanitizeTmuxSessionName(new DirectoryInfo(dir).Name);
 
         var error = TmuxService.CreateSession(name, dir);
         if (error == null)
