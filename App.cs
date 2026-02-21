@@ -921,26 +921,10 @@ public class App
         Console.CursorVisible = true;
         Console.Clear();
 
-        var name = AnsiConsole.Prompt(
-            new TextPrompt<string>("[grey70]Session name[/] [grey](empty to go back)[/][grey70]:[/]")
-                .AllowEmpty()
-                .PromptStyle(new Style(Color.White)));
-
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus("Cancelled");
-            return;
-        }
-
-        var description = AnsiConsole.Prompt(
-            new TextPrompt<string>("[grey70]Description[/] [grey](optional)[/][grey70]:[/]")
-                .AllowEmpty()
-                .PromptStyle(new Style(Color.White)));
-
-        var color = PickColor();
-
-        var dir = PickDirectory(worktreeBranchHint: name);
+        // 1. Pick directory first — Cancel exits here
+        string? worktreeBranch = null;
+        var dir = PickDirectory(
+            onWorktreeBranchCreated: branch => worktreeBranch = branch);
 
         if (dir == null)
         {
@@ -957,6 +941,22 @@ public class App
             _state.SetStatus("Invalid directory");
             return;
         }
+
+        // 2. Name — default to worktree branch or folder name
+        var defaultName = SanitizeTmuxSessionName(worktreeBranch ?? new DirectoryInfo(dir).Name);
+        var name = AnsiConsole.Prompt(
+            new TextPrompt<string>("[grey70]Session name[/][grey70]:[/]")
+                .DefaultValue(defaultName)
+                .PromptStyle(new Style(Color.White)));
+
+        // 3. Description
+        var description = AnsiConsole.Prompt(
+            new TextPrompt<string>("[grey70]Description[/] [grey](optional)[/][grey70]:[/]")
+                .AllowEmpty()
+                .PromptStyle(new Style(Color.White)));
+
+        // 4. Color
+        var color = PickColor();
 
         var error = TmuxService.CreateSession(name, dir);
         if (error == null)
@@ -1515,12 +1515,10 @@ public class App
     private const string _cancelChoice = "Cancel";
     private const string _worktreePrefix = "⑂ ";
 
-    private string? PickDirectory(string? worktreeBranchHint = null)
+    private string? PickDirectory(string? worktreeBranchHint = null, Action<string>? onWorktreeBranchCreated = null)
     {
         var favorites = _config.FavoriteFolders;
-        var gitFavorites = worktreeBranchHint != null
-            ? favorites.Where(f => GitService.IsGitRepo(ConfigService.ExpandPath(f.Path))).ToList()
-            : [];
+        var gitFavorites = favorites.Where(f => GitService.IsGitRepo(ConfigService.ExpandPath(f.Path))).ToList();
 
         while (true)
         {
@@ -1563,12 +1561,26 @@ public class App
                 var fav = gitFavorites.FirstOrDefault(f => f.Name == repoName);
                 if (fav == null) continue;
 
+                var hint = worktreeBranchHint;
+                if (string.IsNullOrWhiteSpace(hint))
+                {
+                    hint = AnsiConsole.Prompt(
+                        new TextPrompt<string>("[grey70]Name[/] [grey](used for branch and session)[/][grey70]:[/]")
+                            .AllowEmpty()
+                            .PromptStyle(new Style(Color.White)));
+                    if (string.IsNullOrWhiteSpace(hint))
+                        continue; // back to picker
+                }
+
                 var repoPath = ConfigService.ExpandPath(fav.Path);
-                var branchName = GitService.SanitizeBranchName(worktreeBranchHint!);
+                var branchName = GitService.SanitizeBranchName(hint);
                 var basePath = ConfigService.ExpandPath(_config.WorktreeBasePath);
                 var worktreeDest = Path.Combine(basePath, branchName, repoName);
 
-                return CreateWorktreeWithProgress(repoPath, worktreeDest, branchName);
+                var result = CreateWorktreeWithProgress(repoPath, worktreeDest, branchName);
+                if (result != null)
+                    onWorktreeBranchCreated?.Invoke(branchName);
+                return result;
             }
 
             // Match back to the favorite by prefix (name before the spacing)
