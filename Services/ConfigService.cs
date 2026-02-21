@@ -142,6 +142,8 @@ public static class ConfigService
         return changed;
     }
 
+    public static void SaveConfig(CccConfig config) => Save(config);
+
     private static void Save(CccConfig config)
     {
         Directory.CreateDirectory(_configDir);

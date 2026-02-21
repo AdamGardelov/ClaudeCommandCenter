@@ -153,6 +153,25 @@ public class App
     {
         var liveSessionNames = new HashSet<string>(_state.Sessions.Select(s => s.Name));
         var sessionLookup = _state.Sessions.ToDictionary(s => s.Name);
+
+        // Clean up persisted config: remove dead sessions and empty groups
+        var configChanged = false;
+        var emptyGroups = new List<string>();
+        foreach (var (name, group) in _config.Groups)
+        {
+            var removed = group.Sessions.RemoveAll(s => !liveSessionNames.Contains(s));
+            if (removed > 0)
+                configChanged = true;
+            if (group.Sessions.Count == 0)
+                emptyGroups.Add(name);
+        }
+
+        foreach (var name in emptyGroups)
+            _config.Groups.Remove(name);
+
+        if (configChanged)
+            ConfigService.SaveConfig(_config);
+
         _state.Groups = _config.Groups.Values
             .Select(g => new SessionGroup
             {
@@ -160,8 +179,7 @@ public class App
                 Description = g.Description,
                 Color = g.Color,
                 WorktreePath = g.WorktreePath,
-                // Only include sessions that are still alive in tmux
-                Sessions = g.Sessions.Where(s => liveSessionNames.Contains(s)).ToList(),
+                Sessions = g.Sessions.ToList(),
             })
             .OrderByDescending(g => g.Sessions.Any(name =>
                 sessionLookup.TryGetValue(name, out var s) && s.IsWaitingForInput))
