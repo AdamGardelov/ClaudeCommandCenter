@@ -117,6 +117,34 @@ Press `Enter` on a grid cell to attach directly to that session. Press `G` to sw
 
 Arrow keys always work for navigation regardless of configuration. When you attach to a session, detach with the standard tmux prefix (`Ctrl-b d`) to return to the command center.
 
+### Worktree Support
+
+CCC can create git worktrees directly — no external tooling needed.
+
+**Single session:** When creating a new session (`n`), the directory picker shows worktree entries below your favorites. Picking one creates a worktree using the session name as the branch name — zero extra steps.
+
+```
+Pick a directory:
+  Core  ~/Dev/Wint/Core
+  BankService  ~/Dev/Wint/BankService
+  ⑂ Core  (new worktree)
+  ⑂ BankService  (new worktree)
+  Custom path...
+  Cancel
+```
+
+**Group with worktrees:** When creating a group (`g`), select "New worktrees (pick repos)" to multi-select repos, enter a feature name, and CCC creates worktrees for all of them in a shared folder with a `.feature-context.json` for discoverability.
+
+```
+~/Dev/Wint/worktrees/
+└── my-feature/
+    ├── Core/                      ← worktree
+    ├── BankService/               ← worktree
+    └── .feature-context.json      ← auto-generated
+```
+
+These worktrees are also discoverable via the "Existing worktree feature" option when creating groups later.
+
 ### Configuration
 
 Create `~/.ccc/config.json` to configure favorite folders. When creating a new session, you'll be able to pick from this list instead of typing a full path.
@@ -137,6 +165,7 @@ Create `~/.ccc/config.json` to configure favorite folders. When creating a new s
 | `ideCommand` | `` | Command to run when pressing `i` (e.g. `rider`, `code`, `cursor`) |
 | `sessionDescriptions` | `{}` | Display names shown under sessions in the preview panel |
 | `sessionColors` | `{}` | Spectre Console color names for session panel borders |
+| `worktreeBasePath` | `~/Dev/Wint/worktrees/` | Root directory for created worktrees |
 | `keybindings` | `{}` | Keybinding overrides (see below) |
 
 The config file is created automatically on first run. Tilde (`~`) paths are expanded automatically.

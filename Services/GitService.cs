@@ -1,0 +1,103 @@
+using System.Diagnostics;
+
+namespace ClaudeCommandCenter.Services;
+
+public static class GitService
+{
+    public static bool IsGitRepo(string path)
+    {
+        var gitPath = Path.Combine(path, ".git");
+        return File.Exists(gitPath) || Directory.Exists(gitPath);
+    }
+
+    /// <summary>
+    /// Creates a git worktree at the specified destination with a new branch.
+    /// </summary>
+    /// <returns>null on success, error message on failure</returns>
+    public static string? CreateWorktree(string repoPath, string worktreeDest, string branchName)
+    {
+        var (success, output) = RunGit(repoPath, "worktree", "add", "-b", branchName, worktreeDest);
+        return success ? null : (output ?? "Failed to create worktree");
+    }
+
+    /// <summary>
+    /// Returns the default branch (development, main, or master) for a repo.
+    /// </summary>
+    public static string GetDefaultBranch(string repoPath)
+    {
+        foreach (var candidate in new[] { "development", "main", "master" })
+        {
+            var (success, _) = RunGit(repoPath, "rev-parse", "--verify", candidate);
+            if (success)
+                return candidate;
+        }
+
+        return "main";
+    }
+
+    /// <summary>
+    /// Fetches with prune to clean up deleted remote branches before creating worktrees.
+    /// </summary>
+    public static void FetchPrune(string repoPath)
+    {
+        RunGit(repoPath, "fetch", "--prune");
+    }
+
+    /// <summary>
+    /// Sanitizes a string for use as a git branch name.
+    /// </summary>
+    public static string SanitizeBranchName(string name)
+    {
+        var sanitized = name
+            .Replace(' ', '-')
+            .Replace('_', '-')
+            .Replace("..", "-")
+            .Replace("~", "")
+            .Replace("^", "")
+            .Replace(":", "")
+            .Replace("\\", "")
+            .TrimStart('-', '/')
+            .TrimEnd('-', '/', '.');
+
+        // Collapse multiple hyphens
+        while (sanitized.Contains("--"))
+            sanitized = sanitized.Replace("--", "-");
+
+        return sanitized.ToLowerInvariant();
+    }
+
+    private static (bool Success, string? Output) RunGit(string workingDirectory, params string[] args)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "git",
+                WorkingDirectory = workingDirectory,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+
+            foreach (var arg in args)
+                startInfo.ArgumentList.Add(arg);
+
+            using var process = Process.Start(startInfo);
+            if (process == null)
+                return (false, "Failed to start git");
+
+            var stdout = process.StandardOutput.ReadToEnd();
+            var stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            return process.ExitCode == 0
+                ? (true, stdout.Trim())
+                : (false, stderr.Trim());
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+}

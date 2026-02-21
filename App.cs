@@ -940,7 +940,7 @@ public class App
 
         var color = PickColor();
 
-        var dir = PickDirectory();
+        var dir = PickDirectory(worktreeBranchHint: name);
 
         if (dir == null)
         {
@@ -989,30 +989,38 @@ public class App
         Console.CursorVisible = true;
         Console.Clear();
 
-        // Check if worktrees are available
         var basePath = ConfigService.ExpandPath(_config.WorktreeBasePath);
-        var hasWorktrees = Directory.Exists(basePath) && ScanWorktreeFeatures(basePath).Count > 0;
+        var hasExistingWorktrees = Directory.Exists(basePath) && ScanWorktreeFeatures(basePath).Count > 0;
+        var hasGitRepos = _config.FavoriteFolders.Any(f => GitService.IsGitRepo(ConfigService.ExpandPath(f.Path)));
 
-        if (hasWorktrees)
+        var modePrompt = new SelectionPrompt<string>()
+            .Title("[grey70]Create group from[/]")
+            .HighlightStyle(new Style(Color.White, Color.Grey70));
+
+        if (hasExistingWorktrees)
+            modePrompt.AddChoice("Existing worktree feature");
+        if (hasGitRepos)
+            modePrompt.AddChoice("New worktrees (pick repos)");
+        modePrompt.AddChoices("Manual (pick directories)", _cancelChoice);
+
+        var mode = AnsiConsole.Prompt(modePrompt);
+        if (mode == _cancelChoice)
         {
-            var modePrompt = new SelectionPrompt<string>()
-                .Title("[grey70]Create group from[/]")
-                .HighlightStyle(new Style(Color.White, Color.Grey70))
-                .AddChoices("Worktree feature", "Manual (pick directories)", _cancelChoice);
+            Console.CursorVisible = false;
+            _state.SetStatus("Cancelled");
+            return;
+        }
 
-            var mode = AnsiConsole.Prompt(modePrompt);
-            if (mode == _cancelChoice)
-            {
-                Console.CursorVisible = false;
-                _state.SetStatus("Cancelled");
-                return;
-            }
+        if (mode.StartsWith("Existing"))
+        {
+            CreateGroupFromWorktree(basePath);
+            return;
+        }
 
-            if (mode.StartsWith("Worktree"))
-            {
-                CreateGroupFromWorktree(basePath);
-                return;
-            }
+        if (mode.StartsWith("New worktrees"))
+        {
+            CreateGroupFromNewWorktrees();
+            return;
         }
 
         CreateGroupManually();
@@ -1091,6 +1099,160 @@ public class App
         };
         ConfigService.SaveGroup(_config, group);
         FinishGroupCreation(feature.Name);
+    }
+
+    private void CreateGroupFromNewWorktrees()
+    {
+        var gitFavorites = _config.FavoriteFolders
+            .Where(f => GitService.IsGitRepo(ConfigService.ExpandPath(f.Path)))
+            .ToList();
+
+        if (gitFavorites.Count < 2)
+        {
+            Console.CursorVisible = false;
+            _state.SetStatus("Need at least 2 git repos in favorites");
+            return;
+        }
+
+        var selectedRepos = AnsiConsole.Prompt(
+            new MultiSelectionPrompt<string>()
+                .Title("[grey70]Select repos[/]")
+                .PageSize(10)
+                .HighlightStyle(new Style(Color.White, Color.Grey70))
+                .InstructionsText("[grey](space to toggle, enter to confirm)[/]")
+                .AddChoices(gitFavorites.Select(f => $"{f.Name}  [grey50]{f.Path}[/]")));
+
+        if (selectedRepos.Count < 2)
+        {
+            Console.CursorVisible = false;
+            _state.SetStatus("Groups need at least 2 repos");
+            return;
+        }
+
+        var featureName = AnsiConsole.Prompt(
+            new TextPrompt<string>("[grey70]Feature name[/] [grey](used for branch + folder)[/][grey70]:[/]")
+                .AllowEmpty()
+                .PromptStyle(new Style(Color.White)));
+
+        if (string.IsNullOrWhiteSpace(featureName))
+        {
+            Console.CursorVisible = false;
+            _state.SetStatus("Cancelled");
+            return;
+        }
+
+        var sanitizedName = SanitizeTmuxSessionName(featureName);
+        var branchName = GitService.SanitizeBranchName(featureName);
+
+        if (_config.Groups.ContainsKey(sanitizedName))
+        {
+            Console.CursorVisible = false;
+            _state.SetStatus($"Group '{sanitizedName}' already exists");
+            return;
+        }
+
+        var color = PickColor();
+
+        var basePath = ConfigService.ExpandPath(_config.WorktreeBasePath);
+        var featurePath = Path.Combine(basePath, branchName);
+
+        // Resolve selected names back to favorites
+        var repos = new List<(string Name, string RepoPath)>();
+        foreach (var sel in selectedRepos)
+        {
+            var name = sel.Split("  ")[0];
+            var fav = gitFavorites.FirstOrDefault(f => f.Name == name);
+            if (fav != null)
+                repos.Add((name, ConfigService.ExpandPath(fav.Path)));
+        }
+
+        // Create worktrees with progress
+        var worktrees = new Dictionary<string, string>();
+        string? error = null;
+
+        AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .SpinnerStyle(new Style(Color.Grey70))
+            .Start("[grey70]Creating worktrees...[/]", ctx =>
+            {
+                foreach (var (repoName, repoPath) in repos)
+                {
+                    ctx.Status($"[grey70]Creating worktree [white]{repoName}[/]...[/]");
+                    GitService.FetchPrune(repoPath);
+
+                    var dest = Path.Combine(featurePath, repoName);
+                    Directory.CreateDirectory(featurePath);
+
+                    error = GitService.CreateWorktree(repoPath, dest, branchName);
+                    if (error != null)
+                    {
+                        error = $"Failed to create worktree for {repoName}: {error}";
+                        return;
+                    }
+
+                    worktrees[repoName] = dest;
+                }
+            });
+
+        if (error != null)
+        {
+            Console.CursorVisible = false;
+            _state.SetStatus(error);
+            return;
+        }
+
+        // Generate .feature-context.json
+        WriteFeatureContext(featurePath, featureName, worktrees);
+
+        // Create sessions
+        Console.CursorVisible = false;
+        var sessionNames = new List<string>();
+        foreach (var (repoName, worktreePath) in worktrees)
+        {
+            var sessionName = SanitizeTmuxSessionName($"{sanitizedName}-{repoName}");
+            var sessionError = TmuxService.CreateSession(sessionName, worktreePath);
+            if (sessionError != null)
+            {
+                _state.SetStatus($"Failed to create session '{sessionName}': {sessionError}");
+                return;
+            }
+
+            if (color != null)
+            {
+                ConfigService.SaveColor(_config, sessionName, color);
+                TmuxService.ApplyStatusColor(sessionName, color);
+            }
+
+            sessionNames.Add(sessionName);
+        }
+
+        var group = new SessionGroup
+        {
+            Name = sanitizedName,
+            Description = featureName,
+            Color = color ?? "",
+            WorktreePath = featurePath,
+            Sessions = sessionNames,
+        };
+        ConfigService.SaveGroup(_config, group);
+        FinishGroupCreation(sanitizedName);
+    }
+
+    private static void WriteFeatureContext(string featurePath, string featureName, Dictionary<string, string> worktrees)
+    {
+        var repos = new Dictionary<string, object>();
+        foreach (var (name, path) in worktrees)
+            repos[name] = new { worktree = path };
+
+        var context = new
+        {
+            feature = featureName,
+            description = "",
+            repos,
+        };
+
+        var json = JsonSerializer.Serialize(context, new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(Path.Combine(featurePath, ".feature-context.json"), json);
     }
 
     private void CreateGroupManually()
@@ -1351,10 +1513,14 @@ public class App
 
     private const string _customPathChoice = "Custom path...";
     private const string _cancelChoice = "Cancel";
+    private const string _worktreePrefix = "⑂ ";
 
-    private string? PickDirectory()
+    private string? PickDirectory(string? worktreeBranchHint = null)
     {
         var favorites = _config.FavoriteFolders;
+        var gitFavorites = worktreeBranchHint != null
+            ? favorites.Where(f => GitService.IsGitRepo(ConfigService.ExpandPath(f.Path))).ToList()
+            : [];
 
         while (true)
         {
@@ -1366,6 +1532,12 @@ public class App
 
             foreach (var fav in favorites)
                 prompt.AddChoice($"{fav.Name}  [grey50]{fav.Path}[/]");
+
+            if (gitFavorites.Count > 0)
+            {
+                foreach (var fav in gitFavorites)
+                    prompt.AddChoice($"{_worktreePrefix}{fav.Name}  [grey50](new worktree)[/]");
+            }
 
             prompt.AddChoice(_customPathChoice);
             prompt.AddChoice(_cancelChoice);
@@ -1384,11 +1556,51 @@ public class App
                 }
             }
 
+            // Handle worktree selection
+            if (selected.StartsWith(_worktreePrefix))
+            {
+                var repoName = selected[_worktreePrefix.Length..].Split("  ")[0];
+                var fav = gitFavorites.FirstOrDefault(f => f.Name == repoName);
+                if (fav == null) continue;
+
+                var repoPath = ConfigService.ExpandPath(fav.Path);
+                var branchName = GitService.SanitizeBranchName(worktreeBranchHint!);
+                var basePath = ConfigService.ExpandPath(_config.WorktreeBasePath);
+                var worktreeDest = Path.Combine(basePath, branchName, repoName);
+
+                return CreateWorktreeWithProgress(repoPath, worktreeDest, branchName);
+            }
+
             // Match back to the favorite by prefix (name before the spacing)
             var selectedName = selected.Split("  ")[0];
             var match = favorites.FirstOrDefault(f => f.Name == selectedName);
             return match?.Path;
         }
+    }
+
+    private static string? CreateWorktreeWithProgress(string repoPath, string worktreeDest, string branchName)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(worktreeDest)!);
+
+        string? error = null;
+        AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .SpinnerStyle(new Style(Color.Grey70))
+            .Start($"[grey70]Creating worktree [white]{branchName}[/]...[/]", _ =>
+            {
+                GitService.FetchPrune(repoPath);
+                error = GitService.CreateWorktree(repoPath, worktreeDest, branchName);
+            });
+
+        if (error != null)
+        {
+            AnsiConsole.MarkupLine($"[red]Worktree failed:[/] {Markup.Escape(error)}");
+            AnsiConsole.MarkupLine("[grey](Press any key)[/]");
+            Console.ReadKey(true);
+            return null;
+        }
+
+        return worktreeDest;
     }
 
     private static string? PromptCustomPath()
