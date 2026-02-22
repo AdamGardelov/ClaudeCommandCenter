@@ -159,7 +159,7 @@ public class App
             // Preserve content tracking state so sessions don't briefly flash as "working"
             if (oldSessions.TryGetValue(s.Name, out var old))
             {
-                s.PreviousContentHash = old.PreviousContentHash;
+                s.PreviousContent = old.PreviousContent;
                 s.StableContentCount = old.StableContentCount;
                 s.IsWaitingForInput = old.IsWaitingForInput;
             }

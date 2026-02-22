@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using ClaudeCommandCenter.Models;
 using Spectre.Console;
 
@@ -33,10 +34,9 @@ public abstract class TmuxService
             sessions.Add(session);
         }
 
-        // Detect input state and git info
+        // Detect git info (input state is tracked by App.cs across polls)
         foreach (var session in sessions)
             DetectGitInfo(session);
-        DetectWaitingForInputBatch(sessions);
 
         return sessions.OrderBy(s => s.Created).ThenBy(s => s.Name).ToList();
     }
@@ -55,7 +55,8 @@ public abstract class TmuxService
     }
 
     // Number of consecutive stable polls before marking as "waiting for input"
-    private const int _stableThreshold = 1;
+    // 6 polls × 500ms = 3 seconds — avoids false positives from short pauses between tool calls
+    private const int _stableThreshold = 6;
 
     public static void DetectWaitingForInputBatch(List<TmuxSession> sessions)
     {
@@ -74,14 +75,14 @@ public abstract class TmuxService
 
             // Strip the status bar (last non-empty line contains the timer that
             // updates continuously). Compare everything above it between polls.
-            var contentHash = HashContentAboveStatusBar(output);
+            var content = GetContentAboveStatusBar(output);
 
-            if (contentHash == session.PreviousContentHash)
+            if (content == session.PreviousContent)
                 session.StableContentCount++;
             else
             {
                 session.StableContentCount = 0;
-                session.PreviousContentHash = contentHash;
+                session.PreviousContent = content;
             }
 
             // Content unchanged for consecutive polls → waiting for input
@@ -89,12 +90,33 @@ public abstract class TmuxService
         }
     }
 
-    private static string HashContentAboveStatusBar(string paneOutput)
+    // Matches status bar timer suffixes like "45s", "24m24s", "1h2m", "1h30m24s"
+    private static readonly Regex StatusBarTimerPattern = new(@"\d+[hms]\d*[ms]?\s*$", RegexOptions.Compiled);
+
+    private static string GetContentAboveStatusBar(string paneOutput)
     {
         var lines = paneOutput.Split('\n');
 
-        // Find the last non-empty line (the status bar) and exclude it.
-        // The status bar contains a continuously updating timer, so it always changes.
+        // Scan from bottom up for the status bar: the first non-empty line ending with a timer.
+        // This correctly skips mode indicator lines (e.g., "⏸ plan mode on") that may appear below the status bar.
+        var statusBarIndex = -1;
+        for (var i = lines.Length - 1; i >= 0; i--)
+        {
+            if (string.IsNullOrWhiteSpace(lines[i]))
+                continue;
+
+            if (StatusBarTimerPattern.IsMatch(lines[i]))
+            {
+                statusBarIndex = i;
+                break;
+            }
+        }
+
+        // Strip the status bar and everything below it (mode indicators, empty lines).
+        // Fall back to stripping the last non-empty line if no timer pattern found.
+        if (statusBarIndex >= 0)
+            return string.Join('\n', lines.AsSpan(0, statusBarIndex));
+
         var lastNonEmpty = -1;
         for (var i = lines.Length - 1; i >= 0; i--)
             if (!string.IsNullOrWhiteSpace(lines[i]))
@@ -103,7 +125,6 @@ public abstract class TmuxService
                 break;
             }
 
-        // Use everything above the status bar for comparison
         var end = lastNonEmpty >= 0 ? lastNonEmpty : lines.Length;
         return string.Join('\n', lines.AsSpan(0, end));
     }
