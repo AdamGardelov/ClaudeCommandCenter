@@ -18,6 +18,9 @@ public static class Renderer
     public static IRenderable BuildLayout(AppState state, string? capturedPane,
         Dictionary<string, string>? allCapturedPanes = null)
     {
+        if (state.MobileMode)
+            return BuildMobileLayout(state);
+
         var layout = new Layout("Root")
             .SplitRows(
                 new Layout("Header").Size(1),
@@ -515,6 +518,153 @@ public static class Renderer
             $" [grey70]Send to[/] [white]{target}[/][grey70]>[/] [white]{buffer}[/][grey]▌[/]{limit}" +
             $"  [grey50]Enter[/][grey] send · [/][grey50]Esc[/][grey] cancel[/]");
     }
+
+    // ── Mobile mode rendering ──────────────────────────────────────────
+
+    private static IRenderable BuildMobileLayout(AppState state)
+    {
+        var sessions = state.GetMobileVisibleSessions();
+        var listHeight = Math.Max(1, Console.WindowHeight - 6);
+
+        state.EnsureCursorVisible(listHeight);
+
+        var layout = new Layout("Root")
+            .SplitRows(
+                new Layout("Header").Size(1),
+                new Layout("List"),
+                new Layout("Detail").Size(4),
+                new Layout("StatusBar").Size(1));
+
+        layout["Header"].Update(BuildMobileHeader(state, sessions.Count));
+        layout["List"].Update(BuildMobileSessionList(state, sessions, listHeight));
+        layout["Detail"].Update(BuildMobileDetailBar(state));
+        layout["StatusBar"].Update(BuildMobileStatusBar(state));
+
+        return layout;
+    }
+
+    private static IRenderable BuildMobileHeader(AppState state, int sessionCount)
+    {
+        var filterLabel = state.GetGroupFilterLabel();
+        var left = new Markup($"[mediumpurple3 bold] CCC[/] [grey50]v{_version}[/] [grey]- {sessionCount} sessions[/]");
+        var right = new Markup($"[grey50][[{Markup.Escape(filterLabel)}]][/] ");
+        return new Columns(left, right) { Expand = true };
+    }
+
+    private static IRenderable BuildMobileSessionList(AppState state, List<TmuxSession> sessions, int listHeight)
+    {
+        var rows = new List<IRenderable>();
+
+        if (sessions.Count == 0)
+        {
+            rows.Add(new Markup("  [grey]No sessions[/]"));
+        }
+        else
+        {
+            var end = Math.Min(state.TopIndex + listHeight, sessions.Count);
+            for (var i = state.TopIndex; i < end; i++)
+            {
+                var session = sessions[i];
+                var isSelected = i == state.CursorIndex;
+                rows.Add(BuildMobileSessionRow(session, isSelected));
+            }
+        }
+
+        return new Rows(rows);
+    }
+
+    private static Markup BuildMobileSessionRow(TmuxSession session, bool isSelected)
+    {
+        var name = Markup.Escape(session.Name);
+        var spinner = Markup.Escape(GetSpinnerFrame());
+        var isWorking = !session.IsWaitingForInput;
+        var status = isWorking ? spinner : "!";
+
+        if (session.IsExcluded)
+        {
+            var excludedStatus = session.IsWaitingForInput ? "[grey42]![/]" : $"[grey35]{spinner}[/]";
+            if (isSelected)
+                return new Markup($"[grey50 on grey19] {excludedStatus} {name} [/]");
+            return new Markup($" {excludedStatus} [grey35]{name}[/]");
+        }
+
+        if (isSelected)
+        {
+            var bg = session.ColorTag ?? "grey37";
+            return new Markup($"[white on {bg}] {status} {name} [/]");
+        }
+
+        if (isWorking)
+            return new Markup($" [green]{spinner}[/] [navajowhite1]{name}[/]");
+        if (session.IsWaitingForInput)
+            return new Markup($" [yellow bold]![/] [navajowhite1]{name}[/]");
+
+        return new Markup($"   [grey70]{name}[/]");
+    }
+
+    private static IRenderable BuildMobileDetailBar(AppState state)
+    {
+        var session = state.GetSelectedSession();
+        var rows = new List<IRenderable>();
+
+        rows.Add(new Rule().RuleStyle(Style.Parse("grey27")));
+
+        if (session == null)
+        {
+            rows.Add(new Markup(" [grey]No session selected[/]"));
+            rows.Add(new Text(""));
+            rows.Add(new Text(""));
+            return new Rows(rows);
+        }
+
+        var color = session.ColorTag ?? "grey70";
+        rows.Add(new Markup($" [{color} bold]{Markup.Escape(session.Name)}[/]"));
+
+        var branch = session.GitBranch != null ? $"[aqua]{Markup.Escape(session.GitBranch)}[/]" : "[grey]no branch[/]";
+        var path = session.CurrentPath != null ? $" [grey50]{Markup.Escape(ShortenPath(session.CurrentPath))}[/]" : "";
+        rows.Add(new Markup($" {branch}{path}"));
+
+        var statusText = session.IsWaitingForInput
+            ? "[yellow bold]waiting for input[/]"
+            : session.IsAttached ? "[green]attached[/]" : "[grey]working[/]";
+        var desc = !string.IsNullOrWhiteSpace(session.Description)
+            ? $" [grey50]- {Markup.Escape(session.Description)}[/]"
+            : "";
+        rows.Add(new Markup($" {statusText}{desc}"));
+
+        return new Rows(rows);
+    }
+
+    private static Markup BuildMobileStatusBar(AppState state)
+    {
+        if (state.IsInputMode)
+            return BuildInputStatusBar(state);
+
+        var status = state.GetActiveStatus();
+        if (status != null)
+            return new Markup($" [yellow]{Markup.Escape(status)}[/]");
+
+        var session = state.GetSelectedSession();
+        var parts = new List<string>();
+
+        if (session?.IsWaitingForInput == true)
+        {
+            parts.Add("[grey70 bold]Y[/][grey] approve [/]");
+            parts.Add("[grey70 bold]N[/][grey] reject [/]");
+        }
+
+        parts.Add("[grey70 bold]S[/][grey] send [/]");
+        parts.Add("[grey70 bold]Enter[/][grey] attach [/]");
+
+        if (state.Groups.Count > 0)
+            parts.Add("[grey70 bold]g[/][grey] filter [/]");
+
+        parts.Add("[grey70 bold]q[/][grey] quit[/]");
+
+        return new Markup(" " + string.Join(" ", parts));
+    }
+
+    // ── Shared helpers ──────────────────────────────────────────────────
 
     private static string ShortenPath(string path)
     {

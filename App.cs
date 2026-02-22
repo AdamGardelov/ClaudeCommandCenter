@@ -9,7 +9,7 @@ namespace ClaudeCommandCenter;
 
 public class App
 {
-    private readonly AppState _state = new();
+    private readonly AppState _state;
     private readonly CccConfig _config = ConfigService.Load();
     private Dictionary<string, string> _keyMap = new();
     private string? _capturedPane;
@@ -24,6 +24,11 @@ public class App
     private int _lastGridWidth;
     private int _lastGridHeight;
     private bool _firstPollDone;
+
+    public App(bool mobileMode = false)
+    {
+        _state = new AppState { MobileMode = mobileMode };
+    }
 
     public void Run()
     {
@@ -114,7 +119,8 @@ public class App
             // Periodically capture pane content for preview
             if ((DateTime.Now - _lastCapture).TotalMilliseconds > 500)
             {
-                ResizeGridPanes();
+                if (!_state.MobileMode)
+                    ResizeGridPanes();
                 if (UpdateCapturedPane())
                     Render();
                 _lastCapture = DateTime.Now;
@@ -217,6 +223,10 @@ public class App
         }
         _firstPollDone = true;
 
+        // Mobile mode doesn't show pane previews
+        if (_state.MobileMode)
+            return true;
+
         // In grid mode, capture panes for visible sessions (all or group-filtered)
         if (_state.ViewMode == ViewMode.Grid)
             return UpdateAllCapturedPanes();
@@ -307,6 +317,12 @@ public class App
         if (_state.IsInputMode)
         {
             HandleInputKey(key);
+            return;
+        }
+
+        if (_state.MobileMode)
+        {
+            HandleMobileKey(key);
             return;
         }
 
@@ -584,6 +600,77 @@ public class App
         if (_state.Groups.Count == 0)
             return;
         _state.GroupCursor = Math.Clamp(_state.GroupCursor + delta, 0, _state.Groups.Count - 1);
+    }
+
+    private void HandleMobileKey(ConsoleKeyInfo key)
+    {
+        if (_state.HasPendingStatus)
+        {
+            _state.ClearStatus();
+            return;
+        }
+
+        switch (key.Key)
+        {
+            case ConsoleKey.UpArrow:
+                MoveMobileCursor(-1);
+                return;
+            case ConsoleKey.DownArrow:
+                MoveMobileCursor(1);
+                return;
+        }
+
+        var keyId = ResolveKeyId(key);
+
+        if (keyId == "g")
+        {
+            _state.CycleGroupFilter();
+            _lastSelectedSession = null;
+            return;
+        }
+
+        if (_keyMap.TryGetValue(keyId, out var actionId))
+            DispatchMobileAction(actionId);
+    }
+
+    private void MoveMobileCursor(int delta)
+    {
+        var visible = _state.GetMobileVisibleSessions();
+        if (visible.Count == 0) return;
+        _state.CursorIndex = Math.Clamp(_state.CursorIndex + delta, 0, visible.Count - 1);
+        _lastSelectedSession = null;
+    }
+
+    private void DispatchMobileAction(string actionId)
+    {
+        switch (actionId)
+        {
+            case "navigate-up":
+                MoveMobileCursor(-1);
+                break;
+            case "navigate-down":
+                MoveMobileCursor(1);
+                break;
+            case "approve":
+                SendQuickKey("y");
+                break;
+            case "reject":
+                SendQuickKey("n");
+                break;
+            case "send-text":
+                SendText();
+                break;
+            case "attach":
+                AttachToSession();
+                break;
+            case "refresh":
+                LoadSessions();
+                _state.SetStatus("Refreshed");
+                break;
+            case "quit":
+                _state.Running = false;
+                break;
+        }
     }
 
     private void OpenGroup()

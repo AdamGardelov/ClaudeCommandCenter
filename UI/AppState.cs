@@ -21,8 +21,21 @@ public class AppState
     public string? ActiveGroup { get; set; }
     private int _savedCursorIndex;
 
+    // Mobile mode state
+    public bool MobileMode { get; set; }
+    public int GroupFilterIndex { get; set; } // 0 = All, 1+ = group index
+    public int TopIndex { get; set; } // Scroll offset for mobile list
+
     public TmuxSession? GetSelectedSession()
     {
+        if (MobileMode)
+        {
+            var mobileSessions = GetMobileVisibleSessions();
+            if (CursorIndex >= 0 && CursorIndex < mobileSessions.Count)
+                return mobileSessions[CursorIndex];
+            return null;
+        }
+
         // When groups section is focused in list view, no session is selected
         if (ViewMode == ViewMode.List && ActiveGroup == null && ActiveSection == ActiveSection.Groups)
             return null;
@@ -71,6 +84,49 @@ public class AppState
     public List<TmuxSession> GetGridSessions()
     {
         return GetVisibleSessions().Where(s => !s.IsExcluded).ToList();
+    }
+
+    public List<TmuxSession> GetMobileVisibleSessions()
+    {
+        if (GroupFilterIndex == 0)
+            return GetStandaloneSessions();
+
+        var groupIdx = GroupFilterIndex - 1;
+        if (groupIdx < Groups.Count)
+        {
+            var group = Groups[groupIdx];
+            var groupSessionNames = new HashSet<string>(group.Sessions);
+            return Sessions.Where(s => groupSessionNames.Contains(s.Name)).ToList();
+        }
+
+        return GetStandaloneSessions();
+    }
+
+    public void CycleGroupFilter()
+    {
+        if (Groups.Count == 0) return;
+
+        GroupFilterIndex++;
+        if (GroupFilterIndex > Groups.Count)
+            GroupFilterIndex = 0;
+
+        CursorIndex = 0;
+        TopIndex = 0;
+    }
+
+    public string GetGroupFilterLabel()
+    {
+        if (GroupFilterIndex == 0 || GroupFilterIndex > Groups.Count)
+            return "All";
+        return Groups[GroupFilterIndex - 1].Name;
+    }
+
+    public void EnsureCursorVisible(int visibleHeight)
+    {
+        if (CursorIndex < TopIndex)
+            TopIndex = CursorIndex;
+        else if (CursorIndex >= TopIndex + visibleHeight)
+            TopIndex = CursorIndex - visibleHeight + 1;
     }
 
     public void EnterGroupGrid(string groupName)
@@ -159,7 +215,7 @@ public class AppState
 
     public void ClampCursor()
     {
-        var visible = GetVisibleSessions();
+        var visible = MobileMode ? GetMobileVisibleSessions() : GetVisibleSessions();
         CursorIndex = visible.Count == 0 ? 0 : Math.Clamp(CursorIndex, 0, visible.Count - 1);
     }
 
