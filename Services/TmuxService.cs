@@ -38,7 +38,7 @@ public abstract class TmuxService
             DetectGitInfo(session);
         DetectWaitingForInputBatch(sessions);
 
-        return sessions.OrderByDescending(s => s.Created).ToList();
+        return sessions.OrderBy(s => s.Created).ThenBy(s => s.Name).ToList();
     }
 
     public static string? CapturePaneContent(string sessionName, int lines = 500) =>
