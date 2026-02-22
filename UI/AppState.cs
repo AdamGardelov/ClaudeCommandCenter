@@ -33,6 +33,13 @@ public class AppState
     public bool IsSettingsEditing { get; set; }
     public string SettingsEditBuffer { get; set; } = "";
 
+    // Diff overlay state
+    public int DiffScrollOffset { get; set; }
+    public string[] DiffOverlayLines { get; set; } = [];
+    public string? DiffOverlaySessionName { get; set; }
+    public string? DiffOverlayBranch { get; set; }
+    public string? DiffOverlayStatSummary { get; set; }
+
     public TmuxSession? GetSelectedSession()
     {
         if (MobileMode)
@@ -231,6 +238,25 @@ public class AppState
     public void ClampGroupCursor() => GroupCursor = Groups.Count == 0
             ? 0
             : Math.Clamp(GroupCursor, 0, Groups.Count - 1);
+
+    public void EnterDiffOverlay(string name, string? branch, string? stat, string[] lines)
+    {
+        ViewMode = ViewMode.DiffOverlay;
+        DiffScrollOffset = 0;
+        DiffOverlaySessionName = name;
+        DiffOverlayBranch = branch;
+        DiffOverlayStatSummary = stat;
+        DiffOverlayLines = lines;
+    }
+
+    public void LeaveDiffOverlay()
+    {
+        ViewMode = ViewMode.List;
+        DiffOverlayLines = [];
+        DiffOverlaySessionName = null;
+        DiffOverlayBranch = null;
+        DiffOverlayStatSummary = null;
+    }
 
     public void EnterSettings()
     {

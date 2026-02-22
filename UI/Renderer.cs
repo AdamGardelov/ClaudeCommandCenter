@@ -844,6 +844,13 @@ public static class Renderer
             parts.Add($"[{keyColor}]{Markup.Escape(b.Key)}[/][{labelColor}] {Markup.Escape(b.Label!)} [/]");
         }
 
+        // Diff overlay hint when diff mode is active
+        if (state.DiffMode)
+        {
+            parts.Add("[grey]│[/]");
+            parts.Add("[white bold]Enter[/][white] open diff [/]");
+        }
+
         // Tab hint when groups exist
         if (state.Groups.Count > 0)
         {
@@ -873,6 +880,111 @@ public static class Renderer
         return session.IsAttached
             ? "[green]attached[/]"
             : "[grey]detached[/]";
+    }
+
+    // ── Diff Overlay View ────────────────────────────────────────────
+
+    public static IRenderable BuildDiffOverlayLayout(AppState state)
+    {
+        var layout = new Layout("Root")
+            .SplitRows(
+                new Layout("Header").Size(1),
+                new Layout("Main"),
+                new Layout("StatusBar").Size(1));
+
+        layout["Header"].Update(BuildDiffOverlayHeader(state));
+        layout["Main"].Update(BuildDiffOverlayContent(state));
+        layout["StatusBar"].Update(BuildDiffOverlayStatusBar());
+
+        return layout;
+    }
+
+    private static Columns BuildDiffOverlayHeader(AppState state)
+    {
+        var name = state.DiffOverlaySessionName ?? "?";
+        var branch = state.DiffOverlayBranch != null
+            ? $" [aqua]{Markup.Escape(state.DiffOverlayBranch)}[/]"
+            : "";
+
+        var totalLines = state.DiffOverlayLines.Length;
+        var viewportHeight = Math.Max(1, Console.WindowHeight - 4);
+        var maxScroll = Math.Max(0, totalLines - viewportHeight);
+        var pct = maxScroll > 0 ? (int)(100.0 * state.DiffScrollOffset / maxScroll) : 100;
+        var scrollInfo = $"[grey50]{state.DiffScrollOffset + 1}-{Math.Min(state.DiffScrollOffset + viewportHeight, totalLines)}/{totalLines} ({pct}%)[/]";
+
+        var left = new Markup($"[mediumpurple3 bold] Diff[/] [white bold]{Markup.Escape(name)}[/]{branch}");
+        var right = new Markup($"{scrollInfo} ");
+
+        return new Columns(left, right) { Expand = true };
+    }
+
+    private static Panel BuildDiffOverlayContent(AppState state)
+    {
+        var rows = new List<IRenderable>();
+        var maxWidth = Math.Max(20, Console.WindowWidth - 4);
+
+        // Stat summary at top
+        if (!string.IsNullOrWhiteSpace(state.DiffOverlayStatSummary))
+        {
+            var statLines = state.DiffOverlayStatSummary.Split('\n');
+            foreach (var line in statLines)
+                rows.Add(FormatDiffStatLine(line));
+            rows.Add(new Rule().RuleStyle(Style.Parse("grey27")));
+        }
+
+        // Calculate viewport
+        var statRowCount = rows.Count;
+        var availableHeight = Math.Max(1, Console.WindowHeight - 4 - statRowCount);
+        var totalLines = state.DiffOverlayLines.Length;
+        var offset = Math.Clamp(state.DiffScrollOffset, 0, Math.Max(0, totalLines - 1));
+        var visibleCount = Math.Min(availableHeight, totalLines - offset);
+
+        for (var i = 0; i < visibleCount; i++)
+            rows.Add(FormatDiffPatchLine(state.DiffOverlayLines[offset + i], maxWidth));
+
+        // Pad remaining lines to fill screen
+        var padding = availableHeight - visibleCount;
+        for (var i = 0; i < padding; i++)
+            rows.Add(new Text(""));
+
+        return new Panel(new Rows(rows))
+            .BorderColor(Color.Grey42)
+            .Expand();
+    }
+
+    private static Markup FormatDiffPatchLine(string line, int maxWidth)
+    {
+        if (line.Length > maxWidth)
+            line = line[..maxWidth];
+
+        var escaped = Markup.Escape(line);
+
+        if (line.StartsWith("+++") || line.StartsWith("---"))
+            return new Markup($"[white bold]{escaped}[/]");
+        if (line.StartsWith('+'))
+            return new Markup($"[green]{escaped}[/]");
+        if (line.StartsWith('-'))
+            return new Markup($"[red]{escaped}[/]");
+        if (line.StartsWith("@@"))
+            return new Markup($"[cyan]{escaped}[/]");
+        if (line.StartsWith("diff "))
+            return new Markup($"[yellow bold]{escaped}[/]");
+        if (line.StartsWith("index "))
+            return new Markup($"[grey50]{escaped}[/]");
+
+        return new Markup($"[grey70]{escaped}[/]");
+    }
+
+    private static Markup BuildDiffOverlayStatusBar()
+    {
+        return new Markup(
+            " [grey70 bold]j/k[/][grey] scroll [/]" +
+            "[grey70 bold]Space/PgDn[/][grey] page down [/]" +
+            "[grey70 bold]PgUp[/][grey] page up [/]" +
+            "[grey70 bold]g[/][grey] top [/]" +
+            "[grey70 bold]G[/][grey] bottom [/]" +
+            "[grey]│[/] " +
+            "[grey70 bold]Esc/q[/][grey] back [/]");
     }
 
     // ── Settings View ──────────────────────────────────────────────

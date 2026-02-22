@@ -123,13 +123,13 @@ public class App
                 if (spinnerFrame != _lastSpinnerFrame)
                 {
                     _lastSpinnerFrame = spinnerFrame;
-                    if (_hasSpinningSessions && _state.ViewMode != ViewMode.Settings)
+                    if (_hasSpinningSessions && _state.ViewMode != ViewMode.Settings && _state.ViewMode != ViewMode.DiffOverlay)
                         Render();
                 }
             }
 
             // Periodically capture pane content for preview
-            if (_state.ViewMode != ViewMode.Settings && (DateTime.Now - _lastCapture).TotalMilliseconds > 500)
+            if (_state.ViewMode != ViewMode.Settings && _state.ViewMode != ViewMode.DiffOverlay && (DateTime.Now - _lastCapture).TotalMilliseconds > 500)
             {
                 if (!_state.MobileMode)
                     ResizeGridPanes();
@@ -367,6 +367,8 @@ public class App
         Console.SetCursorPosition(0, 0);
         if (_state.ViewMode == ViewMode.Settings)
             AnsiConsole.Write(Renderer.BuildSettingsLayout(_state, _config));
+        else if (_state.ViewMode == ViewMode.DiffOverlay)
+            AnsiConsole.Write(Renderer.BuildDiffOverlayLayout(_state));
         else
             AnsiConsole.Write(Renderer.BuildLayout(_state, _capturedPane, _allCapturedPanes, _cachedDiffOutput));
     }
@@ -388,6 +390,12 @@ public class App
         if (_state.ViewMode == ViewMode.Settings)
         {
             HandleSettingsKey(key);
+            return;
+        }
+
+        if (_state.ViewMode == ViewMode.DiffOverlay)
+        {
+            HandleDiffOverlayKey(key);
             return;
         }
 
@@ -519,7 +527,10 @@ public class App
                 SendText();
                 break;
             case "attach":
-                AttachToSession();
+                if (_state.DiffMode && _state.ViewMode == ViewMode.List)
+                    OpenDiffOverlay();
+                else
+                    AttachToSession();
                 break;
             case "toggle-diff":
                 _state.DiffMode = !_state.DiffMode;
@@ -1331,6 +1342,84 @@ public class App
         LoadSessions();
         _lastSelectedSession = null;
         Render();
+    }
+
+    private void OpenDiffOverlay()
+    {
+        var session = _state.GetSelectedSession();
+        if (session == null)
+            return;
+
+        if (session.StartCommitSha == null)
+        {
+            _state.SetStatus("No baseline commit — cannot show diff");
+            return;
+        }
+
+        if (session.CurrentPath == null)
+        {
+            _state.SetStatus("Session has no working directory");
+            return;
+        }
+
+        var fullDiff = GitService.GetFullDiff(session.CurrentPath, session.StartCommitSha);
+        if (string.IsNullOrWhiteSpace(fullDiff))
+        {
+            _state.SetStatus("No changes since session start");
+            return;
+        }
+
+        var lines = fullDiff.Split('\n');
+        _state.EnterDiffOverlay(session.Name, session.GitBranch, _cachedDiffOutput, lines);
+    }
+
+    private void HandleDiffOverlayKey(ConsoleKeyInfo key)
+    {
+        var totalLines = _state.DiffOverlayLines.Length;
+        // viewport = terminal height - header(1) - status bar(1) - panel border(2) - stat section estimate
+        var statLines = _state.DiffOverlayStatSummary?.Split('\n').Length ?? 0;
+        var viewportHeight = Math.Max(1, Console.WindowHeight - 4 - statLines - 1); // -1 for separator
+
+        switch (key.Key)
+        {
+            case ConsoleKey.Escape:
+                _state.LeaveDiffOverlay();
+                return;
+            case ConsoleKey.DownArrow:
+                _state.DiffScrollOffset = Math.Min(_state.DiffScrollOffset + 1, Math.Max(0, totalLines - viewportHeight));
+                return;
+            case ConsoleKey.UpArrow:
+                _state.DiffScrollOffset = Math.Max(0, _state.DiffScrollOffset - 1);
+                return;
+            case ConsoleKey.PageDown:
+                _state.DiffScrollOffset = Math.Min(_state.DiffScrollOffset + viewportHeight, Math.Max(0, totalLines - viewportHeight));
+                return;
+            case ConsoleKey.PageUp:
+                _state.DiffScrollOffset = Math.Max(0, _state.DiffScrollOffset - viewportHeight);
+                return;
+        }
+
+        switch (key.KeyChar)
+        {
+            case 'q':
+                _state.LeaveDiffOverlay();
+                return;
+            case 'j':
+                _state.DiffScrollOffset = Math.Min(_state.DiffScrollOffset + 1, Math.Max(0, totalLines - viewportHeight));
+                return;
+            case 'k':
+                _state.DiffScrollOffset = Math.Max(0, _state.DiffScrollOffset - 1);
+                return;
+            case ' ':
+                _state.DiffScrollOffset = Math.Min(_state.DiffScrollOffset + viewportHeight, Math.Max(0, totalLines - viewportHeight));
+                return;
+            case 'g':
+                _state.DiffScrollOffset = 0;
+                return;
+            case 'G':
+                _state.DiffScrollOffset = Math.Max(0, totalLines - viewportHeight);
+                return;
+        }
     }
 
     private void RunUpdate()

@@ -78,6 +78,19 @@ public static class GitService
         return success ? output : null;
     }
 
+    public static string? GetFullDiff(string repoPath, string sinceCommit, int maxLines = 5000)
+    {
+        var (success, output) = RunGit(repoPath, "diff", sinceCommit);
+        if (!success || string.IsNullOrWhiteSpace(output))
+            return null;
+
+        var lines = output.Split('\n');
+        if (lines.Length <= maxLines)
+            return output;
+
+        return string.Join('\n', lines.Take(maxLines)) + $"\n\n... truncated ({lines.Length - maxLines} more lines)";
+    }
+
     private static (bool Success, string? Output) RunGit(string workingDirectory, params string[] args)
     {
         try
