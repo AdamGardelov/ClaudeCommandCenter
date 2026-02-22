@@ -593,4 +593,191 @@ public static class Renderer
             ? "[green]attached[/]"
             : "[grey]detached[/]";
     }
+
+    // ── Settings View ──────────────────────────────────────────────
+
+    public static IRenderable BuildSettingsLayout(AppState state, CccConfig config)
+    {
+        var layout = new Layout("Root")
+            .SplitRows(
+                new Layout("Header").Size(1),
+                new Layout("Main"),
+                new Layout("StatusBar").Size(1));
+
+        layout["Header"].Update(BuildSettingsHeader());
+
+        var categories = SettingsDefinition.GetCategories();
+        var selectedCategory = categories[Math.Clamp(state.SettingsCategory, 0, categories.Count - 1)];
+        var items = selectedCategory.BuildItems(config);
+
+        layout["Main"].SplitColumns(
+            new Layout("Categories").Size(22),
+            new Layout("Settings"));
+
+        layout["Categories"].Update(BuildCategoryPanel(categories, state));
+        layout["Settings"].Update(BuildSettingsPanel(selectedCategory, items, state, config));
+        layout["StatusBar"].Update(BuildSettingsStatusBar(state, items));
+
+        return layout;
+    }
+
+    private static Columns BuildSettingsHeader()
+    {
+        var left = new Markup("[mediumpurple3 bold] Claude Command Center[/] [grey50]Settings[/]");
+        var right = new Markup("[grey50]Esc to return [/]");
+        return new Columns(left, right) { Expand = true };
+    }
+
+    private static Panel BuildCategoryPanel(List<SettingsCategory> categories, AppState state)
+    {
+        var rows = new List<IRenderable>();
+
+        for (var i = 0; i < categories.Count; i++)
+        {
+            var cat = categories[i];
+            var isSelected = i == state.SettingsCategory;
+            var isFocused = !state.SettingsFocusRight;
+
+            if (isSelected && isFocused)
+                rows.Add(new Markup($"[white on grey37] {cat.Icon} {Markup.Escape(cat.Name),-16} [/]"));
+            else if (isSelected)
+                rows.Add(new Markup($"[white] {cat.Icon} {Markup.Escape(cat.Name),-16} [/]"));
+            else
+                rows.Add(new Markup($"[grey70]   {Markup.Escape(cat.Name),-16} [/]"));
+        }
+
+        var borderColor = !state.SettingsFocusRight ? Color.MediumPurple3 : Color.Grey42;
+
+        return new Panel(new Rows(rows))
+            .Header("[grey70] Categories [/]")
+            .BorderColor(borderColor)
+            .Expand();
+    }
+
+    private static Panel BuildSettingsPanel(SettingsCategory category, List<SettingsItem> items,
+        AppState state, CccConfig config)
+    {
+        var rows = new List<IRenderable>();
+        var isFocused = state.SettingsFocusRight;
+
+        if (items.Count == 0)
+        {
+            rows.Add(new Markup("[grey]No settings in this category[/]"));
+        }
+        else
+        {
+            for (var i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                var isSelected = isFocused && i == state.SettingsItemCursor;
+                rows.Add(BuildSettingsRow(item, isSelected, state, config));
+            }
+        }
+
+        var borderColor = isFocused ? Color.MediumPurple3 : Color.Grey42;
+
+        return new Panel(new Rows(rows))
+            .Header($"[grey70] {Markup.Escape(category.Name)} [/]")
+            .BorderColor(borderColor)
+            .Expand();
+    }
+
+    private static IRenderable BuildSettingsRow(SettingsItem item, bool isSelected,
+        AppState state, CccConfig config)
+    {
+        var label = Markup.Escape(item.Label);
+        var maxValueWidth = Math.Max(10, Console.WindowWidth - 22 - 6 - item.Label.Length - 8);
+
+        switch (item.Type)
+        {
+            case SettingsItemType.Toggle:
+            {
+                var value = item.GetValue?.Invoke(config) ?? "OFF";
+                var isOn = value == "ON";
+                var toggleColor = isOn ? "green" : "grey50";
+                var toggleText = isOn ? " ON " : " OFF";
+                var keyInfo = item.ActionId != null && config.Keybindings.TryGetValue(item.ActionId, out var kb)
+                    ? $"[grey50]({Markup.Escape(kb.Key ?? "?")})[/] " : "";
+
+                if (isSelected)
+                    return new Markup($"[white on grey37] {keyInfo}{label,-20} [{toggleColor}]{toggleText}[/] [/]");
+                return new Markup($" {keyInfo}{label,-20} [{toggleColor}]{toggleText}[/]");
+            }
+
+            case SettingsItemType.Text:
+            case SettingsItemType.Number:
+            {
+                var value = item.GetValue?.Invoke(config) ?? "";
+
+                if (isSelected && state.IsSettingsEditing)
+                {
+                    var buf = Markup.Escape(state.SettingsEditBuffer);
+                    return new Markup($"[white on grey37] {label,-20} [/][white on grey27] {buf}[grey]▌[/] [/]");
+                }
+
+                var displayValue = value.Length > maxValueWidth
+                    ? value[..(maxValueWidth - 2)] + ".." : value;
+                var valueColor = string.IsNullOrEmpty(value) ? "grey42 italic" : "white";
+                var displayText = string.IsNullOrEmpty(value) ? "(not set)" : Markup.Escape(displayValue);
+
+                if (isSelected)
+                    return new Markup($"[white on grey37] {label,-20} [{valueColor}]{displayText}[/] [/]");
+                return new Markup($" [grey70]{label,-20}[/] [{valueColor}]{displayText}[/]");
+            }
+
+            case SettingsItemType.Action:
+            {
+                if (isSelected)
+                    return new Markup($"[white on grey37] {label,-20} [grey50]→[/] [/]");
+                return new Markup($" [mediumpurple3]{label}[/]");
+            }
+
+            default:
+                return new Markup($" {label}");
+        }
+    }
+
+    private static Markup BuildSettingsStatusBar(AppState state, List<SettingsItem> items)
+    {
+        if (state.IsSettingsEditing)
+        {
+            var limit = state.SettingsEditBuffer.Length >= 200
+                ? $" [grey50]({state.SettingsEditBuffer.Length}/250)[/]" : "";
+            return new Markup(
+                $" [grey70]Editing>[/] [white]{Markup.Escape(state.SettingsEditBuffer)}[/][grey]▌[/]{limit}" +
+                "  [grey50]Enter[/][grey] save · [/][grey50]Esc[/][grey] cancel[/]");
+        }
+
+        var itemHint = "";
+        if (state.SettingsFocusRight && state.SettingsItemCursor < items.Count)
+        {
+            var item = items[state.SettingsItemCursor];
+            itemHint = item.Type switch
+            {
+                SettingsItemType.Toggle => "[grey70 bold]Enter[/][grey] toggle [/]",
+                SettingsItemType.Text or SettingsItemType.Number =>
+                    "[grey70 bold]Enter[/][grey] edit [/]",
+                SettingsItemType.Action => "[grey70 bold]Enter[/][grey] execute [/]",
+                _ => "",
+            };
+        }
+
+        var favoritesHint = "";
+        if (state.SettingsFocusRight)
+        {
+            var categories = SettingsDefinition.GetCategories();
+            if (state.SettingsCategory < categories.Count && categories[state.SettingsCategory].Name == "Favorites")
+                favoritesHint = "[grey70 bold]n[/][grey] add [/][grey70 bold]d[/][grey] delete [/]";
+        }
+
+        return new Markup(
+            " [grey70 bold]j/k[/][grey] navigate [/]" +
+            "[grey70 bold]Tab[/][grey] switch panel [/]" +
+            "[grey]│[/] " +
+            itemHint +
+            favoritesHint +
+            "[grey]│[/] " +
+            "[grey70 bold]o[/][grey] open config [/]" +
+            "[grey70 bold]Esc[/][grey] back [/]");
+    }
 }

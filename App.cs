@@ -107,12 +107,12 @@ public class App
             if (spinnerFrame != _lastSpinnerFrame)
             {
                 _lastSpinnerFrame = spinnerFrame;
-                if (_hasSpinningSessions)
+                if (_hasSpinningSessions && _state.ViewMode != ViewMode.Settings)
                     Render();
             }
 
             // Periodically capture pane content for preview
-            if ((DateTime.Now - _lastCapture).TotalMilliseconds > 500)
+            if (_state.ViewMode != ViewMode.Settings && (DateTime.Now - _lastCapture).TotalMilliseconds > 500)
             {
                 ResizeGridPanes();
                 if (UpdateCapturedPane())
@@ -299,7 +299,10 @@ public class App
     private void Render()
     {
         Console.SetCursorPosition(0, 0);
-        AnsiConsole.Write(Renderer.BuildLayout(_state, _capturedPane, _allCapturedPanes));
+        if (_state.ViewMode == ViewMode.Settings)
+            AnsiConsole.Write(Renderer.BuildSettingsLayout(_state, _config));
+        else
+            AnsiConsole.Write(Renderer.BuildLayout(_state, _capturedPane, _allCapturedPanes));
     }
 
     private void HandleKey(ConsoleKeyInfo key)
@@ -307,6 +310,12 @@ public class App
         if (_state.IsInputMode)
         {
             HandleInputKey(key);
+            return;
+        }
+
+        if (_state.ViewMode == ViewMode.Settings)
+        {
+            HandleSettingsKey(key);
             return;
         }
 
@@ -455,8 +464,8 @@ public class App
             case "open-ide":
                 OpenInIde();
                 break;
-            case "open-config":
-                OpenConfig();
+            case "open-settings":
+                _state.EnterSettings();
                 break;
             case "delete-session":
                 DeleteSession();
@@ -533,6 +542,252 @@ public class App
                 if (key.KeyChar >= ' ' && _state.InputBuffer.Length < 500)
                     _state.InputBuffer += key.KeyChar;
                 break;
+        }
+    }
+
+    private void HandleSettingsKey(ConsoleKeyInfo key)
+    {
+        var categories = SettingsDefinition.GetCategories();
+        var currentCategory = categories[Math.Clamp(_state.SettingsCategory, 0, categories.Count - 1)];
+        var items = currentCategory.BuildItems(_config);
+
+        if (_state.IsSettingsEditing)
+        {
+            HandleSettingsEditKey(key, items);
+            return;
+        }
+
+        switch (key.Key)
+        {
+            case ConsoleKey.Escape:
+                _state.LeaveSettings();
+                return;
+
+            case ConsoleKey.Tab:
+                _state.SettingsFocusRight = !_state.SettingsFocusRight;
+                _state.SettingsItemCursor = 0;
+                return;
+
+            case ConsoleKey.UpArrow:
+                if (_state.SettingsFocusRight)
+                    _state.SettingsItemCursor = Math.Max(0, _state.SettingsItemCursor - 1);
+                else
+                {
+                    _state.SettingsCategory = Math.Max(0, _state.SettingsCategory - 1);
+                    _state.SettingsItemCursor = 0;
+                }
+                return;
+
+            case ConsoleKey.DownArrow:
+                if (_state.SettingsFocusRight)
+                    _state.SettingsItemCursor = Math.Min(items.Count - 1, _state.SettingsItemCursor + 1);
+                else
+                {
+                    _state.SettingsCategory = Math.Min(categories.Count - 1, _state.SettingsCategory + 1);
+                    _state.SettingsItemCursor = 0;
+                }
+                return;
+
+            case ConsoleKey.Enter:
+            case ConsoleKey.Spacebar:
+                if (_state.SettingsFocusRight && _state.SettingsItemCursor < items.Count)
+                    ActivateSettingsItem(items[_state.SettingsItemCursor]);
+                else if (!_state.SettingsFocusRight)
+                {
+                    _state.SettingsFocusRight = true;
+                    _state.SettingsItemCursor = 0;
+                }
+                return;
+        }
+
+        // j/k navigation (character-based)
+        switch (key.KeyChar)
+        {
+            case 'k':
+                if (_state.SettingsFocusRight)
+                    _state.SettingsItemCursor = Math.Max(0, _state.SettingsItemCursor - 1);
+                else
+                {
+                    _state.SettingsCategory = Math.Max(0, _state.SettingsCategory - 1);
+                    _state.SettingsItemCursor = 0;
+                }
+                return;
+            case 'j':
+                if (_state.SettingsFocusRight)
+                    _state.SettingsItemCursor = Math.Min(items.Count - 1, _state.SettingsItemCursor + 1);
+                else
+                {
+                    _state.SettingsCategory = Math.Min(categories.Count - 1, _state.SettingsCategory + 1);
+                    _state.SettingsItemCursor = 0;
+                }
+                return;
+        }
+
+        // Favorites shortcuts
+        if (_state.SettingsFocusRight && currentCategory.Name == "Favorites")
+        {
+            switch (key.KeyChar)
+            {
+                case 'n':
+                    AddFavorite();
+                    return;
+                case 'd':
+                    DeleteFavorite();
+                    return;
+            }
+        }
+
+        // 'o' opens config file from anywhere in settings
+        if (key.KeyChar == 'o')
+            OpenConfig();
+    }
+
+    private void HandleSettingsEditKey(ConsoleKeyInfo key, List<SettingsItem> items)
+    {
+        switch (key.Key)
+        {
+            case ConsoleKey.Escape:
+                _state.IsSettingsEditing = false;
+                _state.SettingsEditBuffer = "";
+                _state.SetStatus("Cancelled");
+                return;
+
+            case ConsoleKey.Enter:
+                var item = items[_state.SettingsItemCursor];
+                item.SetValue?.Invoke(_config, _state.SettingsEditBuffer);
+                ConfigService.SaveConfig(_config);
+                _state.IsSettingsEditing = false;
+                _state.SettingsEditBuffer = "";
+                RefreshKeybindings();
+                _state.SetStatus("Saved");
+                return;
+
+            case ConsoleKey.Backspace:
+                if (_state.SettingsEditBuffer.Length > 0)
+                    _state.SettingsEditBuffer = _state.SettingsEditBuffer[..^1];
+                return;
+
+            default:
+                if (key.KeyChar >= ' ' && _state.SettingsEditBuffer.Length < 250)
+                    _state.SettingsEditBuffer += key.KeyChar;
+                return;
+        }
+    }
+
+    private void ActivateSettingsItem(SettingsItem item)
+    {
+        switch (item.Type)
+        {
+            case SettingsItemType.Toggle:
+                item.SetValue?.Invoke(_config, "");
+                ConfigService.SaveConfig(_config);
+                RefreshKeybindings();
+                break;
+
+            case SettingsItemType.Text:
+            case SettingsItemType.Number:
+                _state.IsSettingsEditing = true;
+                _state.SettingsEditBuffer = item.GetValue?.Invoke(_config) ?? "";
+                break;
+
+            case SettingsItemType.Action:
+                HandleSettingsAction(item.Label);
+                break;
+        }
+    }
+
+    private void HandleSettingsAction(string label)
+    {
+        switch (label)
+        {
+            case "Open Config File":
+                OpenConfig();
+                break;
+            case "Reset Keybindings to Defaults":
+                _state.SetStatus("Reset all keybindings? (y/n)");
+                Render();
+                var confirm = Console.ReadKey(true);
+                if (confirm.Key == ConsoleKey.Y)
+                {
+                    _config.Keybindings = KeyBindingService.GetDefaultConfigs();
+                    ConfigService.SaveConfig(_config);
+                    RefreshKeybindings();
+                    _state.SetStatus("Keybindings reset to defaults");
+                }
+                else
+                {
+                    _state.SetStatus("Cancelled");
+                }
+                break;
+            case "+ Add Favorite":
+                AddFavorite();
+                break;
+        }
+    }
+
+    private void RefreshKeybindings()
+    {
+        var bindings = KeyBindingService.Resolve(_config);
+        _keyMap = KeyBindingService.BuildKeyMap(bindings);
+        _state.Keybindings = bindings;
+    }
+
+    private void AddFavorite()
+    {
+        Console.CursorVisible = true;
+        Console.Clear();
+
+        AnsiConsole.MarkupLine("[grey70 bold]Add Favorite Folder[/]\n");
+
+        var name = AnsiConsole.Prompt(
+            new TextPrompt<string>("[grey70]Name:[/]")
+                .PromptStyle(new Style(Color.White)));
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            Console.CursorVisible = false;
+            _state.SetStatus("Cancelled");
+            return;
+        }
+
+        var path = AnsiConsole.Prompt(
+            new TextPrompt<string>("[grey70]Path:[/]")
+                .PromptStyle(new Style(Color.White)));
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            Console.CursorVisible = false;
+            _state.SetStatus("Cancelled");
+            return;
+        }
+
+        _config.FavoriteFolders.Add(new FavoriteFolder { Name = name, Path = path });
+        ConfigService.SaveConfig(_config);
+        Console.CursorVisible = false;
+        _state.SetStatus($"Added '{name}'");
+    }
+
+    private void DeleteFavorite()
+    {
+        if (_state.SettingsItemCursor >= _config.FavoriteFolders.Count)
+            return;
+
+        var fav = _config.FavoriteFolders[_state.SettingsItemCursor];
+        _state.SetStatus($"Delete '{fav.Name}'? (y/n)");
+        Render();
+
+        var confirm = Console.ReadKey(true);
+        if (confirm.Key == ConsoleKey.Y)
+        {
+            _config.FavoriteFolders.RemoveAt(_state.SettingsItemCursor);
+            ConfigService.SaveConfig(_config);
+            _state.SettingsItemCursor = Math.Min(_state.SettingsItemCursor,
+                Math.Max(0, _config.FavoriteFolders.Count - 1));
+            _state.SetStatus("Deleted");
+        }
+        else
+        {
+            _state.SetStatus("Cancelled");
         }
     }
 
@@ -1705,7 +1960,7 @@ public class App
 
         if (string.IsNullOrWhiteSpace(_config.IdeCommand))
         {
-            _state.SetStatus("Set ideCommand in config first (press c)");
+            _state.SetStatus("Set ideCommand in settings first (press s)");
             return;
         }
 

@@ -21,6 +21,13 @@ public class AppState
     public string? ActiveGroup { get; set; }
     private int _savedCursorIndex;
 
+    // Settings state
+    public int SettingsCategory { get; set; }
+    public int SettingsItemCursor { get; set; }
+    public bool SettingsFocusRight { get; set; }
+    public bool IsSettingsEditing { get; set; }
+    public string SettingsEditBuffer { get; set; } = "";
+
     public TmuxSession? GetSelectedSession()
     {
         // When groups section is focused in list view, no session is selected
@@ -166,5 +173,22 @@ public class AppState
     public void ClampGroupCursor() => GroupCursor = Groups.Count == 0
             ? 0
             : Math.Clamp(GroupCursor, 0, Groups.Count - 1);
+
+    public void EnterSettings()
+    {
+        ViewMode = ViewMode.Settings;
+        SettingsCategory = 0;
+        SettingsItemCursor = 0;
+        SettingsFocusRight = false;
+        IsSettingsEditing = false;
+        SettingsEditBuffer = "";
+    }
+
+    public void LeaveSettings()
+    {
+        ViewMode = ViewMode.List;
+        IsSettingsEditing = false;
+        SettingsEditBuffer = "";
+    }
 
 }
