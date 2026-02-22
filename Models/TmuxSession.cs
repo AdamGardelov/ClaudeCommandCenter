@@ -15,4 +15,5 @@ public class TmuxSession
     public string? GitBranch { get; set; }
     public bool IsWorktree { get; set; }
     public bool IsExcluded { get; set; }
+    public string? StartCommitSha { get; set; }
 }

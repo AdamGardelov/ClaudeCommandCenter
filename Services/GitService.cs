@@ -66,6 +66,18 @@ public static class GitService
         return sanitized.ToLowerInvariant();
     }
 
+    public static string? GetCurrentCommitSha(string repoPath)
+    {
+        var (success, output) = RunGit(repoPath, "rev-parse", "HEAD");
+        return success ? output : null;
+    }
+
+    public static string? GetDiffStat(string repoPath, string sinceCommit)
+    {
+        var (success, output) = RunGit(repoPath, "diff", "--stat", sinceCommit);
+        return success ? output : null;
+    }
+
     private static (bool Success, string? Output) RunGit(string workingDirectory, params string[] args)
     {
         try

@@ -26,6 +26,13 @@ public class AppState
     public int GroupFilterIndex { get; set; } // 0 = All, 1+ = group index
     public int TopIndex { get; set; } // Scroll offset for mobile list
 
+    // Settings state
+    public int SettingsCategory { get; set; }
+    public int SettingsItemCursor { get; set; }
+    public bool SettingsFocusRight { get; set; }
+    public bool IsSettingsEditing { get; set; }
+    public string SettingsEditBuffer { get; set; } = "";
+
     public TmuxSession? GetSelectedSession()
     {
         if (MobileMode)
@@ -211,6 +218,8 @@ public class AppState
 
     public string? LatestVersion { get; set; }
 
+    public bool DiffMode { get; set; }
+
     public List<KeyBinding> Keybindings { get; set; } = [];
 
     public void ClampCursor()
@@ -222,5 +231,22 @@ public class AppState
     public void ClampGroupCursor() => GroupCursor = Groups.Count == 0
             ? 0
             : Math.Clamp(GroupCursor, 0, Groups.Count - 1);
+
+    public void EnterSettings()
+    {
+        ViewMode = ViewMode.Settings;
+        SettingsCategory = 0;
+        SettingsItemCursor = 0;
+        SettingsFocusRight = false;
+        IsSettingsEditing = false;
+        SettingsEditBuffer = "";
+    }
+
+    public void LeaveSettings()
+    {
+        ViewMode = ViewMode.List;
+        IsSettingsEditing = false;
+        SettingsEditBuffer = "";
+    }
 
 }
