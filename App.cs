@@ -235,7 +235,7 @@ public class App
 
         // Refresh waiting-for-input status on all sessions (single tmux call)
         TmuxService.DetectWaitingForInputBatch(_state.Sessions);
-        _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput);
+        _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput && !s.IsDead);
 
         // Detect false -> true transitions and notify (skip first poll to avoid startup spam)
         if (_firstPollDone)

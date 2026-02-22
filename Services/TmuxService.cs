@@ -9,7 +9,7 @@ public abstract class TmuxService
 {
     public static List<TmuxSession> ListSessions()
     {
-        var output = RunTmux("list-sessions", "-F", "#{session_name}\t#{session_created}\t#{session_attached}\t#{session_windows}\t#{pane_current_path}");
+        var output = RunTmux("list-sessions", "-F", "#{session_name}\t#{session_created}\t#{session_attached}\t#{session_windows}\t#{pane_current_path}\t#{pane_dead}");
         if (output == null)
             return [];
 
@@ -26,6 +26,7 @@ public abstract class TmuxService
                 IsAttached = parts[2] != "0",
                 WindowCount = int.TryParse(parts[3], out var wc) ? wc : 0,
                 CurrentPath = parts.Length > 4 ? parts[4] : null,
+                IsDead = parts.Length > 5 && parts[5] == "1",
             };
 
             if (long.TryParse(parts[1], out var epoch))
@@ -65,6 +66,13 @@ public abstract class TmuxService
 
         foreach (var session in sessions)
         {
+            // Dead panes have no running process — skip content hashing
+            if (session.IsDead)
+            {
+                session.IsWaitingForInput = false;
+                continue;
+            }
+
             // Capture last 20 lines without ANSI codes
             var output = RunTmux("capture-pane", "-t", session.Name, "-p", "-S", "-20");
             if (output == null)

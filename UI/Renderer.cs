@@ -150,6 +150,23 @@ public static class Renderer
     {
         var name = Markup.Escape(session.Name);
         var spinner = Markup.Escape(GetSpinnerFrame());
+
+        if (session.IsDead)
+        {
+            if (session.IsExcluded)
+            {
+                if (isSelected)
+                    return new Markup($"[grey50 on grey19] [grey42]†[/] {name,-22} [/]");
+                return new Markup($" [grey42]†[/] [grey35]{name,-22}[/]");
+            }
+            if (isSelected)
+            {
+                var bg = session.ColorTag ?? "grey37";
+                return new Markup($"[white on {bg}] † {name,-22} [/]");
+            }
+            return new Markup($" [red]†[/] [grey50]{name,-22}[/]");
+        }
+
         var isWorking = !session.IsWaitingForInput;
         var status = isWorking ? spinner : "!";
 
@@ -180,14 +197,14 @@ public static class Renderer
         var name = Markup.Escape(group.Name);
         var totalSessions = group.Sessions.Count;
 
-        // Check if any session in the group is waiting for input
+        // Check session states within the group
         var groupSessionNames = new HashSet<string>(group.Sessions);
-        var anyWaiting = state.Sessions
-            .Where(s => groupSessionNames.Contains(s.Name))
-            .Any(s => s.IsWaitingForInput);
+        var groupSessions = state.Sessions.Where(s => groupSessionNames.Contains(s.Name)).ToList();
+        var anyWaiting = groupSessions.Any(s => s.IsWaitingForInput);
+        var allDead = groupSessions.Count > 0 && groupSessions.All(s => s.IsDead);
 
         var spinner = Markup.Escape(GetSpinnerFrame());
-        var status = totalSessions == 0 ? "[grey50]x[/]" : anyWaiting ? "[yellow bold]![/]" : $"[green]{spinner}[/]";
+        var status = totalSessions == 0 ? "[grey50]x[/]" : allDead ? "[red]†[/]" : anyWaiting ? "[yellow bold]![/]" : $"[green]{spinner}[/]";
         var countLabel = $"({totalSessions})";
         var colorTag = !string.IsNullOrEmpty(group.Color) ? group.Color : "grey50";
 
@@ -388,7 +405,7 @@ public static class Renderer
         foreach (var session in groupSessions)
         {
             var spinner = Markup.Escape(GetSpinnerFrame());
-            var status = session.IsWaitingForInput ? "[yellow bold]![/]" : $"[green]{spinner}[/]";
+            var status = session.IsDead ? "[red]†[/]" : session.IsWaitingForInput ? "[yellow bold]![/]" : $"[green]{spinner}[/]";
             var name = Markup.Escape(session.Name);
             var branch = session.GitBranch != null ? $" [aqua]{Markup.Escape(session.GitBranch)}[/]" : "";
             var path = session.CurrentPath != null ? $" [grey50]{Markup.Escape(ShortenPath(session.CurrentPath))}[/]" : "";
@@ -482,7 +499,7 @@ public static class Renderer
 
         // Header: name + branch (truncated to prevent wrapping)
         var spinner = Markup.Escape(GetSpinnerFrame());
-        var status = session.IsWaitingForInput ? "[yellow bold]![/]" : $"[green]{spinner}[/]";
+        var status = session.IsDead ? "[red]†[/]" : session.IsWaitingForInput ? "[yellow bold]![/]" : $"[green]{spinner}[/]";
         var nameStr = session.Name;
         var branchStr = session.GitBranch;
         var prefixLen = 3; // " X " visible chars before name
@@ -669,6 +686,23 @@ public static class Renderer
     {
         var name = Markup.Escape(session.Name);
         var spinner = Markup.Escape(GetSpinnerFrame());
+
+        if (session.IsDead)
+        {
+            if (session.IsExcluded)
+            {
+                if (isSelected)
+                    return new Markup($"[grey50 on grey19] [grey42]†[/] {name} [/]");
+                return new Markup($" [grey42]†[/] [grey35]{name}[/]");
+            }
+            if (isSelected)
+            {
+                var bg = session.ColorTag ?? "grey37";
+                return new Markup($"[white on {bg}] † {name} [/]");
+            }
+            return new Markup($" [red]†[/] [grey50]{name}[/]");
+        }
+
         var isWorking = !session.IsWaitingForInput;
         var status = isWorking ? spinner : "!";
 
@@ -716,7 +750,9 @@ public static class Renderer
         var path = session.CurrentPath != null ? $" [grey50]{Markup.Escape(ShortenPath(session.CurrentPath))}[/]" : "";
         rows.Add(new Markup($" {branch}{path}"));
 
-        var statusText = session.IsWaitingForInput
+        var statusText = session.IsDead
+            ? "[red]session ended[/]"
+            : session.IsWaitingForInput
             ? "[yellow bold]waiting for input[/]"
             : session.IsAttached ? "[green]attached[/]" : "[grey]working[/]";
         var desc = !string.IsNullOrWhiteSpace(session.Description)
@@ -829,6 +865,8 @@ public static class Renderer
 
     private static string StatusLabel(TmuxSession session)
     {
+        if (session.IsDead)
+            return "[red]session ended[/]";
         if (session.IsWaitingForInput)
             return "[yellow bold]waiting for input[/]";
 
