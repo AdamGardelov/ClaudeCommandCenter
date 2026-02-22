@@ -85,8 +85,13 @@ public class App
         {
             if (Console.KeyAvailable)
             {
-                var key = Console.ReadKey(true);
-                HandleKey(key);
+                // Drain all buffered keys before rendering once —
+                // prevents input lag over slow SSH connections
+                while (Console.KeyAvailable)
+                {
+                    var key = Console.ReadKey(true);
+                    HandleKey(key);
+                }
                 Render();
             }
 
@@ -108,12 +113,16 @@ public class App
                     Render();
 
             // Re-render when spinner frame advances (only if sessions were spinning at last poll)
-            var spinnerFrame = Renderer.GetSpinnerFrame();
-            if (spinnerFrame != _lastSpinnerFrame)
+            // Skip in mobile mode — spinner updates aren't worth the render cost over SSH
+            if (!_state.MobileMode)
             {
-                _lastSpinnerFrame = spinnerFrame;
-                if (_hasSpinningSessions)
-                    Render();
+                var spinnerFrame = Renderer.GetSpinnerFrame();
+                if (spinnerFrame != _lastSpinnerFrame)
+                {
+                    _lastSpinnerFrame = spinnerFrame;
+                    if (_hasSpinningSessions)
+                        Render();
+                }
             }
 
             // Periodically capture pane content for preview
@@ -223,9 +232,13 @@ public class App
         }
         _firstPollDone = true;
 
-        // Mobile mode doesn't show pane previews
+        // Mobile mode doesn't show pane previews — only re-render
+        // when a session's waiting status actually changed
         if (_state.MobileMode)
-            return true;
+        {
+            return _state.Sessions.Any(s =>
+                wasWaiting.TryGetValue(s.Name, out var was) && was != s.IsWaitingForInput);
+        }
 
         // In grid mode, capture panes for visible sessions (all or group-filtered)
         if (_state.ViewMode == ViewMode.Grid)
@@ -996,9 +1009,15 @@ public class App
         TmuxService.AttachSession(session.Name);
 
         // User detached - back to ClaudeCommandCenter
-        Console.CursorVisible = false;
+        // Re-enter alternate screen buffer and clear — tmux detach may
+        // have exited alt screen, leaving Termius in normal mode with scrollback
+        Console.Write("\x1b[?1049h"); // Enter alternate screen buffer
+        Console.Write("\x1b[2J");     // Clear screen
+        Console.Write("\x1b[H");      // Cursor home
+        Console.Write("\x1b[?25l");   // Re-hide cursor
         LoadSessions();
         _lastSelectedSession = null;
+        Render();
     }
 
     private void RunUpdate()

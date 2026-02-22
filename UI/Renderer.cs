@@ -570,6 +570,10 @@ public static class Renderer
             }
         }
 
+        // Pad to fill available height so old content doesn't bleed through
+        while (rows.Count < listHeight)
+            rows.Add(new Text(""));
+
         return new Rows(rows);
     }
 
