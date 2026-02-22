@@ -94,7 +94,7 @@ Press `Enter` on a grid cell to attach directly to that session. Press `G` to sw
 | `g` | Create new group |
 | `f` | Open session directory in file manager |
 | `i` | Open session directory in IDE |
-| `c` | Open config file in IDE |
+| `s` | Open settings page |
 | `d` | Delete session (with confirmation) |
 | `e` | Edit session (name, description, color) |
 | `x` | Exclude/restore session from grid view |
@@ -116,6 +116,20 @@ Press `Enter` on a grid cell to attach directly to that session. Press `G` to sw
 | `q` | Quit |
 
 Arrow keys always work for navigation regardless of configuration. When you attach to a session, detach with the standard tmux prefix (`Ctrl-b d`) to return to the command center.
+
+### Settings Page
+
+Press `s` to open the in-app settings page. Navigate categories on the left, settings on the right.
+
+| Category | What you can configure |
+|----------|----------------------|
+| General | IDE command, worktree base path |
+| Keybindings | Enable/disable actions |
+| Notifications | Bell, desktop, OSC notify, cooldown |
+| Favorites | Add, edit, delete favorite folders |
+| Advanced | Open raw config file, reset keybindings |
+
+**Controls:** `j/k` navigate, `Tab` switch panels, `Enter` edit/toggle, `Esc` back, `o` open config file.
 
 ### Worktree Support
 
@@ -206,7 +220,7 @@ Each override supports three optional fields:
 | `new-group` | `g` | group | Yes |
 | `open-folder` | `f` | folder | Yes |
 | `open-ide` | `i` | ide | Yes |
-| `open-config` | `c` | config | Yes |
+| `open-settings` | `s` | settings | No |
 | `delete-session` | `d` | del | Yes |
 | `edit-session` | `e` | edit | Yes |
 | `toggle-exclude` | `x` | hide | Yes |
