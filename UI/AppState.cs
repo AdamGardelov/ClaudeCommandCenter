@@ -252,6 +252,7 @@ public class AppState
     public void LeaveDiffOverlay()
     {
         ViewMode = ViewMode.List;
+        DiffMode = false;
         DiffOverlayLines = [];
         DiffOverlaySessionName = null;
         DiffOverlayBranch = null;
