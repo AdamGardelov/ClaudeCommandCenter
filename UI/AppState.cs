@@ -62,9 +62,8 @@ public class AppState
         var groupedNames = new HashSet<string>(Groups.SelectMany(g => g.Sessions));
         return Sessions
             .Where(s => !groupedNames.Contains(s.Name))
-            .OrderBy(s => s.IsExcluded)                // visible first
-            .ThenByDescending(s => s.IsWaitingForInput) // needs input first
-            .ThenByDescending(s => !s.IsWaitingForInput) // working before idle
+            .OrderBy(s => s.IsExcluded)
+            .ThenBy(s => s.Created)
             .ThenBy(s => s.Name)
             .ToList();
     }
@@ -168,31 +167,4 @@ public class AppState
             ? 0
             : Math.Clamp(GroupCursor, 0, Groups.Count - 1);
 
-    public void SortGroupsByStatus()
-    {
-        if (Groups.Count <= 1) return;
-
-        var selectedGroup = GetSelectedGroup();
-        var sessionLookup = Sessions.ToDictionary(s => s.Name);
-
-        Groups.Sort((a, b) =>
-        {
-            var aWaiting = a.Sessions.Any(name =>
-                sessionLookup.TryGetValue(name, out var s) && s.IsWaitingForInput);
-            var bWaiting = b.Sessions.Any(name =>
-                sessionLookup.TryGetValue(name, out var s) && s.IsWaitingForInput);
-
-            if (aWaiting != bWaiting)
-                return bWaiting.CompareTo(aWaiting); // waiting first
-
-            return string.Compare(a.Name, b.Name, StringComparison.Ordinal);
-        });
-
-        // Follow the cursor to the group's new position
-        if (selectedGroup != null)
-        {
-            var newIndex = Groups.FindIndex(g => g.Name == selectedGroup.Name);
-            if (newIndex >= 0) GroupCursor = newIndex;
-        }
-    }
 }
