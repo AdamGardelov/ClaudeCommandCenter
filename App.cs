@@ -107,12 +107,12 @@ public class App
             if (spinnerFrame != _lastSpinnerFrame)
             {
                 _lastSpinnerFrame = spinnerFrame;
-                if (_hasSpinningSessions)
+                if (_hasSpinningSessions && _state.ViewMode != ViewMode.Settings)
                     Render();
             }
 
             // Periodically capture pane content for preview
-            if ((DateTime.Now - _lastCapture).TotalMilliseconds > 500)
+            if (_state.ViewMode != ViewMode.Settings && (DateTime.Now - _lastCapture).TotalMilliseconds > 500)
             {
                 ResizeGridPanes();
                 if (UpdateCapturedPane())
