@@ -27,7 +27,6 @@ public class AppState
     public bool SettingsFocusRight { get; set; }
     public bool IsSettingsEditing { get; set; }
     public string SettingsEditBuffer { get; set; } = "";
-    public int SettingsEditCursorPos { get; set; }
 
     public TmuxSession? GetSelectedSession()
     {

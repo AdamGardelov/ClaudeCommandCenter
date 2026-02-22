@@ -9,7 +9,6 @@ public enum SettingsItemType
     Toggle,
     Number,
     Action,
-    ListHeader,
 }
 
 public class SettingsItem
@@ -18,9 +17,7 @@ public class SettingsItem
     public SettingsItemType Type { get; init; }
     public Func<CccConfig, string>? GetValue { get; init; }
     public Action<CccConfig, string>? SetValue { get; init; }
-    public Action<CccConfig>? Execute { get; init; }
     public string? ActionId { get; init; }
-    public bool IsReadOnly { get; init; }
 }
 
 public class SettingsCategory
@@ -181,7 +178,6 @@ public static class SettingsDefinition
         {
             Label = "+ Add Favorite",
             Type = SettingsItemType.Action,
-            Execute = _ => { },
         });
 
         return items;

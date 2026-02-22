@@ -1960,7 +1960,7 @@ public class App
 
         if (string.IsNullOrWhiteSpace(_config.IdeCommand))
         {
-            _state.SetStatus("Set ideCommand in config first (press c)");
+            _state.SetStatus("Set ideCommand in settings first (press s)");
             return;
         }
 
