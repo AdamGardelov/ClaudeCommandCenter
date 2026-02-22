@@ -147,6 +147,7 @@ public class App
 
         LoadGroups();
         _state.ClampCursor();
+        NotificationService.Cleanup(_state.Sessions.Select(s => s.Name));
     }
 
     private void LoadGroups()
@@ -190,9 +191,24 @@ public class App
 
     private bool UpdateCapturedPane()
     {
+        // Snapshot waiting state before detection
+        var wasWaiting = _state.Sessions
+            .Where(s => !s.IsExcluded)
+            .ToDictionary(s => s.Name, s => s.IsWaitingForInput);
+
         // Refresh waiting-for-input status on all sessions (single tmux call)
         TmuxService.DetectWaitingForInputBatch(_state.Sessions);
         _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput);
+
+        // Detect false -> true transitions and notify
+        var transitioned = _state.Sessions
+            .Where(s => !s.IsExcluded
+                && s.IsWaitingForInput
+                && wasWaiting.TryGetValue(s.Name, out var was) && !was)
+            .ToList();
+
+        if (transitioned.Count > 0)
+            NotificationService.NotifyWaiting(transitioned, _config.Notifications);
 
         // Re-sort groups so those needing input stay at the top
         _state.SortGroupsByStatus();
