@@ -23,6 +23,7 @@ public class App
     private bool _wantsUpdate;
     private int _lastGridWidth;
     private int _lastGridHeight;
+    private bool _firstPollDone;
 
     public void Run()
     {
@@ -200,15 +201,23 @@ public class App
         TmuxService.DetectWaitingForInputBatch(_state.Sessions);
         _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput);
 
-        // Detect false -> true transitions and notify
-        var transitioned = _state.Sessions
-            .Where(s => !s.IsExcluded
-                && s.IsWaitingForInput
-                && wasWaiting.TryGetValue(s.Name, out var was) && !was)
-            .ToList();
+        // Detect false -> true transitions and notify (skip first poll to avoid startup spam)
+        if (_firstPollDone)
+        {
+            var transitioned = _state.Sessions
+                .Where(s => !s.IsExcluded
+                    && s.IsWaitingForInput
+                    && wasWaiting.TryGetValue(s.Name, out var was) && !was)
+                .ToList();
 
-        if (transitioned.Count > 0)
-            NotificationService.NotifyWaiting(transitioned, _config.Notifications);
+            if (transitioned.Count > 0)
+            {
+                var notified = NotificationService.NotifyWaiting(transitioned, _config.Notifications);
+                if (notified != null)
+                    _state.SetStatus($"⏳ {notified}");
+            }
+        }
+        _firstPollDone = true;
 
         // Re-sort groups so those needing input stay at the top
         _state.SortGroupsByStatus();
