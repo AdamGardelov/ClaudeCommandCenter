@@ -156,6 +156,8 @@ public class AppState
 
     public string? LatestVersion { get; set; }
 
+    public bool DiffMode { get; set; }
+
     public List<KeyBinding> Keybindings { get; set; } = [];
 
     public void ClampCursor()
