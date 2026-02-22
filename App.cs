@@ -240,10 +240,12 @@ public class App
         // Detect false -> true transitions and notify (skip first poll to avoid startup spam)
         if (_firstPollDone)
         {
+            var selectedName = _state.GetSelectedSession()?.Name;
             var transitioned = _state.Sessions
                 .Where(s => !s.IsExcluded
                     && s.IsWaitingForInput
-                    && wasWaiting.TryGetValue(s.Name, out var was) && !was)
+                    && wasWaiting.TryGetValue(s.Name, out var was) && !was
+                    && s.Name != selectedName)
                 .ToList();
 
             if (transitioned.Count > 0)
@@ -1331,6 +1333,9 @@ public class App
 
         TmuxService.ResetWindowSize(session.Name);
         TmuxService.AttachSession(session.Name);
+
+        // User detached — reset cooldown so next idle transition notifies fresh
+        NotificationService.ResetCooldown(session.Name);
 
         // User detached - back to ClaudeCommandCenter
         // Re-enter alternate screen buffer and clear — tmux detach may
