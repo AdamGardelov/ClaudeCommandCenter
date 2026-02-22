@@ -1381,8 +1381,10 @@ public class App
             return;
         }
 
-        // 2. Name — default to worktree branch or folder name
+        // 2. Name — default to worktree branch or folder name, with numeric suffix if taken
         var defaultName = SanitizeTmuxSessionName(worktreeBranch ?? new DirectoryInfo(dir).Name);
+        var existingNames = new HashSet<string>(_state.Sessions.Select(s => s.Name), StringComparer.Ordinal);
+        defaultName = UniqueSessionName(defaultName, existingNames, " ");
         var name = AnsiConsole.Prompt(
             new TextPrompt<string>("[grey70]Session name[/][grey70]:[/]")
                 .DefaultValue(defaultName)
@@ -1824,14 +1826,14 @@ public class App
         return name.Replace('.', '_').Replace(':', '_');
     }
 
-    private static string UniqueSessionName(string baseName, ICollection<string> existing)
+    private static string UniqueSessionName(string baseName, ICollection<string> existing, string separator = "-")
     {
         if (!existing.Contains(baseName))
             return baseName;
 
         for (var i = 2; i <= 99; i++)
         {
-            var candidate = $"{baseName}-{i}";
+            var candidate = $"{baseName}{separator}{i}";
             if (!existing.Contains(candidate))
                 return candidate;
         }
