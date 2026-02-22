@@ -23,6 +23,7 @@ public class App
     private bool _wantsUpdate;
     private int _lastGridWidth;
     private int _lastGridHeight;
+    private bool _firstPollDone;
 
     public void Run()
     {
@@ -147,6 +148,7 @@ public class App
 
         LoadGroups();
         _state.ClampCursor();
+        NotificationService.Cleanup(_state.Sessions.Select(s => s.Name));
     }
 
     private void LoadGroups()
@@ -188,9 +190,32 @@ public class App
 
     private bool UpdateCapturedPane()
     {
+        // Snapshot waiting state before detection
+        var wasWaiting = _state.Sessions
+            .Where(s => !s.IsExcluded)
+            .ToDictionary(s => s.Name, s => s.IsWaitingForInput);
+
         // Refresh waiting-for-input status on all sessions (single tmux call)
         TmuxService.DetectWaitingForInputBatch(_state.Sessions);
         _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput);
+
+        // Detect false -> true transitions and notify (skip first poll to avoid startup spam)
+        if (_firstPollDone)
+        {
+            var transitioned = _state.Sessions
+                .Where(s => !s.IsExcluded
+                    && s.IsWaitingForInput
+                    && wasWaiting.TryGetValue(s.Name, out var was) && !was)
+                .ToList();
+
+            if (transitioned.Count > 0)
+            {
+                var notified = NotificationService.NotifyWaiting(transitioned, _config.Notifications);
+                if (notified != null)
+                    _state.SetStatus($"⏳ {notified}");
+            }
+        }
+        _firstPollDone = true;
 
         // In grid mode, capture panes for visible sessions (all or group-filtered)
         if (_state.ViewMode == ViewMode.Grid)

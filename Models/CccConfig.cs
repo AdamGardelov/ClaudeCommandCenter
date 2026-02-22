@@ -10,4 +10,5 @@ public class CccConfig
     public Dictionary<string, SessionGroup> Groups { get; set; } = new();
     public HashSet<string> ExcludedSessions { get; set; } = [];
     public string WorktreeBasePath { get; set; } = "~/Dev/Wint/worktrees/";
+    public NotificationConfig Notifications { get; set; } = new();
 }
