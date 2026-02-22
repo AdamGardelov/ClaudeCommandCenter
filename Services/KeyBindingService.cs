@@ -123,10 +123,10 @@ public static class KeyBindingService
         },
         new()
         {
-            ActionId = "open-config",
-            Key = "c",
-            Label = "config",
-            CanDisable = true,
+            ActionId = "open-settings",
+            Key = "s",
+            Label = "settings",
+            CanDisable = false,
             StatusBarOrder = 33
         },
         // Group 4: View (mode + exit)
