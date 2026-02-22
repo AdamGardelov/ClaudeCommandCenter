@@ -23,6 +23,9 @@ public class App
     private bool _wantsUpdate;
     private int _lastGridWidth;
     private int _lastGridHeight;
+    private string? _cachedDiffOutput;
+    private DateTime _lastDiffRefresh = DateTime.MinValue;
+    private string? _lastDiffSession;
     private bool _firstPollDone;
 
     public void Run()
@@ -128,6 +131,7 @@ public class App
     {
         var oldSessions = _state.Sessions.ToDictionary(s => s.Name);
         _state.Sessions = TmuxService.ListSessions();
+        var startCommitsDirty = false;
         foreach (var s in _state.Sessions)
         {
             if (_config.SessionDescriptions.TryGetValue(s.Name, out var desc))
@@ -144,7 +148,26 @@ public class App
                 s.StableContentCount = old.StableContentCount;
                 s.IsWaitingForInput = old.IsWaitingForInput;
             }
+
+            // Hydrate or snapshot StartCommitSha for diff tracking
+            if (_config.SessionStartCommits.TryGetValue(s.Name, out var sha))
+            {
+                s.StartCommitSha = sha;
+            }
+            else if (s.CurrentPath != null && s.GitBranch != null)
+            {
+                var headSha = GitService.GetCurrentCommitSha(s.CurrentPath);
+                if (headSha != null)
+                {
+                    s.StartCommitSha = headSha;
+                    _config.SessionStartCommits[s.Name] = headSha;
+                    startCommitsDirty = true;
+                }
+            }
         }
+
+        if (startCommitsDirty)
+            ConfigService.SaveConfig(_config);
 
         LoadGroups();
         _state.ClampCursor();
@@ -234,14 +257,34 @@ public class App
         if (session == null)
             return false;
 
+        var changed = false;
         var newContent = TmuxService.CapturePaneContent(session.Name);
         if (newContent != _capturedPane)
         {
             _capturedPane = newContent;
-            return true;
+            changed = true;
         }
 
-        return false;
+        // Refresh diff output when in diff mode
+        if (_state.DiffMode && _state.ViewMode == ViewMode.List)
+        {
+            var sessionChanged = session.Name != _lastDiffSession;
+            if (sessionChanged || (DateTime.Now - _lastDiffRefresh).TotalSeconds >= 5)
+            {
+                _lastDiffSession = session.Name;
+                _lastDiffRefresh = DateTime.Now;
+                string? newDiff = null;
+                if (session.CurrentPath != null && session.StartCommitSha != null)
+                    newDiff = GitService.GetDiffStat(session.CurrentPath, session.StartCommitSha);
+                if (newDiff != _cachedDiffOutput)
+                {
+                    _cachedDiffOutput = newDiff;
+                    changed = true;
+                }
+            }
+        }
+
+        return changed;
     }
 
     private bool UpdateAllCapturedPanes()
@@ -302,7 +345,7 @@ public class App
         if (_state.ViewMode == ViewMode.Settings)
             AnsiConsole.Write(Renderer.BuildSettingsLayout(_state, _config));
         else
-            AnsiConsole.Write(Renderer.BuildLayout(_state, _capturedPane, _allCapturedPanes));
+            AnsiConsole.Write(Renderer.BuildLayout(_state, _capturedPane, _allCapturedPanes, _cachedDiffOutput));
     }
 
     private void HandleKey(ConsoleKeyInfo key)
@@ -448,6 +491,18 @@ public class App
                 break;
             case "attach":
                 AttachToSession();
+                break;
+            case "toggle-diff":
+                _state.DiffMode = !_state.DiffMode;
+                if (_state.DiffMode)
+                {
+                    _lastDiffRefresh = DateTime.MinValue;
+                    _lastDiffSession = null;
+                }
+                else
+                {
+                    _cachedDiffOutput = null;
+                }
                 break;
             case "toggle-grid":
                 ToggleGridView();
@@ -882,6 +937,7 @@ public class App
                 ConfigService.RemoveDescription(_config, sessionName);
                 ConfigService.RemoveColor(_config, sessionName);
                 ConfigService.RemoveExcluded(_config, sessionName);
+                ConfigService.RemoveStartCommit(_config, sessionName);
             }
 
             ConfigService.RemoveGroup(_config, group.Name);
@@ -910,6 +966,7 @@ public class App
             ConfigService.RemoveDescription(_config, session.Name);
             ConfigService.RemoveColor(_config, session.Name);
             ConfigService.RemoveExcluded(_config, session.Name);
+            ConfigService.RemoveStartCommit(_config, session.Name);
             ConfigService.RemoveSessionFromGroup(_config, _state.ActiveGroup, session.Name);
             LoadSessions();
 
@@ -1053,6 +1110,7 @@ public class App
 
                 ConfigService.RenameDescription(_config, sessionName, newSessionName);
                 ConfigService.RenameColor(_config, sessionName, newSessionName);
+                ConfigService.RenameStartCommit(_config, sessionName, newSessionName);
                 renamedSessions.Add(newSessionName);
             }
 
@@ -2064,6 +2122,7 @@ public class App
                 ConfigService.RemoveDescription(_config, session.Name);
                 ConfigService.RemoveColor(_config, session.Name);
                 ConfigService.RemoveExcluded(_config, session.Name);
+                ConfigService.RemoveStartCommit(_config, session.Name);
                 _state.SetStatus("Session killed");
             }
             else
@@ -2238,6 +2297,7 @@ public class App
                 ConfigService.RenameDescription(_config, currentName, newName);
                 ConfigService.RenameColor(_config, currentName, newName);
                 ConfigService.RenameExcluded(_config, currentName, newName);
+                ConfigService.RenameStartCommit(_config, currentName, newName);
                 currentName = newName;
                 changed = true;
             }

@@ -16,7 +16,7 @@ public static class Renderer
     }
 
     public static IRenderable BuildLayout(AppState state, string? capturedPane,
-        Dictionary<string, string>? allCapturedPanes = null)
+        Dictionary<string, string>? allCapturedPanes = null, string? diffOutput = null)
     {
         var layout = new Layout("Root")
             .SplitRows(
@@ -49,7 +49,7 @@ public static class Renderer
             new Layout("Preview"));
 
         layout["Sessions"].Update(BuildSessionPanel(state));
-        layout["Preview"].Update(BuildPreviewPanel(state, capturedPane));
+        layout["Preview"].Update(BuildPreviewPanel(state, capturedPane, diffOutput: diffOutput));
         layout["StatusBar"].Update(BuildStatusBar(state));
 
         return layout;
@@ -201,7 +201,7 @@ public static class Renderer
     }
 
     private static Panel BuildPreviewPanel(AppState state, string? capturedPane,
-        TmuxSession? sessionOverride = null)
+        TmuxSession? sessionOverride = null, string? diffOutput = null)
     {
         var session = sessionOverride ?? state.GetSelectedSession();
 
@@ -245,7 +245,11 @@ public static class Renderer
         rows.Add(new Markup($" [{labelColor}]Status:[/]   {StatusLabel(session)}"));
         rows.Add(new Rule().RuleStyle(Style.Parse(session.ColorTag ?? "grey42")));
 
-        if (!string.IsNullOrWhiteSpace(capturedPane))
+        if (state.DiffMode)
+        {
+            RenderDiffContent(rows, session, diffOutput);
+        }
+        else if (!string.IsNullOrWhiteSpace(capturedPane))
         {
             // Preview width = terminal width - session panel (35) - borders (6) - padding (2)
             var maxWidth = Math.Max(20, Console.WindowWidth - 35 - 8);
@@ -273,10 +277,94 @@ public static class Renderer
 
         var headerColor = session.ColorTag ?? "grey70";
         var headerName = Markup.Escape(session.Name);
+        var headerSuffix = state.DiffMode ? " [grey50]· diff[/]" : "";
         return new Panel(new Rows(rows))
-            .Header($"[{headerColor} bold] {headerName} [/]")
+            .Header($"[{headerColor} bold] {headerName} [/]{headerSuffix}")
             .BorderColor(borderColor)
             .Expand();
+    }
+
+    private static void RenderDiffContent(List<IRenderable> rows, TmuxSession session, string? diffOutput)
+    {
+        if (session.CurrentPath == null)
+        {
+            rows.Add(new Markup(" [grey]Session not running[/]"));
+            return;
+        }
+
+        if (session.StartCommitSha == null)
+        {
+            rows.Add(new Markup(" [grey]No baseline commit recorded[/]"));
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(diffOutput))
+        {
+            rows.Add(new Markup(" [grey]No changes since session start[/]"));
+            return;
+        }
+
+        var availableLines = Math.Max(1, Console.WindowHeight - 9);
+        var lines = diffOutput.Split('\n');
+        var limit = Math.Min(lines.Length, availableLines);
+        var overflow = lines.Length - limit;
+
+        for (var i = 0; i < limit; i++)
+        {
+            var line = lines[i];
+            rows.Add(FormatDiffStatLine(line));
+        }
+
+        if (overflow > 0)
+            rows.Add(new Markup($" [grey]... and {overflow} more line(s)[/]"));
+    }
+
+    private static Markup FormatDiffStatLine(string line)
+    {
+        // Summary line: " N files changed, N insertions(+), N deletions(-)"
+        if (line.Contains("changed") && (line.Contains("insertion") || line.Contains("deletion")))
+        {
+            var parts = line.Split(',');
+            var result = new List<string>();
+            foreach (var part in parts)
+            {
+                var trimmed = part.Trim();
+                if (trimmed.Contains("insertion"))
+                    result.Add($"[green]{Markup.Escape(trimmed)}[/]");
+                else if (trimmed.Contains("deletion"))
+                    result.Add($"[red]{Markup.Escape(trimmed)}[/]");
+                else
+                    result.Add($"[grey]{Markup.Escape(trimmed)}[/]");
+            }
+            return new Markup(" " + string.Join("[grey],[/] ", result));
+        }
+
+        // File line: " path/to/file | N +++---"
+        var pipeIdx = line.IndexOf('|');
+        if (pipeIdx >= 0)
+        {
+            var filePart = Markup.Escape(line[..pipeIdx]);
+            var statPart = line[(pipeIdx + 1)..];
+
+            var colored = new System.Text.StringBuilder();
+            foreach (var c in statPart)
+            {
+                if (c == '+')
+                    colored.Append("[green]+[/]");
+                else if (c == '-')
+                    colored.Append("[red]-[/]");
+                else if (c == '[')
+                    colored.Append("[[");
+                else if (c == ']')
+                    colored.Append("]]");
+                else
+                    colored.Append(c);
+            }
+
+            return new Markup($"[white]{filePart}[/][grey]|[/]{colored}");
+        }
+
+        return new Markup($" [grey]{Markup.Escape(line)}[/]");
     }
 
     private static Panel BuildGroupPreviewPanel(SessionGroup group, AppState state)
@@ -560,8 +648,9 @@ public static class Renderer
             prevGroup = barGroup;
 
             var dimmed = onGroup && sessionOnlyActions.Contains(b.ActionId);
-            var keyColor = dimmed ? "grey35" : "grey70 bold";
-            var labelColor = dimmed ? "grey27" : "grey";
+            var active = b.ActionId == "toggle-diff" && state.DiffMode;
+            var keyColor = dimmed ? "grey35" : active ? "white bold" : "grey70 bold";
+            var labelColor = dimmed ? "grey27" : active ? "white underline" : "grey";
             parts.Add($"[{keyColor}]{Markup.Escape(b.Key)}[/][{labelColor}] {Markup.Escape(b.Label!)} [/]");
         }
 

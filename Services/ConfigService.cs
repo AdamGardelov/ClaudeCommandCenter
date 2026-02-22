@@ -117,6 +117,21 @@ public static class ConfigService
         }
     }
 
+    public static void RemoveStartCommit(CccConfig config, string sessionName)
+    {
+        if (config.SessionStartCommits.Remove(sessionName))
+            Save(config);
+    }
+
+    public static void RenameStartCommit(CccConfig config, string oldName, string newName)
+    {
+        if (config.SessionStartCommits.Remove(oldName, out var sha))
+        {
+            config.SessionStartCommits[newName] = sha;
+            Save(config);
+        }
+    }
+
     private static bool BackfillKeybindings(CccConfig config)
     {
         var defaults = KeyBindingService.GetDefaultConfigs();

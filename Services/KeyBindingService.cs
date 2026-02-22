@@ -140,6 +140,14 @@ public static class KeyBindingService
         },
         new()
         {
+            ActionId = "toggle-diff",
+            Key = "D",
+            Label = "diff",
+            CanDisable = true,
+            StatusBarOrder = 41
+        },
+        new()
+        {
             ActionId = "update",
             Key = "u",
             Label = "update",
