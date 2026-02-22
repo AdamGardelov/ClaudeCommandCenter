@@ -111,26 +111,26 @@ Press `Enter` on a grid cell to attach directly to that session. Press `G` to sw
 
 #### List View (default)
 
-| Key                | Action                                                      |
-|--------------------|-------------------------------------------------------------|
-| `j` / `k` / arrows | Navigate sessions                                           |
-| `Enter`            | Attach to selected session                                  |
-| `G`                | Toggle grid view                                            |
-| `D`                | Toggle git diff summary in preview panel                    |
-| `n`                | Create new session (launches `claude` in a given directory) |
-| `g`                | Create new group                                            |
-| `f`                | Open session directory in file manager                      |
-| `i`                | Open session directory in IDE                               |
-| `s`                | Open settings page                                          |
-| `d`                | Delete session (with confirmation)                          |
-| `e`                | Edit session (name, description, color)                     |
-| `x`                | Exclude/restore session from grid view                      |
-| `m`                | Move standalone session to a group                          |
-| `r`                | Refresh session list                                        |
-| `Y`                | Approve — sends `y` to the selected session                 |
-| `N`                | Reject — sends `n` to the selected session                  |
-| `S`                | Send — type a message and send it to the selected session   |
-| `q`                | Quit                                                        |
+| Key                | Action                                                           |
+|--------------------|------------------------------------------------------------------|
+| `j` / `k` / arrows | Navigate sessions                                                |
+| `Enter`            | Attach to selected session                                       |
+| `G`                | Toggle grid view                                                 |
+| `D`                | Toggle git diff mode (summary in preview, `Enter` for full diff) |
+| `n`                | Create new session (launches `claude` in a given directory)      |
+| `g`                | Create new group                                                 |
+| `f`                | Open session directory in file manager                           |
+| `i`                | Open session directory in IDE                                    |
+| `s`                | Open settings page                                               |
+| `d`                | Delete session (with confirmation)                               |
+| `e`                | Edit session (name, description, color)                          |
+| `x`                | Exclude/restore session from grid view                           |
+| `m`                | Move standalone session to a group                               |
+| `r`                | Refresh session list                                             |
+| `Y`                | Approve — sends `y` to the selected session                      |
+| `N`                | Reject — sends `n` to the selected session                       |
+| `S`                | Send — type a message and send it to the selected session        |
+| `q`                | Quit                                                             |
 
 #### Grid View
 
@@ -143,6 +143,23 @@ Press `Enter` on a grid cell to attach directly to that session. Press `G` to sw
 | `q`             | Quit                                      |
 
 Arrow keys always work for navigation regardless of configuration. When you attach to a session, detach with the standard tmux prefix (`Ctrl-b d`) to return to the command center.
+
+### Git Diff View
+
+Press `D` to toggle diff mode. When active, the preview panel shows a `git diff --stat` summary of all changes since the session started (auto-refreshes every 5 seconds). Press `Enter` while diff mode is on to open a fullscreen scrollable overlay with the complete colorized diff.
+
+CCC records each session's HEAD commit at creation time as a baseline. All diffs are computed against this baseline, so you see exactly what changed during the session.
+
+#### Diff Overlay Controls
+
+| Key                   | Action          |
+|-----------------------|-----------------|
+| `j` / `k` / `↑` / `↓` | Scroll one line |
+| `Space` / `PageDown`  | Page down       |
+| `PageUp`              | Page up         |
+| `g`                   | Jump to top     |
+| `G`                   | Jump to bottom  |
+| `Esc` / `q`           | Close overlay   |
 
 ### Settings Page
 
