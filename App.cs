@@ -181,9 +181,7 @@ public class App
                 WorktreePath = g.WorktreePath,
                 Sessions = g.Sessions.ToList(),
             })
-            .OrderByDescending(g => g.Sessions.Any(name =>
-                sessionLookup.TryGetValue(name, out var s) && s.IsWaitingForInput))
-            .ThenBy(g => g.Name)
+            .OrderBy(g => g.Name)
             .ToList();
         _state.ClampGroupCursor();
     }
@@ -193,9 +191,6 @@ public class App
         // Refresh waiting-for-input status on all sessions (single tmux call)
         TmuxService.DetectWaitingForInputBatch(_state.Sessions);
         _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput);
-
-        // Re-sort groups so those needing input stay at the top
-        _state.SortGroupsByStatus();
 
         // In grid mode, capture panes for visible sessions (all or group-filtered)
         if (_state.ViewMode == ViewMode.Grid)
