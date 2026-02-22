@@ -3,7 +3,8 @@ using ClaudeCommandCenter.Services;
 
 try
 {
-    var app = new App();
+    var mobile = args.Contains("-m") || args.Contains("--mobile");
+    var app = new App(mobile);
     app.Run();
 }
 catch (Exception ex)

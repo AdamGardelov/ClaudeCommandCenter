@@ -9,7 +9,7 @@ namespace ClaudeCommandCenter;
 
 public class App
 {
-    private readonly AppState _state = new();
+    private readonly AppState _state;
     private readonly CccConfig _config = ConfigService.Load();
     private Dictionary<string, string> _keyMap = new();
     private string? _capturedPane;
@@ -27,6 +27,11 @@ public class App
     private DateTime _lastDiffRefresh = DateTime.MinValue;
     private string? _lastDiffSession;
     private bool _firstPollDone;
+
+    public App(bool mobileMode = false)
+    {
+        _state = new AppState { MobileMode = mobileMode };
+    }
 
     public void Run()
     {
@@ -83,8 +88,13 @@ public class App
         {
             if (Console.KeyAvailable)
             {
-                var key = Console.ReadKey(true);
-                HandleKey(key);
+                // Drain all buffered keys before rendering once —
+                // prevents input lag over slow SSH connections
+                while (Console.KeyAvailable)
+                {
+                    var key = Console.ReadKey(true);
+                    HandleKey(key);
+                }
                 Render();
             }
 
@@ -106,18 +116,23 @@ public class App
                     Render();
 
             // Re-render when spinner frame advances (only if sessions were spinning at last poll)
-            var spinnerFrame = Renderer.GetSpinnerFrame();
-            if (spinnerFrame != _lastSpinnerFrame)
+            // Skip in mobile mode — spinner updates aren't worth the render cost over SSH
+            if (!_state.MobileMode)
             {
-                _lastSpinnerFrame = spinnerFrame;
-                if (_hasSpinningSessions && _state.ViewMode != ViewMode.Settings)
-                    Render();
+                var spinnerFrame = Renderer.GetSpinnerFrame();
+                if (spinnerFrame != _lastSpinnerFrame)
+                {
+                    _lastSpinnerFrame = spinnerFrame;
+                    if (_hasSpinningSessions && _state.ViewMode != ViewMode.Settings)
+                        Render();
+                }
             }
 
             // Periodically capture pane content for preview
             if (_state.ViewMode != ViewMode.Settings && (DateTime.Now - _lastCapture).TotalMilliseconds > 500)
             {
-                ResizeGridPanes();
+                if (!_state.MobileMode)
+                    ResizeGridPanes();
                 if (UpdateCapturedPane())
                     Render();
                 _lastCapture = DateTime.Now;
@@ -240,6 +255,14 @@ public class App
         }
         _firstPollDone = true;
 
+        // Mobile mode doesn't show pane previews — only re-render
+        // when a session's waiting status actually changed
+        if (_state.MobileMode)
+        {
+            return _state.Sessions.Any(s =>
+                wasWaiting.TryGetValue(s.Name, out var was) && was != s.IsWaitingForInput);
+        }
+
         // In grid mode, capture panes for visible sessions (all or group-filtered)
         if (_state.ViewMode == ViewMode.Grid)
             return UpdateAllCapturedPanes();
@@ -353,6 +376,12 @@ public class App
         if (_state.IsInputMode)
         {
             HandleInputKey(key);
+            return;
+        }
+
+        if (_state.MobileMode)
+        {
+            HandleMobileKey(key);
             return;
         }
 
@@ -896,6 +925,77 @@ public class App
         _state.GroupCursor = Math.Clamp(_state.GroupCursor + delta, 0, _state.Groups.Count - 1);
     }
 
+    private void HandleMobileKey(ConsoleKeyInfo key)
+    {
+        if (_state.HasPendingStatus)
+        {
+            _state.ClearStatus();
+            return;
+        }
+
+        switch (key.Key)
+        {
+            case ConsoleKey.UpArrow:
+                MoveMobileCursor(-1);
+                return;
+            case ConsoleKey.DownArrow:
+                MoveMobileCursor(1);
+                return;
+        }
+
+        var keyId = ResolveKeyId(key);
+
+        if (keyId == "g")
+        {
+            _state.CycleGroupFilter();
+            _lastSelectedSession = null;
+            return;
+        }
+
+        if (_keyMap.TryGetValue(keyId, out var actionId))
+            DispatchMobileAction(actionId);
+    }
+
+    private void MoveMobileCursor(int delta)
+    {
+        var visible = _state.GetMobileVisibleSessions();
+        if (visible.Count == 0) return;
+        _state.CursorIndex = Math.Clamp(_state.CursorIndex + delta, 0, visible.Count - 1);
+        _lastSelectedSession = null;
+    }
+
+    private void DispatchMobileAction(string actionId)
+    {
+        switch (actionId)
+        {
+            case "navigate-up":
+                MoveMobileCursor(-1);
+                break;
+            case "navigate-down":
+                MoveMobileCursor(1);
+                break;
+            case "approve":
+                SendQuickKey("y");
+                break;
+            case "reject":
+                SendQuickKey("n");
+                break;
+            case "send-text":
+                SendText();
+                break;
+            case "attach":
+                AttachToSession();
+                break;
+            case "refresh":
+                LoadSessions();
+                _state.SetStatus("Refreshed");
+                break;
+            case "quit":
+                _state.Running = false;
+                break;
+        }
+    }
+
     private void OpenGroup()
     {
         var group = _state.GetSelectedGroup();
@@ -1222,9 +1322,15 @@ public class App
         TmuxService.AttachSession(session.Name);
 
         // User detached - back to ClaudeCommandCenter
-        Console.CursorVisible = false;
+        // Re-enter alternate screen buffer and clear — tmux detach may
+        // have exited alt screen, leaving Termius in normal mode with scrollback
+        Console.Write("\x1b[?1049h"); // Enter alternate screen buffer
+        Console.Write("\x1b[2J");     // Clear screen
+        Console.Write("\x1b[H");      // Cursor home
+        Console.Write("\x1b[?25l");   // Re-hide cursor
         LoadSessions();
         _lastSelectedSession = null;
+        Render();
     }
 
     private void RunUpdate()

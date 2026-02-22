@@ -64,6 +64,27 @@ ccc
 
 The app shows a split-panel TUI — sessions on the left, a live pane preview on the right. Sessions that have been idle for a few seconds are marked with `!` (waiting for input).
 
+### Mobile Mode
+
+For SSH clients on phones (e.g. Termius), launch with the `-m` flag:
+
+```bash
+ccc -m
+```
+
+Mobile mode uses a single-column layout optimized for narrow terminals — no preview panel, no grid view. You get a scrollable session list, a 3-line detail bar for the selected session, and a context-sensitive status bar.
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` / arrows | Navigate sessions |
+| `Enter` | Attach to selected session |
+| `Y` | Approve (shown when session is waiting) |
+| `N` | Reject (shown when session is waiting) |
+| `S` | Send text to session |
+| `g` | Cycle group filter (All > Group1 > Group2 > All) |
+| `r` | Refresh session list |
+| `q` | Quit |
+
 ### Grid View
 
 Press `G` to toggle a grid view that displays all sessions as rich panels in an auto-scaling grid. Each cell shows the session name, status, git branch, working directory, and live pane output.
@@ -90,6 +111,7 @@ Press `Enter` on a grid cell to attach directly to that session. Press `G` to sw
 | `j` / `k` / arrows | Navigate sessions |
 | `Enter` | Attach to selected session |
 | `G` | Toggle grid view |
+| `D` | Toggle git diff summary in preview panel |
 | `n` | Create new session (launches `claude` in a given directory) |
 | `g` | Create new group |
 | `f` | Open session directory in file manager |
@@ -226,6 +248,7 @@ Each override supports three optional fields:
 | `toggle-exclude` | `x` | hide | Yes |
 | `move-to-group` | `m` | move | Yes |
 | `toggle-grid` | `G` | grid | Yes |
+| `toggle-diff` | `D` | diff | Yes |
 | `refresh` | `r` | (hidden) | Yes |
 | `quit` | `q` | quit | No |
 
