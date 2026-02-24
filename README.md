@@ -1,9 +1,9 @@
 # Claude Command Center (ccc)
 
 
-![Dash](images/1.png)
-![Grid](images/2.png)
-![Settings](images/3.png)
+![Dash](Images/1.png)
+![Grid](Images/2.png)
+![Settings](Images/3.png)
 
 A terminal UI for managing multiple Claude Code sessions via tmux. Lists your sessions, shows a live preview of the selected pane, and highlights sessions waiting for input.
 
@@ -75,8 +75,8 @@ ccc -m
 Mobile mode uses a single-column layout optimized for narrow terminals — no preview panel, no grid view. You get a scrollable session list, a 3-line detail bar for the selected session, and a context-sensitive status bar.
 
 <p>
-  <img src="images/4.jpg" alt="Phone mode" width="350">
-  <img src="images/5.jpg" alt="Phone mode group filter" width="350">
+  <img src="Images/4.jpg" alt="Phone mode" width="350">
+  <img src="Images/5.jpg" alt="Phone mode group filter" width="350">
 </p>
 
 | Key                | Action                                           |
