@@ -182,6 +182,7 @@ public class App(bool mobileMode = false)
                 s.PreviousContent = old.PreviousContent;
                 s.StableContentCount = old.StableContentCount;
                 s.IsWaitingForInput = old.IsWaitingForInput;
+                s.IsIdle = old.IsIdle;
             }
 
             // Hydrate or snapshot StartCommitSha for diff tracking
@@ -254,7 +255,7 @@ public class App(bool mobileMode = false)
 
         // Refresh waiting-for-input status on all sessions (single tmux call)
         TmuxService.DetectWaitingForInputBatch(_state.Sessions);
-        _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput && !s.IsDead);
+        _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput && !s.IsIdle && !s.IsDead);
 
         // Detect false -> true transitions and notify.
         // Skip the first 8 polls (~4 seconds) so sessions have time to establish their

@@ -168,12 +168,11 @@ public static class Renderer
             return new Markup($" [red]†[/] [grey50]{name,-22}[/]");
         }
 
-        var isWorking = !session.IsWaitingForInput;
-        var status = isWorking ? spinner : "!";
+        var status = session.IsWaitingForInput ? "!" : session.IsIdle ? "✓" : spinner;
 
         if (session.IsExcluded)
         {
-            var excludedStatus = session.IsWaitingForInput ? "[grey42]![/]" : $"[grey35]{spinner}[/]";
+            var excludedStatus = session.IsWaitingForInput ? "[grey42]![/]" : session.IsIdle ? "[grey42]✓[/]" : $"[grey35]{spinner}[/]";
             if (isSelected)
                 return new Markup($"[grey50 on grey19] {excludedStatus} {name,-22} [/]");
             return new Markup($" {excludedStatus} [grey35]{name,-22}[/]");
@@ -185,12 +184,12 @@ public static class Renderer
             return new Markup($"[white on {bg}] {status} {name,-22} [/]");
         }
 
-        if (isWorking)
-            return new Markup($" [green]{spinner}[/] [navajowhite1]{name,-22}[/]");
         if (session.IsWaitingForInput)
             return new Markup($" [yellow bold]![/] [navajowhite1]{name,-22}[/]");
+        if (session.IsIdle)
+            return new Markup($" [grey50]✓[/] [navajowhite1]{name,-22}[/]");
 
-        return new Markup($"   [grey70]{name,-22}[/]");
+        return new Markup($" [green]{spinner}[/] [navajowhite1]{name,-22}[/]");
     }
 
     private static Markup BuildGroupRow(SessionGroup group, bool isSelected, AppState state)
@@ -202,10 +201,11 @@ public static class Renderer
         var groupSessionNames = new HashSet<string>(group.Sessions);
         var groupSessions = state.Sessions.Where(s => groupSessionNames.Contains(s.Name)).ToList();
         var anyWaiting = groupSessions.Any(s => s.IsWaitingForInput);
+        var allIdle = groupSessions.Count > 0 && groupSessions.All(s => s.IsIdle || s.IsDead);
         var allDead = groupSessions.Count > 0 && groupSessions.All(s => s.IsDead);
 
         var spinner = Markup.Escape(GetSpinnerFrame());
-        var status = totalSessions == 0 ? "[grey50]x[/]" : allDead ? "[red]†[/]" : anyWaiting ? "[yellow bold]![/]" : $"[green]{spinner}[/]";
+        var status = totalSessions == 0 ? "[grey50]x[/]" : allDead ? "[red]†[/]" : anyWaiting ? "[yellow bold]![/]" : allIdle ? "[grey50]✓[/]" : $"[green]{spinner}[/]";
         var countLabel = $"({totalSessions})";
         var colorTag = !string.IsNullOrEmpty(group.Color) ? group.Color : "grey50";
 
@@ -366,7 +366,7 @@ public static class Renderer
         foreach (var session in groupSessions)
         {
             var spinner = Markup.Escape(GetSpinnerFrame());
-            var status = session.IsDead ? "[red]†[/]" : session.IsWaitingForInput ? "[yellow bold]![/]" : $"[green]{spinner}[/]";
+            var status = session.IsDead ? "[red]†[/]" : session.IsWaitingForInput ? "[yellow bold]![/]" : session.IsIdle ? "[grey50]✓[/]" : $"[green]{spinner}[/]";
             var name = Markup.Escape(session.Name);
             var branch = session.GitBranch != null ? $" [aqua]{Markup.Escape(session.GitBranch)}[/]" : "";
             var path = session.CurrentPath != null ? $" [grey50]{Markup.Escape(ShortenPath(session.CurrentPath))}[/]" : "";
@@ -460,7 +460,7 @@ public static class Renderer
 
         // Header: name + branch (truncated to prevent wrapping)
         var spinner = Markup.Escape(GetSpinnerFrame());
-        var status = session.IsDead ? "[red]†[/]" : session.IsWaitingForInput ? "[yellow bold]![/]" : $"[green]{spinner}[/]";
+        var status = session.IsDead ? "[red]†[/]" : session.IsWaitingForInput ? "[yellow bold]![/]" : session.IsIdle ? "[grey50]✓[/]" : $"[green]{spinner}[/]";
         var nameStr = session.Name;
         var branchStr = session.GitBranch;
         var prefixLen = 3; // " X " visible chars before name
@@ -678,12 +678,11 @@ public static class Renderer
             return new Markup($" [red]†[/] [grey50]{name}[/]");
         }
 
-        var isWorking = !session.IsWaitingForInput;
-        var status = isWorking ? spinner : "!";
+        var status = session.IsWaitingForInput ? "!" : session.IsIdle ? "✓" : spinner;
 
         if (session.IsExcluded)
         {
-            var excludedStatus = session.IsWaitingForInput ? "[grey42]![/]" : $"[grey35]{spinner}[/]";
+            var excludedStatus = session.IsWaitingForInput ? "[grey42]![/]" : session.IsIdle ? "[grey42]✓[/]" : $"[grey35]{spinner}[/]";
             if (isSelected)
                 return new Markup($"[grey50 on grey19] {excludedStatus} {name} [/]");
             return new Markup($" {excludedStatus} [grey35]{name}[/]");
@@ -695,12 +694,12 @@ public static class Renderer
             return new Markup($"[white on {bg}] {status} {name} [/]");
         }
 
-        if (isWorking)
-            return new Markup($" [green]{spinner}[/] [navajowhite1]{name}[/]");
         if (session.IsWaitingForInput)
             return new Markup($" [yellow bold]![/] [navajowhite1]{name}[/]");
+        if (session.IsIdle)
+            return new Markup($" [grey50]✓[/] [navajowhite1]{name}[/]");
 
-        return new Markup($"   [grey70]{name}[/]");
+        return new Markup($" [green]{spinner}[/] [navajowhite1]{name}[/]");
     }
 
     private static IRenderable BuildMobileDetailBar(AppState state)
@@ -730,6 +729,8 @@ public static class Renderer
             ? "[red]session ended[/]"
             : session.IsWaitingForInput
             ? "[yellow bold]waiting for input[/]"
+            : session.IsIdle
+            ? "[grey50]idle[/]"
             : session.IsAttached ? "[green]attached[/]" : "[grey]working[/]";
         var desc = !string.IsNullOrWhiteSpace(session.Description)
             ? $" [grey50]- {Markup.Escape(session.Description)}[/]"
@@ -856,6 +857,8 @@ public static class Renderer
             return "[red]session ended[/]";
         if (session.IsWaitingForInput)
             return "[yellow bold]waiting for input[/]";
+        if (session.IsIdle)
+            return "[grey50]idle[/]";
 
         return session.IsAttached
             ? "[green]attached[/]"

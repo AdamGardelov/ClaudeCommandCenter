@@ -89,10 +89,11 @@ public abstract partial class TmuxService
                 session.PreviousContent = content;
             }
 
-            // Content unchanged for consecutive polls → waiting for input,
-            // but only if the session isn't just sitting at the idle prompt (❯).
-            session.IsWaitingForInput = session.StableContentCount >= _stableThreshold
-                                       && !IsIdlePrompt(content);
+            // Content unchanged for consecutive polls → stable.
+            // Distinguish idle (at ❯ prompt, done working) from genuinely waiting for input.
+            var isStable = session.StableContentCount >= _stableThreshold;
+            session.IsIdle = isStable && IsIdlePrompt(content);
+            session.IsWaitingForInput = isStable && !session.IsIdle;
         }
     }
 

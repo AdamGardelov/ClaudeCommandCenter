@@ -10,6 +10,7 @@ public class TmuxSession
     public string? ColorTag { get; set; }
     public string? CurrentPath { get; set; }
     public bool IsWaitingForInput { get; set; }
+    public bool IsIdle { get; set; }
     public bool IsDead { get; set; }
     public string? PreviousContent { get; set; }
     public int StableContentCount { get; set; }
