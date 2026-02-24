@@ -52,6 +52,7 @@ The monolith. Contains all application logic: session/group CRUD, directory pick
 | `AppState` | Mutable state container: sessions, cursor, view mode, input buffer, groups |
 | `Renderer` | Stateless rendering — builds Spectre.Console `IRenderable` from `AppState` |
 | `AnsiParser` | Converts tmux ANSI escape sequences to Spectre styles (256-color + truecolor) |
+| `SettingsDefinition` | Builds settings categories and items for the settings view |
 
 ### Models
 
@@ -59,11 +60,18 @@ The monolith. Contains all application logic: session/group CRUD, directory pick
 - `TmuxSession`: Runtime session with tmux metadata + git info + waiting-for-input status
 - `SessionGroup`: Named group of session names with optional worktree path
 - `KeyBinding` / `KeyBindingConfig`: Resolved keybinding and JSON config override
+- `SettingsItem` / `SettingsCategory`: Settings view data structures
+
+### Enums
+
+- `ViewMode`: List, Grid, Settings, DiffOverlay
+- `ActiveSection`: Sessions, Groups
+- `SettingsItemType`: Text, Toggle, Number, Action
 
 ## Code Style
 
-- **One type per file.** Each class, enum, record, and struct gets its own file. Nested types are fine.
-- **Folder names describe contents.** `Models/`, `Services/`, `UI/` — a file's folder should tell you what kind of thing it is.
+- **One type per file.** Each class, enum, record, struct, and exception gets its own file. No nested types.
+- **Folder names describe contents.** `Models/`, `Enums/`, `Services/`, `UI/` — a file's folder should tell you what kind of thing it is.
 
 ## Key Patterns
 

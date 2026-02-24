@@ -83,7 +83,13 @@ public static class NotificationService
             var process = Process.Start(new ProcessStartInfo
             {
                 FileName = "tmux",
-                ArgumentList = { "display-message", "-d", "3000", message },
+                ArgumentList =
+                {
+                    "display-message",
+                    "-d",
+                    "3000",
+                    message
+                },
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -104,7 +110,11 @@ public static class NotificationService
             Process.Start(new ProcessStartInfo
             {
                 FileName = "notify-send",
-                ArgumentList = { "CCC", message },
+                ArgumentList =
+                {
+                    "CCC",
+                    message
+                },
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,

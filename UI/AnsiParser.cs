@@ -86,16 +86,6 @@ public static partial class AnsiParser
         }
     }
 
-    private struct AnsiState
-    {
-        public Color? Foreground;
-        public Color? Background;
-        public Decoration Decoration;
-
-        public readonly Style ToStyle()
-            => new(Foreground, Background, Decoration);
-    }
-
     private static void ApplySgr(ref AnsiState state, string paramsStr)
     {
         if (string.IsNullOrEmpty(paramsStr))

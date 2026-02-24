@@ -1,3 +1,4 @@
+using ClaudeCommandCenter.Enums;
 using ClaudeCommandCenter.Models;
 
 namespace ClaudeCommandCenter.UI;
@@ -119,7 +120,8 @@ public class AppState
 
     public void CycleGroupFilter()
     {
-        if (Groups.Count == 0) return;
+        if (Groups.Count == 0)
+            return;
 
         GroupFilterIndex++;
         if (GroupFilterIndex > Groups.Count)
@@ -185,7 +187,8 @@ public class AppState
     public int GetGridCellOutputLines()
     {
         var (_, gridRows) = GetGridDimensions();
-        if (gridRows == 0) return 0;
+        if (gridRows == 0)
+            return 0;
 
         var terminalHeight = Console.WindowHeight;
         // Each row gets an equal share of: terminal height - app header (1) - status bar (1)
@@ -237,8 +240,8 @@ public class AppState
     }
 
     public void ClampGroupCursor() => GroupCursor = Groups.Count == 0
-            ? 0
-            : Math.Clamp(GroupCursor, 0, Groups.Count - 1);
+        ? 0
+        : Math.Clamp(GroupCursor, 0, Groups.Count - 1);
 
     public void EnterDiffOverlay(string name, string? branch, string? stat, string[] lines)
     {
@@ -285,5 +288,4 @@ public class AppState
         IsSettingsRebinding = false;
         SettingsEditBuffer = "";
     }
-
 }

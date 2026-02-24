@@ -25,7 +25,10 @@ public static class GitService
     /// </summary>
     public static string GetDefaultBranch(string repoPath)
     {
-        foreach (var candidate in new[] { "development", "main", "master" })
+        foreach (var candidate in new[]
+                 {
+                     "development", "main", "master"
+                 })
         {
             var (success, _) = RunGit(repoPath, "rev-parse", "--verify", candidate);
             if (success)

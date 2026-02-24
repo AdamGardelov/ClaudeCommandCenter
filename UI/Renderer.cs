@@ -1,3 +1,4 @@
+using ClaudeCommandCenter.Enums;
 using ClaudeCommandCenter.Models;
 using Spectre.Console;
 using Spectre.Console.Rendering;

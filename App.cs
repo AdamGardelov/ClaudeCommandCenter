@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using ClaudeCommandCenter.Enums;
 using ClaudeCommandCenter.Models;
 using ClaudeCommandCenter.Services;
 using ClaudeCommandCenter.UI;
@@ -7,9 +8,13 @@ using Spectre.Console;
 
 namespace ClaudeCommandCenter;
 
-public class App
+public class App(bool mobileMode = false)
 {
-    private readonly AppState _state;
+    private readonly AppState _state = new()
+    {
+        MobileMode = mobileMode
+    };
+
     private readonly CccConfig _config = ConfigService.Load();
     private Dictionary<string, string> _keyMap = new();
     private string? _capturedPane;
@@ -26,11 +31,6 @@ public class App
     private int _lastGridWidth;
     private int _lastGridHeight;
     private bool _firstPollDone;
-
-    public App(bool mobileMode = false)
-    {
-        _state = new AppState { MobileMode = mobileMode };
-    }
 
     public void Run()
     {
@@ -94,6 +94,7 @@ public class App
                     var key = Console.ReadKey(true);
                     HandleKey(key);
                 }
+
                 Render();
             }
 
@@ -111,11 +112,8 @@ public class App
             }
 
             // Periodic update check
-            if (_updateCheck == null
-                && DateTime.UtcNow - _lastUpdateCheck > _updateCheckInterval)
-            {
+            if (_updateCheck == null && DateTime.UtcNow - _lastUpdateCheck > _updateCheckInterval)
                 _updateCheck = UpdateChecker.CheckForUpdateAsync();
-            }
 
             // Re-render when a status message expires
             if (_state.HasPendingStatus)
@@ -199,7 +197,6 @@ public class App
     private void LoadGroups()
     {
         var liveSessionNames = new HashSet<string>(_state.Sessions.Select(s => s.Name));
-        var sessionLookup = _state.Sessions.ToDictionary(s => s.Name);
 
         // Clean up persisted config: remove dead sessions and empty groups
         var configChanged = false;
@@ -250,9 +247,9 @@ public class App
             var selectedName = _state.GetSelectedSession()?.Name;
             var transitioned = _state.Sessions
                 .Where(s => !s.IsExcluded
-                    && s.IsWaitingForInput
-                    && wasWaiting.TryGetValue(s.Name, out var was) && !was
-                    && s.Name != selectedName)
+                            && s.IsWaitingForInput
+                            && wasWaiting.TryGetValue(s.Name, out var was) && !was
+                            && s.Name != selectedName)
                 .ToList();
 
             if (transitioned.Count > 0)
@@ -262,6 +259,7 @@ public class App
                     _state.SetStatus($"⏳ {notified}");
             }
         }
+
         _firstPollDone = true;
 
         // Mobile mode doesn't show pane previews — only re-render
@@ -663,6 +661,7 @@ public class App
                     _state.SettingsCategory = Math.Max(0, _state.SettingsCategory - 1);
                     _state.SettingsItemCursor = 0;
                 }
+
                 return;
 
             case ConsoleKey.DownArrow:
@@ -673,6 +672,7 @@ public class App
                     _state.SettingsCategory = Math.Min(categories.Count - 1, _state.SettingsCategory + 1);
                     _state.SettingsItemCursor = 0;
                 }
+
                 return;
 
             case ConsoleKey.Enter:
@@ -684,6 +684,7 @@ public class App
                     _state.SettingsFocusRight = true;
                     _state.SettingsItemCursor = 0;
                 }
+
                 return;
         }
 
@@ -698,6 +699,7 @@ public class App
                     _state.SettingsCategory = Math.Max(0, _state.SettingsCategory - 1);
                     _state.SettingsItemCursor = 0;
                 }
+
                 return;
             case 'j':
                 if (_state.SettingsFocusRight)
@@ -707,6 +709,7 @@ public class App
                     _state.SettingsCategory = Math.Min(categories.Count - 1, _state.SettingsCategory + 1);
                     _state.SettingsItemCursor = 0;
                 }
+
                 return;
         }
 
@@ -718,6 +721,7 @@ public class App
                 _state.IsSettingsRebinding = true;
                 _state.SettingsEditBuffer = "";
             }
+
             return;
         }
 
@@ -808,7 +812,8 @@ public class App
         if (conflict != null)
         {
             var conflictLabel = _config.Keybindings.TryGetValue(conflict.ActionId, out var ckb)
-                ? ckb.Label ?? conflict.ActionId : conflict.ActionId;
+                ? ckb.Label ?? conflict.ActionId
+                : conflict.ActionId;
             _state.SettingsEditBuffer = $"'{newKey}' already bound to {conflictLabel}";
             return;
         }
@@ -868,6 +873,7 @@ public class App
                 {
                     _state.SetStatus("Cancelled");
                 }
+
                 break;
             case "+ Add Favorite":
                 AddFavorite();
@@ -890,7 +896,11 @@ public class App
         PrintStep(2, 2, "Path");
         var path = RequireText("[grey70]Path:[/]");
 
-        _config.FavoriteFolders.Add(new FavoriteFolder { Name = name, Path = path });
+        _config.FavoriteFolders.Add(new FavoriteFolder
+        {
+            Name = name,
+            Path = path
+        });
         ConfigService.SaveConfig(_config);
         _state.SetStatus($"Added '{name}'");
     });
@@ -1003,7 +1013,8 @@ public class App
     private void MoveMobileCursor(int delta)
     {
         var visible = _state.GetMobileVisibleSessions();
-        if (visible.Count == 0) return;
+        if (visible.Count == 0)
+            return;
         _state.CursorIndex = Math.Clamp(_state.CursorIndex + delta, 0, visible.Count - 1);
         _lastSelectedSession = null;
     }
@@ -1177,39 +1188,44 @@ public class App
                         .HighlightStyle(new Style(Color.White, Color.Grey70))
                         .AddChoices("Yes", "No", _cancelChoice));
 
-                if (addMore == _cancelChoice) throw new FlowCancelledException();
-
-                if (addMore == "Yes")
+                switch (addMore)
                 {
-                    for (var i = 0; i < remaining; i++)
+                    case _cancelChoice:
+                        throw new FlowCancelledException();
+                    case "Yes":
                     {
-                        AnsiConsole.MarkupLine($"\n[grey70]New session {i + 1} of {remaining}[/]");
-
-                        var dir = PickDirectory();
-                        if (dir == null)
-                            break;
-
-                        dir = ConfigService.ExpandPath(dir);
-                        if (!Directory.Exists(dir))
+                        for (var i = 0; i < remaining; i++)
                         {
-                            AnsiConsole.MarkupLine("[red]Directory not found, skipping[/]");
-                            continue;
+                            AnsiConsole.MarkupLine($"\n[grey70]New session {i + 1} of {remaining}[/]");
+
+                            var dir = PickDirectory();
+                            if (dir == null)
+                                break;
+
+                            dir = ConfigService.ExpandPath(dir);
+                            if (!Directory.Exists(dir))
+                            {
+                                AnsiConsole.MarkupLine("[red]Directory not found, skipping[/]");
+                                continue;
+                            }
+
+                            var label = Path.GetFileName(dir.TrimEnd('/'));
+                            newDirectories.Add((dir, label));
+
+                            if (currentCount + newDirectories.Count >= 9)
+                                break;
+
+                            var more = AnsiConsole.Prompt(
+                                new SelectionPrompt<string>()
+                                    .Title("[grey70]Add another session?[/]")
+                                    .HighlightStyle(new Style(Color.White, Color.Grey70))
+                                    .AddChoices("Yes", "No"));
+
+                            if (more == "No")
+                                break;
                         }
 
-                        var label = Path.GetFileName(dir.TrimEnd('/'));
-                        newDirectories.Add((dir, label));
-
-                        if (currentCount + newDirectories.Count >= 9)
-                            break;
-
-                        var more = AnsiConsole.Prompt(
-                            new SelectionPrompt<string>()
-                                .Title("[grey70]Add another session?[/]")
-                                .HighlightStyle(new Style(Color.White, Color.Grey70))
-                                .AddChoices("Yes", "No"));
-
-                        if (more == "No")
-                            break;
+                        break;
                     }
                 }
             }
@@ -1361,10 +1377,10 @@ public class App
         // User detached - back to ClaudeCommandCenter
         // Re-enter alternate screen buffer and clear — tmux detach may
         // have exited alt screen, leaving Termius in normal mode with scrollback
-        Console.Write("\x1b[?1049h"); // Enter alternate screen buffer
-        Console.Write("\x1b[2J");     // Clear screen
-        Console.Write("\x1b[H");      // Cursor home
-        Console.Write("\x1b[?25l");   // Re-hide cursor
+        Console.Write("\e[?1049h"); // Enter alternate screen buffer
+        Console.Write("\e[2J"); // Clear screen
+        Console.Write("\e[H"); // Cursor home
+        Console.Write("\e[?25l"); // Re-hide cursor
         LoadSessions();
         _lastSelectedSession = null;
         Render();
@@ -1460,7 +1476,8 @@ public class App
     private void JumpToNextFile(int maxScroll)
     {
         var boundaries = _state.DiffFileBoundaries;
-        if (boundaries.Length == 0) return;
+        if (boundaries.Length == 0)
+            return;
 
         // Find the first file boundary after the current scroll position
         foreach (var boundary in boundaries)
@@ -1478,7 +1495,8 @@ public class App
     private void JumpToPreviousFile()
     {
         var boundaries = _state.DiffFileBoundaries;
-        if (boundaries.Length == 0) return;
+        if (boundaries.Length == 0)
+            return;
 
         // Find the last file boundary before the current scroll position
         for (var i = boundaries.Length - 1; i >= 0; i--)
@@ -1523,8 +1541,8 @@ public class App
             PrintStep(1, 4, "Directory");
             string? worktreeBranch = null;
             var dir = PickDirectory(
-                onWorktreeBranchCreated: branch => worktreeBranch = branch)
-                ?? throw new FlowCancelledException();
+                          onWorktreeBranchCreated: branch => worktreeBranch = branch)
+                      ?? throw new FlowCancelledException();
 
             dir = ConfigService.ExpandPath(dir);
             if (!Directory.Exists(dir))
@@ -1582,7 +1600,8 @@ public class App
             modePrompt.AddChoices("Manual (pick directories)", _cancelChoice);
 
             var mode = AnsiConsole.Prompt(modePrompt);
-            if (mode == _cancelChoice) throw new FlowCancelledException();
+            if (mode == _cancelChoice)
+                throw new FlowCancelledException();
 
             if (mode.StartsWith("Existing"))
             {
@@ -1618,14 +1637,16 @@ public class App
             var repos = string.Join(", ", f.Repos.Keys);
             prompt.AddChoice($"{f.Name} - {f.Description} ({repos})");
         }
+
         prompt.AddChoice(_cancelChoice);
 
         var selected = AnsiConsole.Prompt(prompt);
-        if (selected == _cancelChoice) throw new FlowCancelledException();
+        if (selected == _cancelChoice)
+            throw new FlowCancelledException();
 
         var selectedName = selected.Split(" - ")[0];
         var feature = available.FirstOrDefault(f => f.Name == selectedName)
-            ?? throw new FlowCancelledException("Feature not found");
+                      ?? throw new FlowCancelledException("Feature not found");
 
         PrintStep(2, 2, "Color");
         var color = PickColor();
@@ -1771,7 +1792,10 @@ public class App
     {
         var repos = new Dictionary<string, object>();
         foreach (var (name, path) in worktrees)
-            repos[name] = new { worktree = path };
+            repos[name] = new
+            {
+                worktree = path
+            };
 
         var context = new
         {
@@ -1780,7 +1804,10 @@ public class App
             repos,
         };
 
-        var json = JsonSerializer.Serialize(context, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.Serialize(context, new JsonSerializerOptions
+        {
+            WriteIndented = true
+        });
         File.WriteAllText(Path.Combine(featurePath, ".feature-context.json"), json);
     }
 
@@ -1904,7 +1931,6 @@ public class App
         return baseName; // Shouldn't happen with max 8 sessions
     }
 
-    private record WorktreeFeature(string Name, string Description, string WorktreePath, Dictionary<string, string> Repos);
 
     private static List<WorktreeFeature> ScanWorktreeFeatures(string basePath)
     {
@@ -2018,7 +2044,6 @@ public class App
         return null;
     }
 
-    private class FlowCancelledException(string status = "Cancelled") : Exception(status);
 
     private void RunFlow(string title, Action body)
     {
@@ -2074,7 +2099,8 @@ public class App
                 .HighlightStyle(new Style(Color.White, Color.Grey70))
                 .AddChoices(Markup.Escape(defaultValue), changeChoice, _cancelChoice));
 
-        if (selected == _cancelChoice) throw new FlowCancelledException();
+        if (selected == _cancelChoice)
+            throw new FlowCancelledException();
         if (selected == changeChoice)
             return RequireText($"[grey70]{Markup.Escape(label)}:[/]");
         return defaultValue;
@@ -2093,7 +2119,8 @@ public class App
                 .HighlightStyle(new Style(Color.White, Color.Grey70))
                 .AddChoices(skipLabel, changeChoice, _cancelChoice));
 
-        if (selected == _cancelChoice) throw new FlowCancelledException();
+        if (selected == _cancelChoice)
+            throw new FlowCancelledException();
         if (selected == changeChoice)
             return AnsiConsole.Prompt(
                 new TextPrompt<string>($"[grey70]{Markup.Escape(label)}:[/]")
@@ -2150,7 +2177,8 @@ public class App
             {
                 var repoName = selected[_worktreePrefix.Length..].Split("  ")[0];
                 var fav = gitFavorites.FirstOrDefault(f => f.Name == repoName);
-                if (fav == null) continue;
+                if (fav == null)
+                    continue;
 
                 var hint = worktreeBranchHint;
                 if (string.IsNullOrWhiteSpace(hint))
@@ -2280,10 +2308,9 @@ public class App
             return;
         }
 
-        if (LaunchWithIde(_config.IdeCommand, session.CurrentPath))
-            _state.SetStatus($"Opened in {_config.IdeCommand}");
-        else
-            _state.SetStatus($"Failed to run '{_config.IdeCommand}'");
+        _state.SetStatus(LaunchWithIde(_config.IdeCommand, session.CurrentPath)
+            ? $"Opened in {_config.IdeCommand}"
+            : $"Failed to run '{_config.IdeCommand}'");
     }
 
     private void OpenConfig()
@@ -2300,7 +2327,10 @@ public class App
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = opener,
-                    ArgumentList = { configPath },
+                    ArgumentList =
+                    {
+                        configPath
+                    },
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -2315,10 +2345,9 @@ public class App
             return;
         }
 
-        if (LaunchWithIde(_config.IdeCommand, configPath))
-            _state.SetStatus($"Opened config in {_config.IdeCommand}");
-        else
-            _state.SetStatus($"Failed to run '{_config.IdeCommand}'");
+        _state.SetStatus(LaunchWithIde(_config.IdeCommand, configPath)
+            ? $"Opened config in {_config.IdeCommand}"
+            : $"Failed to run '{_config.IdeCommand}'");
     }
 
     private static bool LaunchWithIde(string command, string path)
@@ -2331,7 +2360,12 @@ public class App
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = "open",
-                    ArgumentList = { "-a", command, path },
+                    ArgumentList =
+                    {
+                        "-a",
+                        command,
+                        path
+                    },
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -2349,7 +2383,10 @@ public class App
             Process.Start(new ProcessStartInfo
             {
                 FileName = command,
-                ArgumentList = { path },
+                ArgumentList =
+                {
+                    path
+                },
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -2452,11 +2489,12 @@ public class App
             prompt.AddChoice(_cancelChoice);
 
             var selected = AnsiConsole.Prompt(prompt);
-            if (selected == _cancelChoice) throw new FlowCancelledException();
+            if (selected == _cancelChoice)
+                throw new FlowCancelledException();
 
-            var groupName = selected[..selected.LastIndexOf(" (")];
+            var groupName = selected[..selected.LastIndexOf(" (", StringComparison.Ordinal)];
             var group = _state.Groups.FirstOrDefault(g => g.Name == groupName)
-                ?? throw new FlowCancelledException("Group not found");
+                        ?? throw new FlowCancelledException("Group not found");
 
             group.Sessions.Add(session.Name);
             ConfigService.SaveGroup(_config, group);

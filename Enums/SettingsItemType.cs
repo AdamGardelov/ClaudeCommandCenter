@@ -1,4 +1,4 @@
-namespace ClaudeCommandCenter.UI;
+namespace ClaudeCommandCenter.Enums;
 
 public enum SettingsItemType
 {

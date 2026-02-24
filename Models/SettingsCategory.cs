@@ -1,6 +1,4 @@
-using ClaudeCommandCenter.Models;
-
-namespace ClaudeCommandCenter.UI;
+namespace ClaudeCommandCenter.Models;
 
 public class SettingsCategory
 {
