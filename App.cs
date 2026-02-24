@@ -20,6 +20,8 @@ public class App
     private bool _hasSpinningSessions;
     private bool _claudeAvailable;
     private Task<string?>? _updateCheck;
+    private DateTime _lastUpdateCheck = DateTime.UtcNow;
+    private static readonly TimeSpan _updateCheckInterval = TimeSpan.FromMinutes(20);
     private bool _wantsUpdate;
     private int _lastGridWidth;
     private int _lastGridHeight;
@@ -103,11 +105,19 @@ public class App
             {
                 var latest = _updateCheck.Result;
                 _updateCheck = null;
+                _lastUpdateCheck = DateTime.UtcNow;
                 if (latest != null)
                 {
                     _state.LatestVersion = latest;
                     Render();
                 }
+            }
+
+            // Periodic update check
+            if (_updateCheck == null
+                && DateTime.UtcNow - _lastUpdateCheck > _updateCheckInterval)
+            {
+                _updateCheck = UpdateChecker.CheckForUpdateAsync();
             }
 
             // Re-render when a status message expires
