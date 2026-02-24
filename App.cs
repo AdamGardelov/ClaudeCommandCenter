@@ -35,7 +35,7 @@ public class App(bool mobileMode = false)
     private bool _wantsUpdate;
     private int _lastGridWidth;
     private int _lastGridHeight;
-    private bool _firstPollDone;
+    private int _startupPollCount;
 
     public void Run()
     {
@@ -256,8 +256,10 @@ public class App(bool mobileMode = false)
         TmuxService.DetectWaitingForInputBatch(_state.Sessions);
         _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput && !s.IsDead);
 
-        // Detect false -> true transitions and notify (skip first poll to avoid startup spam)
-        if (_firstPollDone)
+        // Detect false -> true transitions and notify.
+        // Skip the first 8 polls (~4 seconds) so sessions have time to establish their
+        // baseline waiting state — avoids a burst of notifications on startup.
+        if (_startupPollCount > 7)
         {
             var selectedName = _state.GetSelectedSession()?.Name;
             var transitioned = _state.Sessions
@@ -274,8 +276,8 @@ public class App(bool mobileMode = false)
                     _state.SetStatus($"⏳ {notified}");
             }
         }
-
-        _firstPollDone = true;
+        else
+            _startupPollCount++;
 
         // Mobile mode doesn't show pane previews — only re-render
         // when a session's waiting status actually changed
