@@ -208,6 +208,7 @@ public class App(bool mobileMode = false)
         LoadGroups();
         _state.ClampCursor();
         NotificationService.Cleanup(_state.Sessions.Select(s => s.Name));
+        HookStateService.Cleanup(_state.Sessions.Select(s => s.Name));
     }
 
     private void LoadGroups()

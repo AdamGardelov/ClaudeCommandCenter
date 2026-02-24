@@ -62,39 +62,49 @@ public abstract partial class TmuxService
 
         foreach (var session in sessions)
         {
-            // Dead panes have no running process — skip content hashing
             if (session.IsDead)
             {
                 session.IsWaitingForInput = false;
+                session.IsIdle = false;
                 continue;
             }
 
-            // Capture last 20 lines without ANSI codes
-            var output = RunTmux("capture-pane", "-t", session.Name, "-p", "-S", "-20");
-            if (output == null)
+            // Prefer hook-based state (instant, reliable)
+            var hookState = HookStateService.ReadState(session.Name);
+            if (hookState != null)
             {
-                session.IsWaitingForInput = true;
+                session.IsWaitingForInput = hookState == "waiting";
+                session.IsIdle = hookState == "idle";
                 continue;
             }
 
-            // Strip the status bar (last non-empty line contains the timer that
-            // updates continuously). Compare everything above it between polls.
-            var content = GetContentAboveStatusBar(output);
-
-            if (content == session.PreviousContent)
-                session.StableContentCount++;
-            else
-            {
-                session.StableContentCount = 0;
-                session.PreviousContent = content;
-            }
-
-            // Content unchanged for consecutive polls → stable.
-            // Distinguish idle (at ❯ prompt, done working) from genuinely waiting for input.
-            var isStable = session.StableContentCount >= _stableThreshold;
-            session.IsIdle = isStable && IsIdlePrompt(content);
-            session.IsWaitingForInput = isStable && !session.IsIdle;
+            // Fallback: pane content hashing (for sessions without hooks)
+            DetectWaitingByPaneContent(session);
         }
+    }
+
+    private static void DetectWaitingByPaneContent(TmuxSession session)
+    {
+        var output = RunTmux("capture-pane", "-t", session.Name, "-p", "-S", "-20");
+        if (output == null)
+        {
+            session.IsWaitingForInput = true;
+            return;
+        }
+
+        var content = GetContentAboveStatusBar(output);
+
+        if (content == session.PreviousContent)
+            session.StableContentCount++;
+        else
+        {
+            session.StableContentCount = 0;
+            session.PreviousContent = content;
+        }
+
+        var isStable = session.StableContentCount >= _stableThreshold;
+        session.IsIdle = isStable && IsIdlePrompt(content);
+        session.IsWaitingForInput = isStable && !session.IsIdle;
     }
 
     /// <summary>
