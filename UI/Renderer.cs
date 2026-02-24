@@ -542,17 +542,16 @@ public static class Renderer
             "[grey]│[/]",
             "[grey70 bold]arrows[/][grey] navigate [/]",
             "[grey]│[/]",
+            HintFor(kb, "attach"),
+            HintFor(kb, "approve"),
+            HintFor(kb, "reject"),
+            HintFor(kb, "send-text", "send"),
+            HintFor(kb, "delete-session", "kill"),
+            HintFor(kb, "toggle-exclude", "hide"),
+            "[grey]│[/]",
+            "[grey70 bold]Esc[/][grey] back [/]",
+            HintFor(kb, "quit")
         };
-
-        parts.Add(HintFor(kb, "attach"));
-        parts.Add(HintFor(kb, "approve"));
-        parts.Add(HintFor(kb, "reject"));
-        parts.Add(HintFor(kb, "send-text", "send"));
-        parts.Add(HintFor(kb, "delete-session", "kill"));
-        parts.Add(HintFor(kb, "toggle-exclude", "hide"));
-        parts.Add("[grey]│[/]");
-        parts.Add("[grey70 bold]Esc[/][grey] back [/]");
-        parts.Add(HintFor(kb, "quit"));
 
         parts.RemoveAll(string.IsNullOrEmpty);
         return new Markup(string.Join(" ", parts));
@@ -573,16 +572,15 @@ public static class Renderer
         {
             " [grey70 bold]arrows[/][grey] navigate [/]",
             "[grey]│[/]",
+            HintFor(kb, "attach"),
+            HintFor(kb, "approve"),
+            HintFor(kb, "reject"),
+            HintFor(kb, "send-text", "send"),
+            "[grey]│[/]",
+            HintFor(kb, "toggle-exclude", "hide"),
+            HintFor(kb, "toggle-grid", "list view"),
+            HintFor(kb, "quit")
         };
-
-        parts.Add(HintFor(kb, "attach"));
-        parts.Add(HintFor(kb, "approve"));
-        parts.Add(HintFor(kb, "reject"));
-        parts.Add(HintFor(kb, "send-text", "send"));
-        parts.Add("[grey]│[/]");
-        parts.Add(HintFor(kb, "toggle-exclude", "hide"));
-        parts.Add(HintFor(kb, "toggle-grid", "list view"));
-        parts.Add(HintFor(kb, "quit"));
 
         parts.RemoveAll(string.IsNullOrEmpty);
         return new Markup(string.Join(" ", parts));
@@ -624,7 +622,7 @@ public static class Renderer
         return layout;
     }
 
-    private static IRenderable BuildMobileHeader(AppState state, int sessionCount)
+    private static Columns BuildMobileHeader(AppState state, int sessionCount)
     {
         var filterLabel = state.GetGroupFilterLabel();
         var left = new Markup($"[mediumpurple3 bold] CCC[/] [grey50]v{_version}[/] [grey]- {sessionCount} sessions[/]");
@@ -632,7 +630,7 @@ public static class Renderer
         return new Columns(left, right) { Expand = true };
     }
 
-    private static IRenderable BuildMobileSessionList(AppState state, List<TmuxSession> sessions, int listHeight)
+    private static Rows BuildMobileSessionList(AppState state, List<TmuxSession> sessions, int listHeight)
     {
         var rows = new List<IRenderable>();
 
@@ -707,9 +705,10 @@ public static class Renderer
     private static IRenderable BuildMobileDetailBar(AppState state)
     {
         var session = state.GetSelectedSession();
-        var rows = new List<IRenderable>();
-
-        rows.Add(new Rule().RuleStyle(Style.Parse("grey27")));
+        var rows = new List<IRenderable>
+        {
+            new Rule().RuleStyle(Style.Parse("grey27"))
+        };
 
         if (session == null)
         {
@@ -957,7 +956,7 @@ public static class Renderer
         {
             // Extract just the file path (b/path)
             var parts = line.Split(" b/");
-            var fileName = parts.Length > 1 ? "b/" + parts[^1] : line[("diff --git ").Length..];
+            var fileName = parts.Length > 1 ? "b/" + parts[^1] : line["diff --git ".Length..];
             return new Markup($"[bold white on grey19] {Markup.Escape(fileName)}{new string(' ', Math.Max(0, maxWidth - fileName.Length - 1))}[/]");
         }
 
@@ -979,7 +978,7 @@ public static class Renderer
         if (line.StartsWith("@@"))
         {
             // Split at closing @@ to separate line range from function context
-            var endMarker = line.IndexOf("@@", 2);
+            var endMarker = line.IndexOf("@@", 2, StringComparison.Ordinal);
             if (endMarker > 0)
             {
                 var marker = Markup.Escape(line[..(endMarker + 2)]);
@@ -996,10 +995,11 @@ public static class Renderer
     private static Markup BuildDiffOverlayStatusBar(AppState state)
     {
         var kb = state.Keybindings;
-        var parts = new List<string>();
-
-        // File navigation with arrows
-        parts.Add("[grey70 bold]↑/↓[/][grey] file [/]");
+        var parts = new List<string>
+        {
+            // File navigation with arrows
+            "[grey70 bold]↑/↓[/][grey] file [/]"
+        };
 
         // Scroll: combine up/down keys
         var scrollDown = kb.FirstOrDefault(b => b.ActionId == "diff-scroll-down" && b.Enabled);
@@ -1078,12 +1078,18 @@ public static class Renderer
             var isSelected = i == state.SettingsCategory;
             var isFocused = !state.SettingsFocusRight;
 
-            if (isSelected && isFocused)
-                rows.Add(new Markup($"[white on grey37] {cat.Icon} {Markup.Escape(cat.Name),-16} [/]"));
-            else if (isSelected)
-                rows.Add(new Markup($"[white] {cat.Icon} {Markup.Escape(cat.Name),-16} [/]"));
-            else
-                rows.Add(new Markup($"[grey70]   {Markup.Escape(cat.Name),-16} [/]"));
+            switch (isSelected)
+            {
+                case true when isFocused:
+                    rows.Add(new Markup($"[white on grey37] {cat.Icon} {Markup.Escape(cat.Name),-16} [/]"));
+                    break;
+                case true:
+                    rows.Add(new Markup($"[white] {cat.Icon} {Markup.Escape(cat.Name),-16} [/]"));
+                    break;
+                default:
+                    rows.Add(new Markup($"[grey70]   {Markup.Escape(cat.Name),-16} [/]"));
+                    break;
+            }
         }
 
         var borderColor = !state.SettingsFocusRight ? Color.MediumPurple3 : Color.Grey42;
@@ -1101,18 +1107,14 @@ public static class Renderer
         var isFocused = state.SettingsFocusRight;
 
         if (items.Count == 0)
-        {
             rows.Add(new Markup("[grey]No settings in this category[/]"));
-        }
         else
-        {
             for (var i = 0; i < items.Count; i++)
             {
                 var item = items[i];
                 var isSelected = isFocused && i == state.SettingsItemCursor;
                 rows.Add(BuildSettingsRow(item, isSelected, state, config));
             }
-        }
 
         var borderColor = isFocused ? Color.MediumPurple3 : Color.Grey42;
 
@@ -1143,14 +1145,14 @@ public static class Renderer
                         ? "[yellow]Press a key...[/]"
                         : $"[grey70][[{Markup.Escape(kb.Key ?? "?")}]][/]";
 
-                    if (isSelected)
-                        return new Markup($"[white on grey37] {label,-20} {keyDisplay}  [{toggleColor}]{toggleText}[/] [/]");
-                    return new Markup($" {label,-20} [grey70][[{Markup.Escape(kb.Key ?? "?")}]][/]  [{toggleColor}]{toggleText}[/]");
+                    return isSelected
+                        ? new Markup($"[white on grey37] {label,-20} {keyDisplay}  [{toggleColor}]{toggleText}[/] [/]")
+                        : new Markup($" {label,-20} [grey70][[{Markup.Escape(kb.Key ?? "?")}]][/]  [{toggleColor}]{toggleText}[/]");
                 }
 
-                if (isSelected)
-                    return new Markup($"[white on grey37] {label,-20} [{toggleColor}]{toggleText}[/] [/]");
-                return new Markup($" {label,-20} [{toggleColor}]{toggleText}[/]");
+                return isSelected
+                    ? new Markup($"[white on grey37] {label,-20} [{toggleColor}]{toggleText}[/] [/]")
+                    : new Markup($" {label,-20} [{toggleColor}]{toggleText}[/]");
             }
 
             case SettingsItemType.Text:
@@ -1169,16 +1171,16 @@ public static class Renderer
                 var valueColor = string.IsNullOrEmpty(value) ? "grey42 italic" : "white";
                 var displayText = string.IsNullOrEmpty(value) ? "(not set)" : Markup.Escape(displayValue);
 
-                if (isSelected)
-                    return new Markup($"[white on grey37] {label,-20} [{valueColor}]{displayText}[/] [/]");
-                return new Markup($" [grey70]{label,-20}[/] [{valueColor}]{displayText}[/]");
+                return isSelected
+                    ? new Markup($"[white on grey37] {label,-20} [{valueColor}]{displayText}[/] [/]")
+                    : new Markup($" [grey70]{label,-20}[/] [{valueColor}]{displayText}[/]");
             }
 
             case SettingsItemType.Action:
             {
-                if (isSelected)
-                    return new Markup($"[white on grey37] {label,-20} [grey50]→[/] [/]");
-                return new Markup($" [mediumpurple3]{label}[/]");
+                return isSelected
+                    ? new Markup($"[white on grey37] {label,-20} [grey50]→[/] [/]")
+                    : new Markup($" [mediumpurple3]{label}[/]");
             }
 
             default:

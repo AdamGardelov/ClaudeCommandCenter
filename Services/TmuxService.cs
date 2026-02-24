@@ -5,7 +5,7 @@ using Spectre.Console;
 
 namespace ClaudeCommandCenter.Services;
 
-public abstract class TmuxService
+public abstract partial class TmuxService
 {
     public static List<TmuxSession> ListSessions()
     {
@@ -45,15 +45,11 @@ public abstract class TmuxService
     public static string? CapturePaneContent(string sessionName, int lines = 500) =>
         RunTmux("capture-pane", "-t", sessionName, "-p", "-e", "-S", $"-{lines}");
 
-    public static void ResetWindowSize(string sessionName)
-    {
+    public static void ResetWindowSize(string sessionName) =>
         RunTmux("set-option", "-u", "-t", sessionName, "window-size");
-    }
 
-    public static void ResizeWindow(string sessionName, int width, int height)
-    {
+    public static void ResizeWindow(string sessionName, int width, int height) =>
         RunTmux("resize-window", "-t", sessionName, "-x", width.ToString(), "-y", height.ToString());
-    }
 
     // Number of consecutive stable polls before marking as "waiting for input"
     // 6 polls × 500ms = 3 seconds — avoids false positives from short pauses between tool calls
@@ -99,7 +95,7 @@ public abstract class TmuxService
     }
 
     // Matches status bar timer suffixes like "45s", "24m24s", "1h2m", "1h30m24s"
-    private static readonly Regex StatusBarTimerPattern = new(@"\d+[hms]\d*[ms]?\s*$", RegexOptions.Compiled);
+    private static readonly Regex _statusBarTimerPattern = MyRegex();
 
     private static string GetContentAboveStatusBar(string paneOutput)
     {
@@ -113,7 +109,7 @@ public abstract class TmuxService
             if (string.IsNullOrWhiteSpace(lines[i]))
                 continue;
 
-            if (StatusBarTimerPattern.IsMatch(lines[i]))
+            if (_statusBarTimerPattern.IsMatch(lines[i]))
             {
                 statusBarIndex = i;
                 break;
@@ -371,4 +367,7 @@ public abstract class TmuxService
             return null;
         }
     }
+
+    [GeneratedRegex(@"\d+[hms]\d*[ms]?\s*$", RegexOptions.Compiled)]
+    private static partial Regex MyRegex();
 }

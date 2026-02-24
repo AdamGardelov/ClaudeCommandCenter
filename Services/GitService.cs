@@ -17,7 +17,7 @@ public static class GitService
     public static string? CreateWorktree(string repoPath, string worktreeDest, string branchName)
     {
         var (success, output) = RunGit(repoPath, "worktree", "add", "-b", branchName, worktreeDest);
-        return success ? null : (output ?? "Failed to create worktree");
+        return success ? null : output ?? "Failed to create worktree";
     }
 
     /// <summary>
@@ -38,10 +38,8 @@ public static class GitService
     /// <summary>
     /// Fetches with prune to clean up deleted remote branches before creating worktrees.
     /// </summary>
-    public static void FetchPrune(string repoPath)
-    {
+    public static void FetchPrune(string repoPath) =>
         RunGit(repoPath, "fetch", "--prune");
-    }
 
     /// <summary>
     /// Sanitizes a string for use as a git branch name.

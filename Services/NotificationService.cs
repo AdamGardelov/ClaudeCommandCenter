@@ -53,10 +53,8 @@ public static class NotificationService
         return message;
     }
 
-    public static void ResetCooldown(string sessionName)
-    {
+    public static void ResetCooldown(string sessionName) =>
         _cooldowns.Remove(sessionName);
-    }
 
     public static void Cleanup(IEnumerable<string> liveSessionNames)
     {
@@ -72,9 +70,9 @@ public static class NotificationService
     private static void SendOscNotification(string title, string body)
     {
         // OSC 777 (iTerm2/rxvt-unicode style)
-        Console.Write($"\x1b]777;notify;{title};{body}\x1b\\");
+        Console.Write($"\e]777;notify;{title};{body}\e" + $"\\");
         // OSC 9 (Windows Terminal / ConEmu style)
-        Console.Write($"\x1b]9;{body}\x1b\\");
+        Console.Write($"\e]9;{body}\e" + $"\\");
         Console.Out.Flush();
     }
 

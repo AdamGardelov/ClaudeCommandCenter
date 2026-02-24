@@ -5,7 +5,7 @@ public static class CrashLog
     private static readonly string _logPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ccc", "crash.log");
 
-    private const long MaxBytes = 512 * 1024; // 500 KB
+    private const long _maxBytes = 512 * 1024; // 500 KB
 
     public static void Write(Exception ex)
     {
@@ -33,7 +33,7 @@ public static class CrashLog
             return;
 
         var info = new FileInfo(_logPath);
-        if (info.Length <= MaxBytes)
+        if (info.Length <= _maxBytes)
             return;
 
         // Keep the last half of the file
@@ -42,9 +42,6 @@ public static class CrashLog
 
         // Find the next entry boundary so we don't cut mid-entry
         var boundary = text.IndexOf("\n--- ", keepFrom, StringComparison.Ordinal);
-        if (boundary > 0)
-            File.WriteAllText(_logPath, text[(boundary + 1)..]);
-        else
-            File.WriteAllText(_logPath, text[keepFrom..]);
+        File.WriteAllText(_logPath, boundary > 0 ? text[(boundary + 1)..] : text[keepFrom..]);
     }
 }

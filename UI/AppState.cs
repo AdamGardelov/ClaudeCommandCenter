@@ -23,7 +23,7 @@ public class AppState
 
     // Mobile mode state
     public bool MobileMode { get; set; }
-    public int GroupFilterIndex { get; set; } // 0 = All, 1+ = group index
+    private int GroupFilterIndex { get; set; } // 0 = All, 1+ = group index
     public int TopIndex { get; set; } // Scroll offset for mobile list
 
     // Settings state
@@ -96,10 +96,10 @@ public class AppState
             .ToList();
     }
 
-    public List<TmuxSession> GetGridSessions()
-    {
-        return GetVisibleSessions().Where(s => !s.IsExcluded).ToList();
-    }
+    public List<TmuxSession> GetGridSessions() =>
+        GetVisibleSessions()
+            .Where(s => !s.IsExcluded)
+            .ToList();
 
     public List<TmuxSession> GetMobileVisibleSessions()
     {

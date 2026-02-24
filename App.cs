@@ -882,40 +882,18 @@ public class App
         _state.Keybindings = bindings;
     }
 
-    private void AddFavorite()
+    private void AddFavorite() => RunFlow("Add Favorite", () =>
     {
-        Console.CursorVisible = true;
-        Console.Clear();
+        PrintStep(1, 2, "Name");
+        var name = RequireText("[grey70]Name:[/]");
 
-        AnsiConsole.MarkupLine("[grey70 bold]Add Favorite Folder[/]\n");
-
-        var name = AnsiConsole.Prompt(
-            new TextPrompt<string>("[grey70]Name:[/]")
-                .PromptStyle(new Style(Color.White)));
-
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus("Cancelled");
-            return;
-        }
-
-        var path = AnsiConsole.Prompt(
-            new TextPrompt<string>("[grey70]Path:[/]")
-                .PromptStyle(new Style(Color.White)));
-
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus("Cancelled");
-            return;
-        }
+        PrintStep(2, 2, "Path");
+        var path = RequireText("[grey70]Path:[/]");
 
         _config.FavoriteFolders.Add(new FavoriteFolder { Name = name, Path = path });
         ConfigService.SaveConfig(_config);
-        Console.CursorVisible = false;
         _state.SetStatus($"Added '{name}'");
-    }
+    });
 
     private void DeleteFavorite()
     {
@@ -1171,179 +1149,163 @@ public class App
         if (group == null)
             return;
 
-        Console.CursorVisible = true;
-        Console.Clear();
-
-        var escapedName = Markup.Escape(group.Name);
-        AnsiConsole.MarkupLine($"[grey70 bold]Edit group[/] [white]'{escapedName}'[/] [grey](empty = keep current)[/]\n");
-
-        // Edit name
-        var newName = AnsiConsole.Prompt(
-            new TextPrompt<string>($"[grey70]Name[/] [grey50]({escapedName})[/][grey70]:[/]")
-                .AllowEmpty()
-                .PromptStyle(new Style(Color.White)));
-
-        if (!string.IsNullOrWhiteSpace(newName))
-            newName = SanitizeTmuxSessionName(newName);
-
-        // Validate new name doesn't conflict
-        if (!string.IsNullOrWhiteSpace(newName) && newName != group.Name && _config.Groups.ContainsKey(newName))
+        RunFlow($"Edit Group — {group.Name}", () =>
         {
-            Console.CursorVisible = false;
-            _state.SetStatus($"Group '{newName}' already exists");
-            return;
-        }
+            // Edit name
+            PrintStep(1, 3, "Name");
+            var newName = PromptOptional("Name", group.Name);
 
-        // Add more sessions
-        var currentCount = group.Sessions.Count;
-        var remaining = 9 - currentCount;
-        var newDirectories = new List<(string Dir, string Label)>();
+            if (!string.IsNullOrWhiteSpace(newName))
+                newName = SanitizeTmuxSessionName(newName);
 
-        if (remaining > 0)
-        {
-            AnsiConsole.MarkupLine($"\n[grey70]Current sessions: {currentCount}/9 — you can add {remaining} more[/]");
+            if (!string.IsNullOrWhiteSpace(newName) && newName != group.Name && _config.Groups.ContainsKey(newName))
+                throw new FlowCancelledException($"Group '{newName}' already exists");
 
-            var addMore = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[grey70]Add sessions?[/]")
-                    .HighlightStyle(new Style(Color.White, Color.Grey70))
-                    .AddChoices("Yes", "No"));
+            // Add more sessions
+            PrintStep(2, 3, "Sessions");
+            var currentCount = group.Sessions.Count;
+            var remaining = 9 - currentCount;
+            var newDirectories = new List<(string Dir, string Label)>();
 
-            if (addMore == "Yes")
+            if (remaining > 0)
             {
-                for (var i = 0; i < remaining; i++)
+                AnsiConsole.MarkupLine($"[grey70]Current sessions: {currentCount}/9 — you can add {remaining} more[/]");
+
+                var addMore = AnsiConsole.Prompt(
+                    new SelectionPrompt<string>()
+                        .Title("[grey70]Add sessions?[/]")
+                        .HighlightStyle(new Style(Color.White, Color.Grey70))
+                        .AddChoices("Yes", "No", _cancelChoice));
+
+                if (addMore == _cancelChoice) throw new FlowCancelledException();
+
+                if (addMore == "Yes")
                 {
-                    AnsiConsole.MarkupLine($"\n[grey70]New session {i + 1} of {remaining}[/]");
-
-                    var dir = PickDirectory();
-                    if (dir == null)
-                        break;
-
-                    dir = ConfigService.ExpandPath(dir);
-                    if (!Directory.Exists(dir))
+                    for (var i = 0; i < remaining; i++)
                     {
-                        AnsiConsole.MarkupLine("[red]Directory not found, skipping[/]");
-                        continue;
+                        AnsiConsole.MarkupLine($"\n[grey70]New session {i + 1} of {remaining}[/]");
+
+                        var dir = PickDirectory();
+                        if (dir == null)
+                            break;
+
+                        dir = ConfigService.ExpandPath(dir);
+                        if (!Directory.Exists(dir))
+                        {
+                            AnsiConsole.MarkupLine("[red]Directory not found, skipping[/]");
+                            continue;
+                        }
+
+                        var label = Path.GetFileName(dir.TrimEnd('/'));
+                        newDirectories.Add((dir, label));
+
+                        if (currentCount + newDirectories.Count >= 9)
+                            break;
+
+                        var more = AnsiConsole.Prompt(
+                            new SelectionPrompt<string>()
+                                .Title("[grey70]Add another session?[/]")
+                                .HighlightStyle(new Style(Color.White, Color.Grey70))
+                                .AddChoices("Yes", "No"));
+
+                        if (more == "No")
+                            break;
                     }
-
-                    var label = Path.GetFileName(dir.TrimEnd('/'));
-                    newDirectories.Add((dir, label));
-
-                    if (currentCount + newDirectories.Count >= 9)
-                        break;
-
-                    var more = AnsiConsole.Prompt(
-                        new SelectionPrompt<string>()
-                            .Title("[grey70]Add another session?[/]")
-                            .HighlightStyle(new Style(Color.White, Color.Grey70))
-                            .AddChoices("Yes", "No"));
-
-                    if (more == "No")
-                        break;
                 }
             }
-        }
-        else
-        {
-            AnsiConsole.MarkupLine($"\n[grey50]Group is full (9/9 sessions)[/]");
-        }
-
-        // Pick new color
-        var currentColor = !string.IsNullOrEmpty(group.Color) ? group.Color : "none";
-        AnsiConsole.MarkupLine($"\n[grey70]Current color:[/] [{currentColor}]{currentColor}[/]");
-        var newColor = PickColor();
-
-        Console.CursorVisible = false;
-
-        var effectiveName = !string.IsNullOrWhiteSpace(newName) && newName != group.Name ? newName : group.Name;
-        var changed = false;
-
-        // Apply name change — rename all tmux sessions and update config
-        if (effectiveName != group.Name)
-        {
-            var oldName = group.Name;
-
-            // Rename tmux sessions: old prefix → new prefix
-            var renamedSessions = new List<string>();
-            foreach (var sessionName in group.Sessions.ToList())
+            else
             {
-                string newSessionName;
-                if (sessionName.StartsWith(oldName + "-"))
-                    newSessionName = effectiveName + sessionName[oldName.Length..];
-                else
-                    newSessionName = effectiveName + "-" + sessionName;
+                AnsiConsole.MarkupLine($"\n[grey50]Group is full (9/9 sessions)[/]");
+            }
 
-                var renameError = TmuxService.RenameSession(sessionName, newSessionName);
-                if (renameError != null)
+            // Pick new color
+            PrintStep(3, 3, "Color");
+            var currentColor = !string.IsNullOrEmpty(group.Color) ? group.Color : "none";
+            AnsiConsole.MarkupLine($"[grey70]Current color:[/] [{currentColor}]{currentColor}[/]");
+            var newColor = PickColor();
+
+            var effectiveName = !string.IsNullOrWhiteSpace(newName) && newName != group.Name ? newName : group.Name;
+            var changed = false;
+
+            // Apply name change — rename all tmux sessions and update config
+            if (effectiveName != group.Name)
+            {
+                var oldName = group.Name;
+
+                var renamedSessions = new List<string>();
+                foreach (var sessionName in group.Sessions.ToList())
                 {
-                    _state.SetStatus($"Failed to rename session: {renameError}");
-                    return;
+                    string newSessionName;
+                    if (sessionName.StartsWith(oldName + "-"))
+                        newSessionName = effectiveName + sessionName[oldName.Length..];
+                    else
+                        newSessionName = effectiveName + "-" + sessionName;
+
+                    var renameError = TmuxService.RenameSession(sessionName, newSessionName);
+                    if (renameError != null)
+                        throw new FlowCancelledException($"Failed to rename session: {renameError}");
+
+                    ConfigService.RenameDescription(_config, sessionName, newSessionName);
+                    ConfigService.RenameColor(_config, sessionName, newSessionName);
+                    ConfigService.RenameStartCommit(_config, sessionName, newSessionName);
+                    renamedSessions.Add(newSessionName);
                 }
 
-                ConfigService.RenameDescription(_config, sessionName, newSessionName);
-                ConfigService.RenameColor(_config, sessionName, newSessionName);
-                ConfigService.RenameStartCommit(_config, sessionName, newSessionName);
-                renamedSessions.Add(newSessionName);
+                ConfigService.RemoveGroup(_config, oldName);
+                group.Name = effectiveName;
+                group.Sessions = renamedSessions;
+                ConfigService.SaveGroup(_config, group);
+                changed = true;
             }
 
-            // Remove old group, create under new name
-            ConfigService.RemoveGroup(_config, oldName);
-            group.Name = effectiveName;
-            group.Sessions = renamedSessions;
-            ConfigService.SaveGroup(_config, group);
-            changed = true;
-        }
-
-        // Create new sessions
-        var usedNames = new HashSet<string>(group.Sessions, StringComparer.Ordinal);
-        foreach (var (dir, label) in newDirectories)
-        {
-            var sessionName = UniqueSessionName(SanitizeTmuxSessionName($"{effectiveName}-{label}"), usedNames);
-            usedNames.Add(sessionName);
-            var error = TmuxService.CreateSession(sessionName, dir);
-            if (error != null)
+            // Create new sessions
+            var usedNames = new HashSet<string>(group.Sessions, StringComparer.Ordinal);
+            foreach (var (dir, label) in newDirectories)
             {
-                _state.SetStatus($"Failed to create session '{sessionName}': {error}");
-                break;
+                var sessionName = UniqueSessionName(SanitizeTmuxSessionName($"{effectiveName}-{label}"), usedNames);
+                usedNames.Add(sessionName);
+                var error = TmuxService.CreateSession(sessionName, dir);
+                if (error != null)
+                    throw new FlowCancelledException($"Failed to create session '{sessionName}': {error}");
+
+                var sessionColor = newColor ?? group.Color;
+                if (!string.IsNullOrEmpty(sessionColor))
+                {
+                    ConfigService.SaveColor(_config, sessionName, sessionColor);
+                    TmuxService.ApplyStatusColor(sessionName, sessionColor);
+                }
+
+                group.Sessions.Add(sessionName);
+                changed = true;
             }
 
-            var sessionColor = newColor ?? group.Color;
-            if (!string.IsNullOrEmpty(sessionColor))
+            // Apply color change to all existing sessions
+            if (newColor != null)
             {
-                ConfigService.SaveColor(_config, sessionName, sessionColor);
-                TmuxService.ApplyStatusColor(sessionName, sessionColor);
+                group.Color = newColor;
+                foreach (var sessionName in group.Sessions)
+                {
+                    ConfigService.SaveColor(_config, sessionName, newColor);
+                    TmuxService.ApplyStatusColor(sessionName, newColor);
+                }
+
+                changed = true;
             }
 
-            group.Sessions.Add(sessionName);
-            changed = true;
-        }
-
-        // Apply color change to all existing sessions
-        if (newColor != null)
-        {
-            group.Color = newColor;
-            foreach (var sessionName in group.Sessions)
+            if (changed)
             {
-                ConfigService.SaveColor(_config, sessionName, newColor);
-                TmuxService.ApplyStatusColor(sessionName, newColor);
+                ConfigService.SaveGroup(_config, group);
+                LoadSessions();
+                _state.GroupCursor = _state.Groups.FindIndex(g => g.Name == effectiveName);
+                if (_state.GroupCursor < 0)
+                    _state.GroupCursor = 0;
+                _state.SetStatus("Group updated");
             }
-
-            changed = true;
-        }
-
-        if (changed)
-        {
-            ConfigService.SaveGroup(_config, group);
-            LoadSessions();
-            _state.GroupCursor = _state.Groups.FindIndex(g => g.Name == effectiveName);
-            if (_state.GroupCursor < 0)
-                _state.GroupCursor = 0;
-            _state.SetStatus("Group updated");
-        }
-        else
-        {
-            _state.SetStatus("No changes");
-        }
+            else
+            {
+                _state.SetStatus("No changes");
+            }
+        });
     }
 
     private void ToggleGridView()
@@ -1556,66 +1518,43 @@ public class App
             return;
         }
 
-        Console.CursorVisible = true;
-        Console.Clear();
-
-        // 1. Pick directory first — Cancel exits here
-        string? worktreeBranch = null;
-        var dir = PickDirectory(
-            onWorktreeBranchCreated: branch => worktreeBranch = branch);
-
-        if (dir == null)
+        RunFlow("New Session", () =>
         {
-            Console.CursorVisible = false;
-            _state.SetStatus("Cancelled");
-            return;
-        }
+            PrintStep(1, 4, "Directory");
+            string? worktreeBranch = null;
+            var dir = PickDirectory(
+                onWorktreeBranchCreated: branch => worktreeBranch = branch)
+                ?? throw new FlowCancelledException();
 
-        dir = ConfigService.ExpandPath(dir);
+            dir = ConfigService.ExpandPath(dir);
+            if (!Directory.Exists(dir))
+                throw new FlowCancelledException("Invalid directory");
 
-        if (!Directory.Exists(dir))
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus("Invalid directory");
-            return;
-        }
+            PrintStep(2, 4, "Name");
+            var defaultName = SanitizeTmuxSessionName(worktreeBranch ?? new DirectoryInfo(dir).Name);
+            var existingNames = new HashSet<string>(_state.Sessions.Select(s => s.Name), StringComparer.Ordinal);
+            defaultName = UniqueSessionName(defaultName, existingNames, " ");
+            var name = PromptWithDefault("Session name", defaultName);
 
-        // 2. Name — default to worktree branch or folder name, with numeric suffix if taken
-        var defaultName = SanitizeTmuxSessionName(worktreeBranch ?? new DirectoryInfo(dir).Name);
-        var existingNames = new HashSet<string>(_state.Sessions.Select(s => s.Name), StringComparer.Ordinal);
-        defaultName = UniqueSessionName(defaultName, existingNames, " ");
-        var name = AnsiConsole.Prompt(
-            new TextPrompt<string>("[grey70]Session name[/][grey70]:[/]")
-                .DefaultValue(defaultName)
-                .PromptStyle(new Style(Color.White)));
+            PrintStep(3, 4, "Description");
+            var description = PromptOptional("Description", null);
 
-        // 3. Description
-        var description = AnsiConsole.Prompt(
-            new TextPrompt<string>("[grey70]Description[/] [grey](optional)[/][grey70]:[/]")
-                .AllowEmpty()
-                .PromptStyle(new Style(Color.White)));
+            PrintStep(4, 4, "Color");
+            var color = PickColor();
 
-        // 4. Color
-        var color = PickColor();
+            var error = TmuxService.CreateSession(name, dir);
+            if (error != null)
+                throw new FlowCancelledException(error);
 
-        var error = TmuxService.CreateSession(name, dir);
-        if (error == null)
-        {
             if (!string.IsNullOrWhiteSpace(description))
                 ConfigService.SaveDescription(_config, name, description);
             if (color != null)
                 ConfigService.SaveColor(_config, name, color);
             TmuxService.ApplyStatusColor(name, color ?? "grey42");
             TmuxService.AttachSession(name);
-        }
-        else
-        {
-            _state.SetStatus(error);
-        }
-
-        Console.CursorVisible = false;
-        LoadSessions();
-        _lastSelectedSession = null;
+            LoadSessions();
+            _lastSelectedSession = null;
+        });
     }
 
     private void CreateNewGroup()
@@ -1626,44 +1565,39 @@ public class App
             return;
         }
 
-        Console.CursorVisible = true;
-        Console.Clear();
-
-        var basePath = ConfigService.ExpandPath(_config.WorktreeBasePath);
-        var hasExistingWorktrees = Directory.Exists(basePath) && ScanWorktreeFeatures(basePath).Count > 0;
-        var hasGitRepos = _config.FavoriteFolders.Any(f => GitService.IsGitRepo(ConfigService.ExpandPath(f.Path)));
-
-        var modePrompt = new SelectionPrompt<string>()
-            .Title("[grey70]Create group from[/]")
-            .HighlightStyle(new Style(Color.White, Color.Grey70));
-
-        if (hasExistingWorktrees)
-            modePrompt.AddChoice("Existing worktree feature");
-        if (hasGitRepos)
-            modePrompt.AddChoice("New worktrees (pick repos)");
-        modePrompt.AddChoices("Manual (pick directories)", _cancelChoice);
-
-        var mode = AnsiConsole.Prompt(modePrompt);
-        if (mode == _cancelChoice)
+        RunFlow("New Group", () =>
         {
-            Console.CursorVisible = false;
-            _state.SetStatus("Cancelled");
-            return;
-        }
+            var basePath = ConfigService.ExpandPath(_config.WorktreeBasePath);
+            var hasExistingWorktrees = Directory.Exists(basePath) && ScanWorktreeFeatures(basePath).Count > 0;
+            var hasGitRepos = _config.FavoriteFolders.Any(f => GitService.IsGitRepo(ConfigService.ExpandPath(f.Path)));
 
-        if (mode.StartsWith("Existing"))
-        {
-            CreateGroupFromWorktree(basePath);
-            return;
-        }
+            var modePrompt = new SelectionPrompt<string>()
+                .Title("[grey70]Create group from[/]")
+                .HighlightStyle(new Style(Color.White, Color.Grey70));
 
-        if (mode.StartsWith("New worktrees"))
-        {
-            CreateGroupFromNewWorktrees();
-            return;
-        }
+            if (hasExistingWorktrees)
+                modePrompt.AddChoice("Existing worktree feature");
+            if (hasGitRepos)
+                modePrompt.AddChoice("New worktrees (pick repos)");
+            modePrompt.AddChoices("Manual (pick directories)", _cancelChoice);
 
-        CreateGroupManually();
+            var mode = AnsiConsole.Prompt(modePrompt);
+            if (mode == _cancelChoice) throw new FlowCancelledException();
+
+            if (mode.StartsWith("Existing"))
+            {
+                CreateGroupFromWorktree(basePath);
+                return;
+            }
+
+            if (mode.StartsWith("New worktrees"))
+            {
+                CreateGroupFromNewWorktrees();
+                return;
+            }
+
+            CreateGroupManually();
+        });
     }
 
     private void CreateGroupFromWorktree(string basePath)
@@ -1672,42 +1606,29 @@ public class App
         var activeGroupNames = new HashSet<string>(_config.Groups.Keys);
         var available = features.Where(f => !activeGroupNames.Contains(f.Name)).ToList();
         if (available.Count == 0)
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus("All worktrees already have active groups");
-            return;
-        }
+            throw new FlowCancelledException("All worktrees already have active groups");
 
+        PrintStep(1, 2, "Worktree");
         var prompt = new SelectionPrompt<string>()
             .Title("[grey70]Select a worktree feature[/]")
             .HighlightStyle(new Style(Color.White, Color.Grey70));
 
-        prompt.AddChoice(_cancelChoice);
         foreach (var f in available)
         {
             var repos = string.Join(", ", f.Repos.Keys);
             prompt.AddChoice($"{f.Name} - {f.Description} ({repos})");
         }
+        prompt.AddChoice(_cancelChoice);
 
         var selected = AnsiConsole.Prompt(prompt);
-        if (selected == _cancelChoice)
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus("Cancelled");
-            return;
-        }
+        if (selected == _cancelChoice) throw new FlowCancelledException();
 
         var selectedName = selected.Split(" - ")[0];
-        var feature = available.FirstOrDefault(f => f.Name == selectedName);
-        if (feature == null)
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus("Feature not found");
-            return;
-        }
+        var feature = available.FirstOrDefault(f => f.Name == selectedName)
+            ?? throw new FlowCancelledException("Feature not found");
 
+        PrintStep(2, 2, "Color");
         var color = PickColor();
-        Console.CursorVisible = false;
 
         var sessionNames = new List<string>();
         foreach (var (repoName, repoPath) in feature.Repos)
@@ -1715,10 +1636,7 @@ public class App
             var sessionName = SanitizeTmuxSessionName($"{feature.Name}-{repoName}");
             var error = TmuxService.CreateSession(sessionName, repoPath);
             if (error != null)
-            {
-                _state.SetStatus($"Failed to create session '{sessionName}': {error}");
-                return;
-            }
+                throw new FlowCancelledException($"Failed to create session '{sessionName}': {error}");
 
             if (color != null)
             {
@@ -1748,12 +1666,9 @@ public class App
             .ToList();
 
         if (gitFavorites.Count < 2)
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus("Need at least 2 git repos in favorites");
-            return;
-        }
+            throw new FlowCancelledException("Need at least 2 git repos in favorites");
 
+        PrintStep(1, 3, "Repositories");
         var selectedRepos = AnsiConsole.Prompt(
             new MultiSelectionPrompt<string>()
                 .Title("[grey70]Select repos[/]")
@@ -1763,34 +1678,18 @@ public class App
                 .AddChoices(gitFavorites.Select(f => $"{f.Name}  [grey50]{f.Path}[/]")));
 
         if (selectedRepos.Count < 2)
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus("Groups need at least 2 repos");
-            return;
-        }
+            throw new FlowCancelledException("Groups need at least 2 repos");
 
-        var featureName = AnsiConsole.Prompt(
-            new TextPrompt<string>("[grey70]Feature name[/] [grey](used for branch + folder)[/][grey70]:[/]")
-                .AllowEmpty()
-                .PromptStyle(new Style(Color.White)));
-
-        if (string.IsNullOrWhiteSpace(featureName))
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus("Cancelled");
-            return;
-        }
+        PrintStep(2, 3, "Feature name");
+        var featureName = RequireText("[grey70]Feature name[/] [grey](used for branch + folder)[/][grey70]:[/]");
 
         var sanitizedName = SanitizeTmuxSessionName(featureName);
         var branchName = GitService.SanitizeBranchName(featureName);
 
         if (_config.Groups.ContainsKey(sanitizedName))
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus($"Group '{sanitizedName}' already exists");
-            return;
-        }
+            throw new FlowCancelledException($"Group '{sanitizedName}' already exists");
 
+        PrintStep(3, 3, "Color");
         var color = PickColor();
 
         var basePath = ConfigService.ExpandPath(_config.WorktreeBasePath);
@@ -1835,27 +1734,17 @@ public class App
             });
 
         if (error != null)
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus(error);
-            return;
-        }
+            throw new FlowCancelledException(error);
 
-        // Generate .feature-context.json
         WriteFeatureContext(featurePath, featureName, worktrees);
 
-        // Create sessions
-        Console.CursorVisible = false;
         var sessionNames = new List<string>();
         foreach (var (repoName, worktreePath) in worktrees)
         {
             var sessionName = SanitizeTmuxSessionName($"{sanitizedName}-{repoName}");
             var sessionError = TmuxService.CreateSession(sessionName, worktreePath);
             if (sessionError != null)
-            {
-                _state.SetStatus($"Failed to create session '{sessionName}': {sessionError}");
-                return;
-            }
+                throw new FlowCancelledException($"Failed to create session '{sessionName}': {sessionError}");
 
             if (color != null)
             {
@@ -1897,27 +1786,14 @@ public class App
 
     private void CreateGroupManually()
     {
-        var name = AnsiConsole.Prompt(
-            new TextPrompt<string>("[grey70]Group name[/] [grey](empty to cancel)[/][grey70]:[/]")
-                .AllowEmpty()
-                .PromptStyle(new Style(Color.White)));
-
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus("Cancelled");
-            return;
-        }
-
+        PrintStep(1, 3, "Name");
+        var name = RequireText("[grey70]Group name:[/]");
         name = SanitizeTmuxSessionName(name);
 
         if (_config.Groups.ContainsKey(name))
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus($"Group '{name}' already exists");
-            return;
-        }
+            throw new FlowCancelledException($"Group '{name}' already exists");
 
+        PrintStep(2, 3, "Directories");
         var directories = new List<(string Dir, string Label)>();
 
         for (var i = 0; i < 9; i++)
@@ -1928,13 +1804,8 @@ public class App
             if (dir == null)
             {
                 if (directories.Count == 0)
-                {
-                    Console.CursorVisible = false;
-                    _state.SetStatus("Cancelled");
-                    return;
-                }
-
-                break; // Done adding sessions
+                    throw new FlowCancelledException();
+                break;
             }
 
             dir = ConfigService.ExpandPath(dir);
@@ -1964,14 +1835,10 @@ public class App
         }
 
         if (directories.Count < 2)
-        {
-            Console.CursorVisible = false;
-            _state.SetStatus("Groups need at least 2 sessions");
-            return;
-        }
+            throw new FlowCancelledException("Groups need at least 2 sessions");
 
+        PrintStep(3, 3, "Color");
         var color = PickColor();
-        Console.CursorVisible = false;
 
         var sessionNames = new List<string>();
         var usedNames = new HashSet<string>(StringComparer.Ordinal);
@@ -1981,10 +1848,7 @@ public class App
             usedNames.Add(sessionName);
             var error = TmuxService.CreateSession(sessionName, dir);
             if (error != null)
-            {
-                _state.SetStatus($"Failed to create session '{sessionName}': {error}");
-                return;
-            }
+                throw new FlowCancelledException($"Failed to create session '{sessionName}': {error}");
 
             if (color != null)
             {
@@ -2132,9 +1996,12 @@ public class App
         prompt.AddChoice("None");
         foreach (var (label, spectreColor) in _colorPalette)
             prompt.AddChoice($"[{spectreColor}]████[/]  {label}");
+        prompt.AddChoice(_cancelChoice);
 
         var selected = AnsiConsole.Prompt(prompt);
 
+        if (selected == _cancelChoice)
+            throw new FlowCancelledException();
         if (selected == "None")
             return null;
 
@@ -2149,6 +2016,90 @@ public class App
                 return spectreColor;
 
         return null;
+    }
+
+    private class FlowCancelledException(string status = "Cancelled") : Exception(status);
+
+    private void RunFlow(string title, Action body)
+    {
+        Console.CursorVisible = true;
+        _flowTitle = title;
+        Console.Clear();
+        AnsiConsole.MarkupLine($"[mediumpurple3 bold] Claude Command Center[/]  [grey]›[/]  [white bold]{Markup.Escape(title)}[/]\n");
+        try
+        {
+            body();
+        }
+        catch (FlowCancelledException ex)
+        {
+            _state.SetStatus(ex.Message);
+        }
+        finally
+        {
+            Console.CursorVisible = false;
+            _flowTitle = null;
+        }
+    }
+
+    private static string? _flowTitle;
+
+    private static void PrintStep(int current, int total, string label)
+    {
+        Console.Clear();
+        var title = _flowTitle ?? "";
+        AnsiConsole.MarkupLine($"[mediumpurple3 bold] Claude Command Center[/]  [grey]›[/]  [white bold]{Markup.Escape(title)}[/]\n");
+        var dots = new string[total];
+        for (var i = 0; i < total; i++)
+            dots[i] = i < current ? "[mediumpurple3]●[/]" : "[grey42]○[/]";
+        AnsiConsole.MarkupLine($"{string.Join(" ", dots)}  [grey50]Step {current}/{total} — {Markup.Escape(label)}[/]");
+    }
+
+    private static string RequireText(string prompt)
+    {
+        var result = AnsiConsole.Prompt(
+            new TextPrompt<string>(prompt)
+                .AllowEmpty()
+                .PromptStyle(new Style(Color.White)));
+        if (string.IsNullOrWhiteSpace(result))
+            throw new FlowCancelledException();
+        return result;
+    }
+
+    private string PromptWithDefault(string label, string defaultValue)
+    {
+        const string changeChoice = "Change...";
+        var selected = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title($"[grey70]{Markup.Escape(label)}[/]")
+                .HighlightStyle(new Style(Color.White, Color.Grey70))
+                .AddChoices(Markup.Escape(defaultValue), changeChoice, _cancelChoice));
+
+        if (selected == _cancelChoice) throw new FlowCancelledException();
+        if (selected == changeChoice)
+            return RequireText($"[grey70]{Markup.Escape(label)}:[/]");
+        return defaultValue;
+    }
+
+    private string PromptOptional(string label, string? currentValue)
+    {
+        const string changeChoice = "Change...";
+        var skipLabel = !string.IsNullOrWhiteSpace(currentValue)
+            ? $"Keep \"{Markup.Escape(currentValue)}\""
+            : "Skip";
+
+        var selected = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title($"[grey70]{Markup.Escape(label)}[/]")
+                .HighlightStyle(new Style(Color.White, Color.Grey70))
+                .AddChoices(skipLabel, changeChoice, _cancelChoice));
+
+        if (selected == _cancelChoice) throw new FlowCancelledException();
+        if (selected == changeChoice)
+            return AnsiConsole.Prompt(
+                new TextPrompt<string>($"[grey70]{Markup.Escape(label)}:[/]")
+                    .AllowEmpty()
+                    .PromptStyle(new Style(Color.White)));
+        return "";
     }
 
     private const string _customPathChoice = "Custom path...";
@@ -2480,7 +2431,6 @@ public class App
         if (session == null)
             return;
 
-        // Find groups that don't already contain this session
         var eligible = _state.Groups
             .Where(g => !g.Sessions.Contains(session.Name))
             .ToList();
@@ -2491,48 +2441,36 @@ public class App
             return;
         }
 
-        Console.CursorVisible = true;
-        Console.Clear();
-
-        var prompt = new SelectionPrompt<string>()
-            .Title($"[grey70]Move[/] [white]'{Markup.Escape(session.Name)}'[/] [grey70]to group[/]")
-            .HighlightStyle(new Style(Color.White, Color.Grey70));
-
-        prompt.AddChoice(_cancelChoice);
-        foreach (var g in eligible)
-            prompt.AddChoice($"{Markup.Escape(g.Name)} ({g.Sessions.Count} sessions)");
-
-        var selected = AnsiConsole.Prompt(prompt);
-        Console.CursorVisible = false;
-
-        if (selected == _cancelChoice)
+        RunFlow($"Move Session — {session.Name}", () =>
         {
-            _state.SetStatus("Cancelled");
-            return;
-        }
+            var prompt = new SelectionPrompt<string>()
+                .Title($"[grey70]Move[/] [white]'{Markup.Escape(session.Name)}'[/] [grey70]to group[/]")
+                .HighlightStyle(new Style(Color.White, Color.Grey70));
 
-        // Extract group name from the selection (everything before the last " (N sessions)")
-        var groupName = selected[..selected.LastIndexOf(" (")];
-        var group = _state.Groups.FirstOrDefault(g => g.Name == groupName);
-        if (group == null)
-        {
-            _state.SetStatus("Group not found");
-            return;
-        }
+            foreach (var g in eligible)
+                prompt.AddChoice($"{Markup.Escape(g.Name)} ({g.Sessions.Count} sessions)");
+            prompt.AddChoice(_cancelChoice);
 
-        group.Sessions.Add(session.Name);
-        ConfigService.SaveGroup(_config, group);
+            var selected = AnsiConsole.Prompt(prompt);
+            if (selected == _cancelChoice) throw new FlowCancelledException();
 
-        // Apply group color to the session if it doesn't have one
-        if (!string.IsNullOrEmpty(group.Color) && !_config.SessionColors.ContainsKey(session.Name))
-        {
-            ConfigService.SaveColor(_config, session.Name, group.Color);
-            TmuxService.ApplyStatusColor(session.Name, group.Color);
-        }
+            var groupName = selected[..selected.LastIndexOf(" (")];
+            var group = _state.Groups.FirstOrDefault(g => g.Name == groupName)
+                ?? throw new FlowCancelledException("Group not found");
 
-        LoadSessions();
-        _lastSelectedSession = null;
-        _state.SetStatus($"Moved to '{groupName}'");
+            group.Sessions.Add(session.Name);
+            ConfigService.SaveGroup(_config, group);
+
+            if (!string.IsNullOrEmpty(group.Color) && !_config.SessionColors.ContainsKey(session.Name))
+            {
+                ConfigService.SaveColor(_config, session.Name, group.Color);
+                TmuxService.ApplyStatusColor(session.Name, group.Color);
+            }
+
+            LoadSessions();
+            _lastSelectedSession = null;
+            _state.SetStatus($"Moved to '{groupName}'");
+        });
     }
 
     private void SendQuickKey(string key)
@@ -2570,37 +2508,26 @@ public class App
         if (session == null)
             return;
 
-        Console.CursorVisible = true;
-        Console.Clear();
-
-        var escapedName = Markup.Escape(session.Name);
-        AnsiConsole.MarkupLine($"[grey70 bold]Edit session[/] [white]'{escapedName}'[/] [grey](empty = keep current)[/]\n");
-
-        var newName = AnsiConsole.Prompt(
-            new TextPrompt<string>($"[grey70]Name[/] [grey50]({escapedName})[/][grey70]:[/]")
-                .AllowEmpty()
-                .PromptStyle(new Style(Color.White)));
-
-        var currentDesc = session.Description ?? "";
-        var descHint = string.IsNullOrWhiteSpace(currentDesc) ? "none" : Markup.Escape(currentDesc);
-        var newDesc = AnsiConsole.Prompt(
-            new TextPrompt<string>($"[grey70]Description[/] [grey50]({descHint})[/][grey70]:[/]")
-                .AllowEmpty()
-                .PromptStyle(new Style(Color.White)));
-
-        var newColor = PickColor();
-
-        Console.CursorVisible = false;
-
-        var currentName = session.Name;
-        var changed = false;
-
-        // Apply name change
-        if (!string.IsNullOrWhiteSpace(newName) && newName != currentName)
+        RunFlow($"Edit Session — {session.Name}", () =>
         {
-            var renameError = TmuxService.RenameSession(currentName, newName);
-            if (renameError == null)
+            PrintStep(1, 3, "Name");
+            var newName = PromptOptional("Name", session.Name);
+
+            PrintStep(2, 3, "Description");
+            var newDesc = PromptOptional("Description", session.Description);
+
+            PrintStep(3, 3, "Color");
+            var newColor = PickColor();
+
+            var currentName = session.Name;
+            var changed = false;
+
+            if (!string.IsNullOrWhiteSpace(newName) && newName != currentName)
             {
+                var renameError = TmuxService.RenameSession(currentName, newName);
+                if (renameError != null)
+                    throw new FlowCancelledException(renameError);
+
                 ConfigService.RenameDescription(_config, currentName, newName);
                 ConfigService.RenameColor(_config, currentName, newName);
                 ConfigService.RenameExcluded(_config, currentName, newName);
@@ -2608,36 +2535,29 @@ public class App
                 currentName = newName;
                 changed = true;
             }
+
+            if (!string.IsNullOrWhiteSpace(newDesc))
+            {
+                ConfigService.SaveDescription(_config, currentName, newDesc);
+                changed = true;
+            }
+
+            if (newColor != null)
+            {
+                ConfigService.SaveColor(_config, currentName, newColor);
+                TmuxService.ApplyStatusColor(currentName, newColor);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                LoadSessions();
+                _state.SetStatus("Session updated");
+            }
             else
             {
-                _state.SetStatus(renameError);
-                return;
+                _state.SetStatus("No changes");
             }
-        }
-
-        // Apply description change
-        if (!string.IsNullOrWhiteSpace(newDesc))
-        {
-            ConfigService.SaveDescription(_config, currentName, newDesc);
-            changed = true;
-        }
-
-        // Apply color change
-        if (newColor != null)
-        {
-            ConfigService.SaveColor(_config, currentName, newColor);
-            TmuxService.ApplyStatusColor(currentName, newColor);
-            changed = true;
-        }
-
-        if (changed)
-        {
-            LoadSessions();
-            _state.SetStatus("Session updated");
-        }
-        else
-        {
-            _state.SetStatus("No changes");
-        }
+        });
     }
 }
