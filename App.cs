@@ -248,19 +248,22 @@ public class App(bool mobileMode = false)
 
     private bool UpdateCapturedPane()
     {
-        // Snapshot waiting state before detection
+        // Snapshot waiting/idle state before detection
         var wasWaiting = _state.Sessions
             .Where(s => !s.IsExcluded)
             .ToDictionary(s => s.Name, s => s.IsWaitingForInput);
+        var wasIdle = _state.Sessions
+            .Where(s => !s.IsExcluded)
+            .ToDictionary(s => s.Name, s => s.IsIdle);
 
         // Refresh waiting-for-input status on all sessions (single tmux call)
         TmuxService.DetectWaitingForInputBatch(_state.Sessions);
         _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput && !s.IsIdle && !s.IsDead);
 
         // Detect false -> true transitions and notify.
-        // Skip the first 8 polls (~4 seconds) so sessions have time to establish their
+        // Skip the first 6 polls (~3 seconds) so sessions have time to establish their
         // baseline waiting state — avoids a burst of notifications on startup.
-        if (_startupPollCount > 7)
+        if (_startupPollCount > 5)
         {
             var selectedName = _state.GetSelectedSession()?.Name;
             var transitioned = _state.Sessions
@@ -302,10 +305,16 @@ public class App(bool mobileMode = false)
             return true;
         }
 
-        if (session == null)
-            return false;
+        // Re-render if any session's status icon changed (waiting/idle transitions)
+        var statusChanged = _state.Sessions.Any(s =>
+            !s.IsExcluded
+            && ((wasWaiting.TryGetValue(s.Name, out var ww) && ww != s.IsWaitingForInput)
+                || (wasIdle.TryGetValue(s.Name, out var wi) && wi != s.IsIdle)));
 
-        var changed = false;
+        if (session == null)
+            return statusChanged;
+
+        var changed = statusChanged;
         var newContent = TmuxService.CapturePaneContent(session.Name);
         if (newContent != _capturedPane)
         {

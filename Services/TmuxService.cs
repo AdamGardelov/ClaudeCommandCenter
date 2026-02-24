@@ -52,8 +52,8 @@ public abstract partial class TmuxService
         RunTmux("resize-window", "-t", sessionName, "-x", width.ToString(), "-y", height.ToString());
 
     // Number of consecutive stable polls before marking as "waiting for input"
-    // 6 polls × 500ms = 3 seconds — avoids false positives from short pauses between tool calls
-    private const int _stableThreshold = 6;
+    // 4 polls × 500ms = 2 seconds — avoids false positives from short pauses between tool calls
+    private const int _stableThreshold = 4;
 
     public static void DetectWaitingForInputBatch(List<TmuxSession> sessions)
     {
