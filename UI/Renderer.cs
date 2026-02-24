@@ -1089,12 +1089,21 @@ public static class Renderer
                 var isOn = value == "ON";
                 var toggleColor = isOn ? "green" : "grey50";
                 var toggleText = isOn ? " ON " : " OFF";
-                var keyInfo = item.ActionId != null && config.Keybindings.TryGetValue(item.ActionId, out var kb)
-                    ? $"[grey50]({Markup.Escape(kb.Key ?? "?")})[/] " : "";
+
+                if (item.ActionId != null && config.Keybindings.TryGetValue(item.ActionId, out var kb))
+                {
+                    var keyDisplay = isSelected && state.IsSettingsRebinding
+                        ? "[yellow]Press a key...[/]"
+                        : $"[grey70][[{Markup.Escape(kb.Key ?? "?")}]][/]";
+
+                    if (isSelected)
+                        return new Markup($"[white on grey37] {label,-20} {keyDisplay}  [{toggleColor}]{toggleText}[/] [/]");
+                    return new Markup($" {label,-20} [grey70][[{Markup.Escape(kb.Key ?? "?")}]][/]  [{toggleColor}]{toggleText}[/]");
+                }
 
                 if (isSelected)
-                    return new Markup($"[white on grey37] {keyInfo}{label,-20} [{toggleColor}]{toggleText}[/] [/]");
-                return new Markup($" {keyInfo}{label,-20} [{toggleColor}]{toggleText}[/]");
+                    return new Markup($"[white on grey37] {label,-20} [{toggleColor}]{toggleText}[/] [/]");
+                return new Markup($" {label,-20} [{toggleColor}]{toggleText}[/]");
             }
 
             case SettingsItemType.Text:
@@ -1132,6 +1141,16 @@ public static class Renderer
 
     private static Markup BuildSettingsStatusBar(AppState state, List<SettingsItem> items)
     {
+        if (state.IsSettingsRebinding)
+        {
+            var statusMsg = state.SettingsEditBuffer.Length > 0
+                ? $" [yellow]{Markup.Escape(state.SettingsEditBuffer)}[/]  " : " ";
+            return new Markup(
+                statusMsg +
+                "[grey70 bold]Press a key[/][grey] to bind · [/]" +
+                "[grey70 bold]Esc[/][grey] cancel[/]");
+        }
+
         if (state.IsSettingsEditing)
         {
             var limit = state.SettingsEditBuffer.Length >= 200
@@ -1147,6 +1166,8 @@ public static class Renderer
             var item = items[state.SettingsItemCursor];
             itemHint = item.Type switch
             {
+                SettingsItemType.Toggle when item.ActionId != null =>
+                    "[grey70 bold]e[/][grey] rebind [/][grey70 bold]Enter[/][grey] toggle [/]",
                 SettingsItemType.Toggle => "[grey70 bold]Enter[/][grey] toggle [/]",
                 SettingsItemType.Text or SettingsItemType.Number =>
                     "[grey70 bold]Enter[/][grey] edit [/]",

@@ -658,6 +658,12 @@ public class App
         var currentCategory = categories[Math.Clamp(_state.SettingsCategory, 0, categories.Count - 1)];
         var items = currentCategory.BuildItems(_config);
 
+        if (_state.IsSettingsRebinding)
+        {
+            HandleSettingsRebindKey(key, items);
+            return;
+        }
+
         if (_state.IsSettingsEditing)
         {
             HandleSettingsEditKey(key, items);
@@ -730,6 +736,17 @@ public class App
                 return;
         }
 
+        // Keybinding rebind shortcut
+        if (_state.SettingsFocusRight && currentCategory.Name == "Keybindings" && key.KeyChar == 'e')
+        {
+            if (_state.SettingsItemCursor < items.Count && items[_state.SettingsItemCursor].ActionId != null)
+            {
+                _state.IsSettingsRebinding = true;
+                _state.SettingsEditBuffer = "";
+            }
+            return;
+        }
+
         // Favorites shortcuts
         if (_state.SettingsFocusRight && currentCategory.Name == "Favorites")
         {
@@ -779,6 +796,55 @@ public class App
                     _state.SettingsEditBuffer += key.KeyChar;
                 return;
         }
+    }
+
+    private void HandleSettingsRebindKey(ConsoleKeyInfo key, List<SettingsItem> items)
+    {
+        if (key.Key == ConsoleKey.Escape)
+        {
+            _state.IsSettingsRebinding = false;
+            _state.SettingsEditBuffer = "";
+            _state.SetStatus("Cancelled");
+            return;
+        }
+
+        // Determine the key string from the press
+        var newKey = key.Key switch
+        {
+            ConsoleKey.Enter => "Enter",
+            ConsoleKey.Spacebar => "Space",
+            ConsoleKey.Tab => "Tab",
+            _ when key.KeyChar >= '!' && key.KeyChar <= '~' => key.KeyChar.ToString(),
+            _ => null,
+        };
+
+        if (newKey == null)
+            return;
+
+        var item = items[_state.SettingsItemCursor];
+        var actionId = item.ActionId!;
+
+        // Check for conflicts with other enabled bindings
+        var bindings = KeyBindingService.Resolve(_config);
+        var conflict = bindings.FirstOrDefault(b => b.Enabled && b.Key == newKey && b.ActionId != actionId);
+
+        if (conflict != null)
+        {
+            var conflictLabel = _config.Keybindings.TryGetValue(conflict.ActionId, out var ckb)
+                ? ckb.Label ?? conflict.ActionId : conflict.ActionId;
+            _state.SettingsEditBuffer = $"'{newKey}' already bound to {conflictLabel}";
+            return;
+        }
+
+        // Apply the new key
+        if (_config.Keybindings.TryGetValue(actionId, out var kb))
+            kb.Key = newKey;
+
+        ConfigService.SaveConfig(_config);
+        RefreshKeybindings();
+        _state.IsSettingsRebinding = false;
+        _state.SettingsEditBuffer = "";
+        _state.SetStatus($"Bound to '{newKey}'");
     }
 
     private void ActivateSettingsItem(SettingsItem item)

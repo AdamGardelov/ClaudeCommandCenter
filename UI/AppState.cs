@@ -31,6 +31,7 @@ public class AppState
     public int SettingsItemCursor { get; set; }
     public bool SettingsFocusRight { get; set; }
     public bool IsSettingsEditing { get; set; }
+    public bool IsSettingsRebinding { get; set; }
     public string SettingsEditBuffer { get; set; } = "";
 
     // Diff overlay state
@@ -266,6 +267,7 @@ public class AppState
         SettingsItemCursor = 0;
         SettingsFocusRight = false;
         IsSettingsEditing = false;
+        IsSettingsRebinding = false;
         SettingsEditBuffer = "";
     }
 
@@ -273,6 +275,7 @@ public class AppState
     {
         ViewMode = ViewMode.List;
         IsSettingsEditing = false;
+        IsSettingsRebinding = false;
         SettingsEditBuffer = "";
     }
 
