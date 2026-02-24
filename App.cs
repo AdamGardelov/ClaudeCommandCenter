@@ -35,6 +35,7 @@ public class App(bool mobileMode = false)
     private bool _wantsUpdate;
     private int _lastGridWidth;
     private int _lastGridHeight;
+    private int _lastPreviewWidth;
     private int _startupPollCount;
 
     public void Run()
@@ -152,7 +153,10 @@ public class App(bool mobileMode = false)
             if (_state.ViewMode != ViewMode.Settings && _state.ViewMode != ViewMode.DiffOverlay && (DateTime.Now - _lastCapture).TotalMilliseconds > 500)
             {
                 if (!_state.MobileMode)
+                {
                     ResizeGridPanes();
+                    ResizePreviewPane();
+                }
                 if (UpdateCapturedPane())
                     Render();
                 _lastCapture = DateTime.Now;
@@ -302,6 +306,7 @@ public class App(bool mobileMode = false)
         if (sessionName != _lastSelectedSession)
         {
             _lastSelectedSession = sessionName;
+            _lastPreviewWidth = 0; // Force resize for newly selected session
             _capturedPane = session != null ? TmuxService.CapturePaneContent(session.Name) : null;
             return true;
         }
@@ -378,6 +383,25 @@ public class App(bool mobileMode = false)
             TmuxService.ResizeWindow(session.Name, targetWidth, targetHeight);
     }
 
+    private void ResizePreviewPane()
+    {
+        if (_state.ViewMode != ViewMode.List)
+            return;
+
+        var session = _state.GetSelectedSession();
+        if (session == null)
+            return;
+
+        // Match the width calculation in Renderer.BuildPreviewPanel
+        var targetWidth = Math.Max(20, Console.WindowWidth - 35 - 8);
+
+        if (targetWidth == _lastPreviewWidth)
+            return;
+
+        _lastPreviewWidth = targetWidth;
+        TmuxService.ResizeWindow(session.Name, targetWidth, Console.WindowHeight);
+    }
+
     private void Render()
     {
         Console.SetCursorPosition(0, 0);
@@ -428,6 +452,7 @@ public class App(bool mobileMode = false)
             _lastSelectedSession = null;
             _lastGridWidth = 0;
             _lastGridHeight = 0;
+            _lastPreviewWidth = 0;
             return;
         }
 
@@ -797,6 +822,7 @@ public class App(bool mobileMode = false)
             }
 
             _state.ViewMode = ViewMode.Grid;
+            _lastPreviewWidth = 0;
             ResizeGridPanes();
         }
         else
@@ -804,6 +830,7 @@ public class App(bool mobileMode = false)
             _state.ViewMode = ViewMode.List;
             _lastGridWidth = 0;
             _lastGridHeight = 0;
+            _lastPreviewWidth = 0;
         }
 
         _lastSelectedSession = null;
