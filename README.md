@@ -1,10 +1,17 @@
 # Claude Command Center (ccc)
 
 
-![Dash](Images/1.png)
-![Grid](Images/2.png)
+### List View
+![List View](Images/1.png)
+
+### Grid View
+![Grid View](Images/2.png)
+
+### Settings
 ![Settings](Images/3.png)
-![Diffview](Images/6.png)
+
+### Diff View
+![Diff View](Images/6.png)
 
 A terminal UI for managing multiple Claude Code sessions via tmux. Lists your sessions, shows a live preview of the selected pane, and highlights sessions waiting for input.
 
