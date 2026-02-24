@@ -3,30 +3,6 @@ using ClaudeCommandCenter.Services;
 
 namespace ClaudeCommandCenter.UI;
 
-public enum SettingsItemType
-{
-    Text,
-    Toggle,
-    Number,
-    Action,
-}
-
-public class SettingsItem
-{
-    public required string Label { get; init; }
-    public SettingsItemType Type { get; init; }
-    public Func<CccConfig, string>? GetValue { get; init; }
-    public Action<CccConfig, string>? SetValue { get; init; }
-    public string? ActionId { get; init; }
-}
-
-public class SettingsCategory
-{
-    public required string Name { get; init; }
-    public required string Icon { get; init; }
-    public required Func<CccConfig, List<SettingsItem>> BuildItems { get; init; }
-}
-
 public static class SettingsDefinition
 {
     public static List<SettingsCategory> GetCategories() =>

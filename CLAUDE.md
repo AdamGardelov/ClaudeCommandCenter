@@ -60,6 +60,11 @@ The monolith. Contains all application logic: session/group CRUD, directory pick
 - `SessionGroup`: Named group of session names with optional worktree path
 - `KeyBinding` / `KeyBindingConfig`: Resolved keybinding and JSON config override
 
+## Code Style
+
+- **One type per file.** Each class, enum, record, and struct gets its own file. Nested types are fine.
+- **Folder names describe contents.** `Models/`, `Services/`, `UI/` — a file's folder should tell you what kind of thing it is.
+
 ## Key Patterns
 
 **Session naming**: `SanitizeTmuxSessionName()` replaces dots/colons with underscores (tmux requirement). Group sessions named `{groupName}-{repoName}`.
