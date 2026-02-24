@@ -1,19 +1,23 @@
 # Claude Command Center (ccc)
 
-
 ### List View
+
 ![List View](Images/1.png)
 
 ### Grid View
+
 ![Grid View](Images/2.png)
 
 ### Settings
+
 ![Settings](Images/3.png)
 
 ### Diff View
+
 ![Diff View](Images/6.png)
 
-A terminal UI for managing multiple Claude Code sessions via tmux. Lists your sessions, shows a live preview of the selected pane, and highlights sessions waiting for input.
+A terminal UI for managing multiple Claude Code sessions via tmux. Lists your sessions, shows a live preview of the
+selected pane, and highlights sessions waiting for input.
 
 ## Requirements
 
@@ -37,7 +41,8 @@ Download and install the latest release automatically:
 curl -fsSL https://raw.githubusercontent.com/AdamGardelov/ClaudeCommandCenter/main/install.sh | bash
 ```
 
-This detects your platform (Linux, macOS Intel/ARM), downloads the latest release, and installs to `/usr/local/bin`. Windows users should run this inside WSL.
+This detects your platform (Linux, macOS Intel/ARM), downloads the latest release, and installs to `/usr/local/bin`.
+Windows users should run this inside WSL.
 
 ### From Source
 
@@ -70,7 +75,8 @@ Run outside of tmux:
 ccc
 ```
 
-The app shows a split-panel TUI — sessions on the left, a live pane preview on the right. Sessions that have been idle for a few seconds are marked with `!` (waiting for input).
+The app shows a split-panel TUI — sessions on the left, a live pane preview on the right. Sessions that have been idle
+for a few seconds are marked with `!` (waiting for input).
 
 ### Mobile Mode
 
@@ -80,7 +86,8 @@ For SSH clients on phones (e.g. Termius), launch with the `-m` flag:
 ccc -m
 ```
 
-Mobile mode uses a single-column layout optimized for narrow terminals — no preview panel, no grid view. You get a scrollable session list, a 3-line detail bar for the selected session, and a context-sensitive status bar.
+Mobile mode uses a single-column layout optimized for narrow terminals — no preview panel, no grid view. You get a
+scrollable session list, a 3-line detail bar for the selected session, and a context-sensitive status bar.
 
 <p>
   <img src="Images/4.jpg" alt="Phone mode" width="350">
@@ -100,7 +107,8 @@ Mobile mode uses a single-column layout optimized for narrow terminals — no pr
 
 ### Grid View
 
-Press `G` to toggle a grid view that displays all sessions as rich panels in an auto-scaling grid. Each cell shows the session name, status, git branch, working directory, and live pane output.
+Press `G` to toggle a grid view that displays all sessions as rich panels in an auto-scaling grid. Each cell shows the
+session name, status, git branch, working directory, and live pane output.
 
 The grid auto-scales based on session count:
 
@@ -150,13 +158,17 @@ Press `Enter` on a grid cell to attach directly to that session. Press `G` to sw
 | `Y` / `N` / `S` | Approve, reject, send (same as list view) |
 | `q`             | Quit                                      |
 
-Arrow keys always work for navigation regardless of configuration. When you attach to a session, detach with the standard tmux prefix (`Ctrl-b d`) to return to the command center.
+Arrow keys always work for navigation regardless of configuration. When you attach to a session, detach with the
+standard tmux prefix (`Ctrl-b d`) to return to the command center.
 
 ### Git Diff View
 
-Press `D` to toggle diff mode. When active, the preview panel shows a `git diff --stat` summary of all changes since the session started (auto-refreshes every 5 seconds). Press `Enter` while diff mode is on to open a fullscreen scrollable overlay with the complete colorized diff.
+Press `D` to toggle diff mode. When active, the preview panel shows a `git diff --stat` summary of all changes since the
+session started (auto-refreshes every 5 seconds). Press `Enter` while diff mode is on to open a fullscreen scrollable
+overlay with the complete colorized diff.
 
-CCC records each session's HEAD commit at creation time as a baseline. All diffs are computed against this baseline, so you see exactly what changed during the session.
+CCC records each session's HEAD commit at creation time as a baseline. All diffs are computed against this baseline, so
+you see exactly what changed during the session.
 
 #### Diff Overlay Controls
 
@@ -187,7 +199,8 @@ Press `s` to open the in-app settings page. Navigate categories on the left, set
 
 CCC can create git worktrees directly — no external tooling needed.
 
-**Single session:** When creating a new session (`n`), the directory picker shows worktree entries below your favorites. Picking one creates a worktree using the session name as the branch name — zero extra steps.
+**Single session:** When creating a new session (`n`), the directory picker shows worktree entries below your favorites.
+Picking one creates a worktree using the session name as the branch name — zero extra steps.
 
 ```
 Pick a directory:
@@ -199,7 +212,9 @@ Pick a directory:
   Cancel
 ```
 
-**Group with worktrees:** When creating a group (`g`), select "New worktrees (pick repos)" to multi-select repos, enter a feature name, and CCC creates worktrees for all of them in a shared folder with a `.feature-context.json` for discoverability.
+**Group with worktrees:** When creating a group (`g`), select "New worktrees (pick repos)" to multi-select repos, enter
+a feature name, and CCC creates worktrees for all of them in a shared folder with a `.feature-context.json` for
+discoverability.
 
 ```
 ~/Dev/Wint/worktrees/
@@ -213,15 +228,22 @@ These worktrees are also discoverable via the "Existing worktree feature" option
 
 ### Configuration
 
-Create `~/.ccc/config.json` to configure favorite folders. When creating a new session, you'll be able to pick from this list instead of typing a full path.
+Create `~/.ccc/config.json` to configure favorite folders. When creating a new session, you'll be able to pick from this
+list instead of typing a full path.
 
 ```json
 {
-  "favoriteFolders": [
-    { "name": "Core", "path": "~/Dev/Wint/Core" },
-    { "name": "Salary", "path": "~/Dev/Wint/Wint.Salary" }
-  ],
-  "ideCommand": "rider"
+    "favoriteFolders": [
+        {
+            "name": "Core",
+            "path": "~/Dev/Wint/Core"
+        },
+        {
+            "name": "Salary",
+            "path": "~/Dev/Wint/Wint.Salary"
+        }
+    ],
+    "ideCommand": "rider"
 }
 ```
 
@@ -238,15 +260,24 @@ The config file is created automatically on first run. Tilde (`~`) paths are exp
 
 #### Keybinding Configuration
 
-Override default keybindings by adding a `keybindings` object to your config. Only include the actions you want to change — missing entries keep their defaults.
+Override default keybindings by adding a `keybindings` object to your config. Only include the actions you want to
+change — missing entries keep their defaults.
 
 ```json
 {
-  "keybindings": {
-    "approve": { "key": "y", "label": "yes" },
-    "delete-session": { "enabled": false },
-    "open-ide": { "key": "e", "label": "editor" }
-  }
+    "keybindings": {
+        "approve": {
+            "key": "y",
+            "label": "yes"
+        },
+        "delete-session": {
+            "enabled": false
+        },
+        "open-ide": {
+            "key": "e",
+            "label": "editor"
+        }
+    }
 }
 ```
 
@@ -284,4 +315,5 @@ Each override supports three optional fields:
 
 Arrow keys always work for navigation regardless of configuration.
 
-**Adding a new keybinding (developer guide):** Add a default entry in `KeyBindingService.Defaults` and a case in `App.DispatchAction()`.
+**Adding a new keybinding (developer guide):** Add a default entry in `KeyBindingService.Defaults` and a case in
+`App.DispatchAction()`.

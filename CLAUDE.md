@@ -14,11 +14,13 @@ No test project exists. Verify changes by building and manual testing.
 
 ## Architecture
 
-**Claude Command Center (ccc)** is a terminal dashboard for managing multiple Claude Code tmux sessions. Single .NET 10 executable, single dependency (Spectre.Console).
+**Claude Command Center (ccc)** is a terminal dashboard for managing multiple Claude Code tmux sessions. Single .NET 10
+executable, single dependency (Spectre.Console).
 
 ### Core Loop
 
 `Program.cs` creates `App`, which runs a polling-based TUI main loop (30ms tick):
+
 1. Process keyboard input via `HandleKey()` → `DispatchAction()`
 2. Refresh pane captures every 500ms
 3. Detect waiting-for-input sessions via content hash stability
@@ -26,11 +28,14 @@ No test project exists. Verify changes by building and manual testing.
 
 ### App.cs (~800 lines)
 
-Orchestration shell. Contains the main loop, pane capture, key routing, cursor movement, and lifecycle management. Delegates domain logic to handlers.
+Orchestration shell. Contains the main loop, pane capture, key routing, cursor movement, and lifecycle management.
+Delegates domain logic to handlers.
 
-- **Key dispatch** (`DispatchAction`): Maps action IDs to handler methods. Actions defined in `KeyBindingService.Defaults`.
+- **Key dispatch** (`DispatchAction`): Maps action IDs to handler methods. Actions defined in
+  `KeyBindingService.Defaults`.
 - **Main loop** (`MainLoop`): 30ms tick, polls pane content, checks update status, re-renders on state changes.
-- **Pane capture** (`UpdateCapturedPane`): Detects waiting-for-input transitions, notifies, captures pane content for preview.
+- **Pane capture** (`UpdateCapturedPane`): Detects waiting-for-input transitions, notifies, captures pane content for
+  preview.
 
 ### Handlers/
 
@@ -42,7 +47,8 @@ Orchestration shell. Contains the main loop, pane capture, key routing, cursor m
 | `SessionHandler`  | Session CRUD — create, delete, edit, attach, exclude, send keys, open folder/IDE                                                     |
 | `GroupHandler`    | Group CRUD — create (3 modes: existing worktree, new worktrees, manual), delete, edit, move session to group                         |
 
-Handlers receive `AppState` and `CccConfig` via primary constructors, plus `Action` callbacks for cross-cutting concerns (reload sessions, render, reset caches).
+Handlers receive `AppState` and `CccConfig` via primary constructors, plus `Action` callbacks for cross-cutting
+concerns (reload sessions, render, reset caches).
 
 ### Services (all static)
 
@@ -81,31 +87,40 @@ Handlers receive `AppState` and `CccConfig` via primary constructors, plus `Acti
 ## Code Style
 
 - **One type per file.** Each class, enum, record, struct, and exception gets its own file. No nested types.
-- **Folder names describe contents.** `Models/`, `Enums/`, `Services/`, `UI/` — a file's folder should tell you what kind of thing it is.
+- **Folder names describe contents.** `Models/`, `Enums/`, `Services/`, `UI/` — a file's folder should tell you what
+  kind of thing it is.
 
 ## Key Patterns
 
-**Session naming**: `SanitizeTmuxSessionName()` replaces dots/colons with underscores (tmux requirement). Group sessions named `{groupName}-{repoName}`.
+**Session naming**: `SanitizeTmuxSessionName()` replaces dots/colons with underscores (tmux requirement). Group sessions
+named `{groupName}-{repoName}`.
 
-**Waiting-for-input detection**: Hash pane content (excluding status bar), track consecutive stable polls. After threshold, mark session idle with `!` indicator.
+**Waiting-for-input detection**: Hash pane content (excluding status bar), track consecutive stable polls. After
+threshold, mark session idle with `!` indicator.
 
-**Grid view**: Auto-scales 1x1 to 3x3 (max 9 sessions). Resizes tmux panes to match grid cell width before capture to prevent line-wrap artifacts.
+**Grid view**: Auto-scales 1x1 to 3x3 (max 9 sessions). Resizes tmux panes to match grid cell width before capture to
+prevent line-wrap artifacts.
 
-**Worktree creation**: `PickDirectory` shows `⑂` entries for git repo favorites. Creates worktrees at `worktreeBasePath/{branchName}/{repoName}/`. Group flow generates `.feature-context.json` for later discovery.
+**Worktree creation**: `PickDirectory` shows `⑂` entries for git repo favorites. Creates worktrees at
+`worktreeBasePath/{branchName}/{repoName}/`. Group flow generates `.feature-context.json` for later discovery.
 
-**Color system**: 13 predefined Spectre.Console colors. Converted to RGB hex for tmux `status-style`. "Just give me one" picks random unused color.
+**Color system**: 13 predefined Spectre.Console colors. Converted to RGB hex for tmux `status-style`. "Just give me one"
+picks random unused color.
 
 ## Config
 
-Stored at `~/.ccc/config.json`. Key fields: `favoriteFolders`, `ideCommand`, `groups`, `sessionColors`, `sessionDescriptions`, `worktreeBasePath`, `keybindings`, `excludedSessions`.
+Stored at `~/.ccc/config.json`. Key fields: `favoriteFolders`, `ideCommand`, `groups`, `sessionColors`,
+`sessionDescriptions`, `worktreeBasePath`, `keybindings`, `excludedSessions`.
 
 ## CI/CD
 
-`.github/workflows/release.yml`: Push to main triggers semantic version bump (based on commit prefixes), cross-platform build (linux-x64, osx-arm64, osx-x64), and GitHub release with binary archives.
+`.github/workflows/release.yml`: Push to main triggers semantic version bump (based on commit prefixes), cross-platform
+build (linux-x64, osx-arm64, osx-x64), and GitHub release with binary archives.
 
 ## Documentation
 
-Always update `README.md` when adding or changing features. The README is the primary user-facing documentation — keybindings table, config options, and feature descriptions must stay in sync with the code.
+Always update `README.md` when adding or changing features. The README is the primary user-facing documentation —
+keybindings table, config options, and feature descriptions must stay in sync with the code.
 
 ## Version
 
