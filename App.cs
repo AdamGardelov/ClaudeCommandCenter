@@ -25,9 +25,6 @@ public class App
     private bool _wantsUpdate;
     private int _lastGridWidth;
     private int _lastGridHeight;
-    private string? _cachedDiffOutput;
-    private DateTime _lastDiffRefresh = DateTime.MinValue;
-    private string? _lastDiffSession;
     private bool _firstPollDone;
 
     public App(bool mobileMode = false)
@@ -300,25 +297,6 @@ public class App
             changed = true;
         }
 
-        // Refresh diff output when in diff mode
-        if (_state.DiffMode && _state.ViewMode == ViewMode.List)
-        {
-            var sessionChanged = session.Name != _lastDiffSession;
-            if (sessionChanged || (DateTime.Now - _lastDiffRefresh).TotalSeconds >= 5)
-            {
-                _lastDiffSession = session.Name;
-                _lastDiffRefresh = DateTime.Now;
-                string? newDiff = null;
-                if (session.CurrentPath != null && session.StartCommitSha != null)
-                    newDiff = GitService.GetDiffStat(session.CurrentPath, session.StartCommitSha);
-                if (newDiff != _cachedDiffOutput)
-                {
-                    _cachedDiffOutput = newDiff;
-                    changed = true;
-                }
-            }
-        }
-
         return changed;
     }
 
@@ -382,7 +360,7 @@ public class App
         else if (_state.ViewMode == ViewMode.DiffOverlay)
             AnsiConsole.Write(Renderer.BuildDiffOverlayLayout(_state));
         else
-            AnsiConsole.Write(Renderer.BuildLayout(_state, _capturedPane, _allCapturedPanes, _cachedDiffOutput));
+            AnsiConsole.Write(Renderer.BuildLayout(_state, _capturedPane, _allCapturedPanes));
     }
 
     private void HandleKey(ConsoleKeyInfo key)
@@ -487,6 +465,8 @@ public class App
         return key.Key switch
         {
             ConsoleKey.Enter => "Enter",
+            ConsoleKey.Spacebar => "Space",
+            ConsoleKey.Tab => "Tab",
             ConsoleKey.UpArrow => "UpArrow",
             ConsoleKey.DownArrow => "DownArrow",
             _ => key.KeyChar.ToString(),
@@ -539,22 +519,10 @@ public class App
                 SendText();
                 break;
             case "attach":
-                if (_state.DiffMode && _state.ViewMode == ViewMode.List)
-                    OpenDiffOverlay();
-                else
-                    AttachToSession();
+                AttachToSession();
                 break;
             case "toggle-diff":
-                _state.DiffMode = !_state.DiffMode;
-                if (_state.DiffMode)
-                {
-                    _lastDiffRefresh = DateTime.MinValue;
-                    _lastDiffSession = null;
-                }
-                else
-                {
-                    _cachedDiffOutput = null;
-                }
+                OpenDiffOverlay();
                 break;
             case "toggle-grid":
                 ToggleGridView();
@@ -830,9 +798,12 @@ public class App
         var item = items[_state.SettingsItemCursor];
         var actionId = item.ActionId!;
 
-        // Check for conflicts with other enabled bindings
+        // Check for conflicts with other enabled bindings (scoped: diff vs non-diff)
         var bindings = KeyBindingService.Resolve(_config);
-        var conflict = bindings.FirstOrDefault(b => b.Enabled && b.Key == newKey && b.ActionId != actionId);
+        var isDiffAction = actionId.StartsWith("diff-");
+        var conflict = bindings.FirstOrDefault(b =>
+            b.Enabled && b.Key == newKey && b.ActionId != actionId
+            && b.ActionId.StartsWith("diff-") == isDiffAction);
 
         if (conflict != null)
         {
@@ -1462,8 +1433,9 @@ public class App
             return;
         }
 
+        var stat = GitService.GetDiffStat(session.CurrentPath, session.StartCommitSha);
         var lines = fullDiff.Split('\n');
-        _state.EnterDiffOverlay(session.Name, session.GitBranch, _cachedDiffOutput, lines);
+        _state.EnterDiffOverlay(session.Name, session.GitBranch, stat, lines);
     }
 
     private void HandleDiffOverlayKey(ConsoleKeyInfo key)
@@ -1472,47 +1444,92 @@ public class App
         // viewport = terminal height - header(1) - status bar(1) - panel border(2) - stat section estimate
         var statLines = _state.DiffOverlayStatSummary?.Split('\n').Length ?? 0;
         var viewportHeight = Math.Max(1, Console.WindowHeight - 4 - statLines - 1); // -1 for separator
+        var maxScroll = Math.Max(0, totalLines - viewportHeight);
 
+        // Non-rebindable keys (always work)
         switch (key.Key)
         {
             case ConsoleKey.Escape:
                 _state.LeaveDiffOverlay();
                 return;
             case ConsoleKey.DownArrow:
-                _state.DiffScrollOffset = Math.Min(_state.DiffScrollOffset + 1, Math.Max(0, totalLines - viewportHeight));
+                JumpToNextFile(maxScroll);
                 return;
             case ConsoleKey.UpArrow:
-                _state.DiffScrollOffset = Math.Max(0, _state.DiffScrollOffset - 1);
+                JumpToPreviousFile();
                 return;
             case ConsoleKey.PageDown:
-                _state.DiffScrollOffset = Math.Min(_state.DiffScrollOffset + viewportHeight, Math.Max(0, totalLines - viewportHeight));
+                _state.DiffScrollOffset = Math.Min(_state.DiffScrollOffset + viewportHeight, maxScroll);
                 return;
             case ConsoleKey.PageUp:
                 _state.DiffScrollOffset = Math.Max(0, _state.DiffScrollOffset - viewportHeight);
                 return;
         }
 
-        switch (key.KeyChar)
+        // Rebindable keys (looked up from keybindings)
+        var keyId = ResolveKeyId(key);
+        var diffAction = _state.Keybindings
+            .FirstOrDefault(b => b.Enabled && b.ActionId.StartsWith("diff-") && b.Key == keyId)
+            ?.ActionId;
+
+        switch (diffAction)
         {
-            case 'q':
-                _state.LeaveDiffOverlay();
-                return;
-            case 'j':
-                _state.DiffScrollOffset = Math.Min(_state.DiffScrollOffset + 1, Math.Max(0, totalLines - viewportHeight));
-                return;
-            case 'k':
+            case "diff-scroll-down":
+                _state.DiffScrollOffset = Math.Min(_state.DiffScrollOffset + 1, maxScroll);
+                break;
+            case "diff-scroll-up":
                 _state.DiffScrollOffset = Math.Max(0, _state.DiffScrollOffset - 1);
-                return;
-            case ' ':
-                _state.DiffScrollOffset = Math.Min(_state.DiffScrollOffset + viewportHeight, Math.Max(0, totalLines - viewportHeight));
-                return;
-            case 'g':
+                break;
+            case "diff-page-down":
+                _state.DiffScrollOffset = Math.Min(_state.DiffScrollOffset + viewportHeight, maxScroll);
+                break;
+            case "diff-top":
                 _state.DiffScrollOffset = 0;
-                return;
-            case 'G':
-                _state.DiffScrollOffset = Math.Max(0, totalLines - viewportHeight);
-                return;
+                break;
+            case "diff-bottom":
+                _state.DiffScrollOffset = maxScroll;
+                break;
+            case "diff-close":
+                _state.LeaveDiffOverlay();
+                break;
         }
+    }
+
+    private void JumpToNextFile(int maxScroll)
+    {
+        var boundaries = _state.DiffFileBoundaries;
+        if (boundaries.Length == 0) return;
+
+        // Find the first file boundary after the current scroll position
+        foreach (var boundary in boundaries)
+        {
+            if (boundary > _state.DiffScrollOffset)
+            {
+                _state.DiffScrollOffset = Math.Min(boundary, maxScroll);
+                return;
+            }
+        }
+
+        // Already past last file — stay put
+    }
+
+    private void JumpToPreviousFile()
+    {
+        var boundaries = _state.DiffFileBoundaries;
+        if (boundaries.Length == 0) return;
+
+        // Find the last file boundary before the current scroll position
+        for (var i = boundaries.Length - 1; i >= 0; i--)
+        {
+            if (boundaries[i] < _state.DiffScrollOffset)
+            {
+                _state.DiffScrollOffset = boundaries[i];
+                return;
+            }
+        }
+
+        // Already before first file — jump to top
+        _state.DiffScrollOffset = 0;
     }
 
     private void RunUpdate()

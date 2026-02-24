@@ -226,7 +226,7 @@ public class AppState
 
     public string? LatestVersion { get; set; }
 
-    public bool DiffMode { get; set; }
+    public int[] DiffFileBoundaries { get; set; } = [];
 
     public List<KeyBinding> Keybindings { get; set; } = [];
 
@@ -248,16 +248,23 @@ public class AppState
         DiffOverlayBranch = branch;
         DiffOverlayStatSummary = stat;
         DiffOverlayLines = lines;
+
+        // Pre-compute file boundaries for arrow-key file navigation
+        var boundaries = new List<int>();
+        for (var i = 0; i < lines.Length; i++)
+            if (lines[i].StartsWith("diff --git "))
+                boundaries.Add(i);
+        DiffFileBoundaries = boundaries.ToArray();
     }
 
     public void LeaveDiffOverlay()
     {
         ViewMode = ViewMode.List;
-        DiffMode = false;
         DiffOverlayLines = [];
         DiffOverlaySessionName = null;
         DiffOverlayBranch = null;
         DiffOverlayStatSummary = null;
+        DiffFileBoundaries = [];
     }
 
     public void EnterSettings()

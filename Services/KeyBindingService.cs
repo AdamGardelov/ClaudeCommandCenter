@@ -170,6 +170,55 @@ public static class KeyBindingService
             CanDisable = false,
             StatusBarOrder = 99
         },
+        // Diff overlay actions (scoped — excluded from global keyMap)
+        new()
+        {
+            ActionId = "diff-scroll-down",
+            Key = "j",
+            Label = "scroll ↓",
+            CanDisable = true,
+            StatusBarOrder = -1
+        },
+        new()
+        {
+            ActionId = "diff-scroll-up",
+            Key = "k",
+            Label = "scroll ↑",
+            CanDisable = true,
+            StatusBarOrder = -1
+        },
+        new()
+        {
+            ActionId = "diff-page-down",
+            Key = "Space",
+            Label = "page ↓",
+            CanDisable = true,
+            StatusBarOrder = -1
+        },
+        new()
+        {
+            ActionId = "diff-top",
+            Key = "g",
+            Label = "top",
+            CanDisable = true,
+            StatusBarOrder = -1
+        },
+        new()
+        {
+            ActionId = "diff-bottom",
+            Key = "G",
+            Label = "bottom",
+            CanDisable = true,
+            StatusBarOrder = -1
+        },
+        new()
+        {
+            ActionId = "diff-close",
+            Key = "q",
+            Label = "back",
+            CanDisable = true,
+            StatusBarOrder = -1
+        },
     ];
 
     public static List<KeyBinding> Resolve(CccConfig config)
@@ -225,7 +274,7 @@ public static class KeyBindingService
     public static Dictionary<string, string> BuildKeyMap(List<KeyBinding> bindings)
     {
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var b in bindings.Where(b => b.Enabled))
+        foreach (var b in bindings.Where(b => b.Enabled && !b.ActionId.StartsWith("diff-")))
             map[b.Key] = b.ActionId;
 
         return map;

@@ -16,7 +16,7 @@ public static class Renderer
     }
 
     public static IRenderable BuildLayout(AppState state, string? capturedPane,
-        Dictionary<string, string>? allCapturedPanes = null, string? diffOutput = null)
+        Dictionary<string, string>? allCapturedPanes = null)
     {
         if (state.MobileMode)
             return BuildMobileLayout(state);
@@ -52,7 +52,7 @@ public static class Renderer
             new Layout("Preview"));
 
         layout["Sessions"].Update(BuildSessionPanel(state));
-        layout["Preview"].Update(BuildPreviewPanel(state, capturedPane, diffOutput: diffOutput));
+        layout["Preview"].Update(BuildPreviewPanel(state, capturedPane));
         layout["StatusBar"].Update(BuildStatusBar(state));
 
         return layout;
@@ -221,7 +221,7 @@ public static class Renderer
     }
 
     private static Panel BuildPreviewPanel(AppState state, string? capturedPane,
-        TmuxSession? sessionOverride = null, string? diffOutput = null)
+        TmuxSession? sessionOverride = null)
     {
         var session = sessionOverride ?? state.GetSelectedSession();
 
@@ -265,11 +265,7 @@ public static class Renderer
         rows.Add(new Markup($" [{labelColor}]Status:[/]   {StatusLabel(session)}"));
         rows.Add(new Rule().RuleStyle(Style.Parse(session.ColorTag ?? "grey42")));
 
-        if (state.DiffMode)
-        {
-            RenderDiffContent(rows, session, diffOutput);
-        }
-        else if (!string.IsNullOrWhiteSpace(capturedPane))
+        if (!string.IsNullOrWhiteSpace(capturedPane))
         {
             // Preview width = terminal width - session panel (35) - borders (6) - padding (2)
             var maxWidth = Math.Max(20, Console.WindowWidth - 35 - 8);
@@ -297,46 +293,10 @@ public static class Renderer
 
         var headerColor = session.ColorTag ?? "grey70";
         var headerName = Markup.Escape(session.Name);
-        var headerSuffix = state.DiffMode ? " [grey50]· diff[/]" : "";
         return new Panel(new Rows(rows))
-            .Header($"[{headerColor} bold] {headerName} [/]{headerSuffix}")
+            .Header($"[{headerColor} bold] {headerName} [/]")
             .BorderColor(borderColor)
             .Expand();
-    }
-
-    private static void RenderDiffContent(List<IRenderable> rows, TmuxSession session, string? diffOutput)
-    {
-        if (session.CurrentPath == null)
-        {
-            rows.Add(new Markup(" [grey]Session not running[/]"));
-            return;
-        }
-
-        if (session.StartCommitSha == null)
-        {
-            rows.Add(new Markup(" [grey]No baseline commit recorded[/]"));
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(diffOutput))
-        {
-            rows.Add(new Markup(" [grey]No changes since session start[/]"));
-            return;
-        }
-
-        var availableLines = Math.Max(1, Console.WindowHeight - 9);
-        var lines = diffOutput.Split('\n');
-        var limit = Math.Min(lines.Length, availableLines);
-        var overflow = lines.Length - limit;
-
-        for (var i = 0; i < limit; i++)
-        {
-            var line = lines[i];
-            rows.Add(FormatDiffStatLine(line));
-        }
-
-        if (overflow > 0)
-            rows.Add(new Markup($" [grey]... and {overflow} more line(s)[/]"));
     }
 
     private static Markup FormatDiffStatLine(string line)
@@ -573,21 +533,29 @@ public static class Renderer
         if (status != null)
             return new Markup($" [yellow]{Markup.Escape(status)}[/]");
 
+        var kb = state.Keybindings;
         var groupName = state.ActiveGroup != null ? Markup.Escape(state.ActiveGroup) : "group";
 
-        return new Markup(
-            $" [mediumpurple3]{groupName}[/] [grey]│[/] " +
-            "[grey70 bold]arrows[/][grey] navigate [/]" +
-            "[grey]│[/] " +
-            "[grey70 bold]Enter[/][grey] attach [/]" +
-            "[grey70 bold]Y[/][grey] approve [/]" +
-            "[grey70 bold]N[/][grey] reject [/]" +
-            "[grey70 bold]S[/][grey] send [/]" +
-            "[grey70 bold]d[/][grey] kill [/]" +
-            "[grey70 bold]x[/][grey] hide [/]" +
-            "[grey]│[/] " +
-            "[grey70 bold]Esc[/][grey] back [/]" +
-            "[grey70 bold]q[/][grey] quit [/]");
+        var parts = new List<string>
+        {
+            $" [mediumpurple3]{groupName}[/]",
+            "[grey]│[/]",
+            "[grey70 bold]arrows[/][grey] navigate [/]",
+            "[grey]│[/]",
+        };
+
+        parts.Add(HintFor(kb, "attach"));
+        parts.Add(HintFor(kb, "approve"));
+        parts.Add(HintFor(kb, "reject"));
+        parts.Add(HintFor(kb, "send-text", "send"));
+        parts.Add(HintFor(kb, "delete-session", "kill"));
+        parts.Add(HintFor(kb, "toggle-exclude", "hide"));
+        parts.Add("[grey]│[/]");
+        parts.Add("[grey70 bold]Esc[/][grey] back [/]");
+        parts.Add(HintFor(kb, "quit"));
+
+        parts.RemoveAll(string.IsNullOrEmpty);
+        return new Markup(string.Join(" ", parts));
     }
 
     private static Markup BuildGridStatusBar(AppState state)
@@ -599,17 +567,25 @@ public static class Renderer
         if (status != null)
             return new Markup($" [yellow]{Markup.Escape(status)}[/]");
 
-        return new Markup(
-            " [grey70 bold]arrows[/][grey] navigate [/]" +
-            "[grey]│[/] " +
-            "[grey70 bold]Enter[/][grey] attach [/]" +
-            "[grey70 bold]Y[/][grey] approve [/]" +
-            "[grey70 bold]N[/][grey] reject [/]" +
-            "[grey70 bold]S[/][grey] send [/]" +
-            "[grey]│[/] " +
-            "[grey70 bold]x[/][grey] hide [/]" +
-            "[grey70 bold]G[/][grey] list view [/]" +
-            "[grey70 bold]q[/][grey] quit [/]");
+        var kb = state.Keybindings;
+
+        var parts = new List<string>
+        {
+            " [grey70 bold]arrows[/][grey] navigate [/]",
+            "[grey]│[/]",
+        };
+
+        parts.Add(HintFor(kb, "attach"));
+        parts.Add(HintFor(kb, "approve"));
+        parts.Add(HintFor(kb, "reject"));
+        parts.Add(HintFor(kb, "send-text", "send"));
+        parts.Add("[grey]│[/]");
+        parts.Add(HintFor(kb, "toggle-exclude", "hide"));
+        parts.Add(HintFor(kb, "toggle-grid", "list view"));
+        parts.Add(HintFor(kb, "quit"));
+
+        parts.RemoveAll(string.IsNullOrEmpty);
+        return new Markup(string.Join(" ", parts));
     }
 
     private static Markup BuildInputStatusBar(AppState state)
@@ -772,27 +748,39 @@ public static class Renderer
         if (status != null)
             return new Markup($" [yellow]{Markup.Escape(status)}[/]");
 
+        var kb = state.Keybindings;
         var session = state.GetSelectedSession();
         var parts = new List<string>();
 
         if (session?.IsWaitingForInput == true)
         {
-            parts.Add("[grey70 bold]Y[/][grey] approve [/]");
-            parts.Add("[grey70 bold]N[/][grey] reject [/]");
+            parts.Add(HintFor(kb, "approve"));
+            parts.Add(HintFor(kb, "reject"));
         }
 
-        parts.Add("[grey70 bold]S[/][grey] send [/]");
-        parts.Add("[grey70 bold]Enter[/][grey] attach [/]");
+        parts.Add(HintFor(kb, "send-text", "send"));
+        parts.Add(HintFor(kb, "attach"));
 
         if (state.Groups.Count > 0)
-            parts.Add("[grey70 bold]g[/][grey] filter [/]");
+            parts.Add("[grey70 bold]g[/][grey] filter [/]"); // hardcoded — not a rebindable action
 
-        parts.Add("[grey70 bold]q[/][grey] quit[/]");
+        parts.Add(HintFor(kb, "quit"));
 
+        parts.RemoveAll(string.IsNullOrEmpty);
         return new Markup(" " + string.Join(" ", parts));
     }
 
     // ── Shared helpers ──────────────────────────────────────────────────
+
+    private static string HintFor(IReadOnlyList<KeyBinding> bindings, string actionId,
+        string? labelOverride = null)
+    {
+        var binding = bindings.FirstOrDefault(b => b.ActionId == actionId);
+        if (binding == null || !binding.Enabled)
+            return "";
+        var label = labelOverride ?? binding.Label ?? actionId;
+        return $"[grey70 bold]{Markup.Escape(binding.Key)}[/][grey] {Markup.Escape(label)} [/]";
+    }
 
     private static string ShortenPath(string path)
     {
@@ -838,17 +826,9 @@ public static class Renderer
             prevGroup = barGroup;
 
             var dimmed = onGroup && sessionOnlyActions.Contains(b.ActionId);
-            var active = b.ActionId == "toggle-diff" && state.DiffMode;
-            var keyColor = dimmed ? "grey35" : active ? "white bold" : "grey70 bold";
-            var labelColor = dimmed ? "grey27" : active ? "white underline" : "grey";
+            var keyColor = dimmed ? "grey35" : "grey70 bold";
+            var labelColor = dimmed ? "grey27" : "grey";
             parts.Add($"[{keyColor}]{Markup.Escape(b.Key)}[/][{labelColor}] {Markup.Escape(b.Label!)} [/]");
-        }
-
-        // Diff overlay hint when diff mode is active
-        if (state.DiffMode)
-        {
-            parts.Add("[grey]│[/]");
-            parts.Add("[white bold]Enter[/][white] open diff [/]");
         }
 
         // Tab hint when groups exist
@@ -894,7 +874,7 @@ public static class Renderer
 
         layout["Header"].Update(BuildDiffOverlayHeader(state));
         layout["Main"].Update(BuildDiffOverlayContent(state));
-        layout["StatusBar"].Update(BuildDiffOverlayStatusBar());
+        layout["StatusBar"].Update(BuildDiffOverlayStatusBar(state));
 
         return layout;
     }
@@ -906,6 +886,18 @@ public static class Renderer
             ? $" [aqua]{Markup.Escape(state.DiffOverlayBranch)}[/]"
             : "";
 
+        // File position indicator (e.g., "file 3/7")
+        var fileInfo = "";
+        if (state.DiffFileBoundaries.Length > 0)
+        {
+            var currentFile = 0;
+            for (var i = 0; i < state.DiffFileBoundaries.Length; i++)
+                if (state.DiffFileBoundaries[i] <= state.DiffScrollOffset)
+                    currentFile = i + 1;
+            if (currentFile > 0)
+                fileInfo = $" [grey50]file {currentFile}/{state.DiffFileBoundaries.Length}[/]";
+        }
+
         var totalLines = state.DiffOverlayLines.Length;
         var viewportHeight = Math.Max(1, Console.WindowHeight - 4);
         var maxScroll = Math.Max(0, totalLines - viewportHeight);
@@ -913,7 +905,7 @@ public static class Renderer
         var scrollInfo = $"[grey50]{state.DiffScrollOffset + 1}-{Math.Min(state.DiffScrollOffset + viewportHeight, totalLines)}/{totalLines} ({pct}%)[/]";
 
         var left = new Markup($"[mediumpurple3 bold] Diff[/] [white bold]{Markup.Escape(name)}[/]{branch}");
-        var right = new Markup($"{scrollInfo} ");
+        var right = new Markup($"{fileInfo} {scrollInfo} ");
 
         return new Columns(left, right) { Expand = true };
     }
@@ -958,33 +950,88 @@ public static class Renderer
             line = line[..maxWidth];
 
         var escaped = Markup.Escape(line);
+        var pad = new string(' ', Math.Max(0, maxWidth - line.Length));
 
+        // File header — prominent separator with background
+        if (line.StartsWith("diff --git "))
+        {
+            // Extract just the file path (b/path)
+            var parts = line.Split(" b/");
+            var fileName = parts.Length > 1 ? "b/" + parts[^1] : line[("diff --git ").Length..];
+            return new Markup($"[bold white on grey19] {Markup.Escape(fileName)}{new string(' ', Math.Max(0, maxWidth - fileName.Length - 1))}[/]");
+        }
+
+        // File metadata — de-emphasized
         if (line.StartsWith("+++") || line.StartsWith("---"))
-            return new Markup($"[white bold]{escaped}[/]");
-        if (line.StartsWith('+'))
-            return new Markup($"[green]{escaped}[/]");
-        if (line.StartsWith('-'))
-            return new Markup($"[red]{escaped}[/]");
-        if (line.StartsWith("@@"))
-            return new Markup($"[cyan]{escaped}[/]");
-        if (line.StartsWith("diff "))
-            return new Markup($"[yellow bold]{escaped}[/]");
+            return new Markup($"[grey42]{escaped}[/]");
         if (line.StartsWith("index "))
-            return new Markup($"[grey50]{escaped}[/]");
+            return new Markup($"[grey30]{escaped}[/]");
 
-        return new Markup($"[grey70]{escaped}[/]");
+        // Additions — green text on subtle dark background
+        if (line.StartsWith('+'))
+            return new Markup($"[green on #1a2e1a]{escaped}{pad}[/]");
+
+        // Deletions — red text on subtle dark background
+        if (line.StartsWith('-'))
+            return new Markup($"[red on #2e1a1a]{escaped}{pad}[/]");
+
+        // Hunk header — cyan markers, grey function context
+        if (line.StartsWith("@@"))
+        {
+            // Split at closing @@ to separate line range from function context
+            var endMarker = line.IndexOf("@@", 2);
+            if (endMarker > 0)
+            {
+                var marker = Markup.Escape(line[..(endMarker + 2)]);
+                var context = Markup.Escape(line[(endMarker + 2)..]);
+                return new Markup($"[cyan]{marker}[/][italic grey50]{context}[/]");
+            }
+            return new Markup($"[cyan]{escaped}[/]");
+        }
+
+        // Context lines — subtle
+        return new Markup($"[grey58]{escaped}[/]");
     }
 
-    private static Markup BuildDiffOverlayStatusBar()
+    private static Markup BuildDiffOverlayStatusBar(AppState state)
     {
-        return new Markup(
-            " [grey70 bold]j/k[/][grey] scroll [/]" +
-            "[grey70 bold]Space/PgDn[/][grey] page down [/]" +
-            "[grey70 bold]PgUp[/][grey] page up [/]" +
-            "[grey70 bold]g[/][grey] top [/]" +
-            "[grey70 bold]G[/][grey] bottom [/]" +
-            "[grey]│[/] " +
-            "[grey70 bold]Esc/q[/][grey] back [/]");
+        var kb = state.Keybindings;
+        var parts = new List<string>();
+
+        // File navigation with arrows
+        parts.Add("[grey70 bold]↑/↓[/][grey] file [/]");
+
+        // Scroll: combine up/down keys
+        var scrollDown = kb.FirstOrDefault(b => b.ActionId == "diff-scroll-down" && b.Enabled);
+        var scrollUp = kb.FirstOrDefault(b => b.ActionId == "diff-scroll-up" && b.Enabled);
+        if (scrollDown != null || scrollUp != null)
+        {
+            var keys = new[] { scrollDown?.Key, scrollUp?.Key }
+                .Where(k => k != null).Select(k => Markup.Escape(k!));
+            parts.Add($"[grey70 bold]{string.Join("/", keys)}[/][grey] scroll [/]");
+        }
+
+        // Page down: rebindable key + PgDn fallback
+        var pageDown = kb.FirstOrDefault(b => b.ActionId == "diff-page-down" && b.Enabled);
+        if (pageDown != null)
+            parts.Add($"[grey70 bold]{Markup.Escape(pageDown.Key)}/PgDn[/][grey] page down [/]");
+        else
+            parts.Add("[grey70 bold]PgDn[/][grey] page down [/]");
+
+        parts.Add("[grey70 bold]PgUp[/][grey] page up [/]");
+        parts.Add(HintFor(kb, "diff-top"));
+        parts.Add(HintFor(kb, "diff-bottom"));
+        parts.Add("[grey]│[/]");
+
+        // Close: Esc always works + rebindable key
+        var close = kb.FirstOrDefault(b => b.ActionId == "diff-close" && b.Enabled);
+        if (close != null)
+            parts.Add($"[grey70 bold]Esc/{Markup.Escape(close.Key)}[/][grey] back [/]");
+        else
+            parts.Add("[grey70 bold]Esc[/][grey] back [/]");
+
+        parts.RemoveAll(string.IsNullOrEmpty);
+        return new Markup(" " + string.Join(" ", parts));
     }
 
     // ── Settings View ──────────────────────────────────────────────
