@@ -4,6 +4,7 @@
 ![Dash](Images/1.png)
 ![Grid](Images/2.png)
 ![Settings](Images/3.png)
+![Diffview](Images/6.png)
 
 A terminal UI for managing multiple Claude Code sessions via tmux. Lists your sessions, shows a live preview of the selected pane, and highlights sessions waiting for input.
 
