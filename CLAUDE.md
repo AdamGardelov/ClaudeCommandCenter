@@ -24,35 +24,45 @@ No test project exists. Verify changes by building and manual testing.
 3. Detect waiting-for-input sessions via content hash stability
 4. Re-render with `Renderer.BuildLayout()`
 
-### App.cs (~2000 lines)
+### App.cs (~800 lines)
 
-The monolith. Contains all application logic: session/group CRUD, directory picker, worktree creation, input handling, grid management, and update checking. Key sections:
+Orchestration shell. Contains the main loop, pane capture, key routing, cursor movement, and lifecycle management. Delegates domain logic to handlers.
 
-- **Session creation** (`CreateNewSession`): name → description → color → pick directory → `tmux new-session ... claude`
-- **Group creation** (`CreateNewGroup`): 3 modes — existing worktree features, new worktrees from repos, manual directory picks
-- **Directory picker** (`PickDirectory`): Shows favorites + worktree entries (prefixed with `⑂`). Worktree entries create git worktrees using the session name as branch.
-- **Key dispatch** (`DispatchAction`): Maps action IDs to methods. Actions defined in `KeyBindingService.Defaults`.
-- **Worktree scanning** (`ScanWorktreeFeatures`): Reads `.feature-context.json` or auto-detects git subdirectories under `worktreeBasePath`.
+- **Key dispatch** (`DispatchAction`): Maps action IDs to handler methods. Actions defined in `KeyBindingService.Defaults`.
+- **Main loop** (`MainLoop`): 30ms tick, polls pane content, checks update status, re-renders on state changes.
+- **Pane capture** (`UpdateCapturedPane`): Detects waiting-for-input transitions, notifies, captures pane content for preview.
+
+### Handlers/
+
+| Handler           | Purpose                                                                                                                              |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| `FlowHelper`      | Flow UI scaffolding (RunFlow, prompts, pickers), static utilities (sanitize names, worktree scanning, IDE launch, key ID resolution) |
+| `DiffHandler`     | Diff overlay view — open, scroll, jump between files                                                                                 |
+| `SettingsHandler` | Settings view — navigation, editing, rebinding, favorites, config file opening                                                       |
+| `SessionHandler`  | Session CRUD — create, delete, edit, attach, exclude, send keys, open folder/IDE                                                     |
+| `GroupHandler`    | Group CRUD — create (3 modes: existing worktree, new worktrees, manual), delete, edit, move session to group                         |
+
+Handlers receive `AppState` and `CccConfig` via primary constructors, plus `Action` callbacks for cross-cutting concerns (reload sessions, render, reset caches).
 
 ### Services (all static)
 
-| Service | Purpose |
-|---------|---------|
-| `TmuxService` | All tmux interaction — create/kill/attach sessions, capture panes, send keys, detect waiting-for-input |
-| `ConfigService` | JSON persistence to `~/.ccc/config.json`. Handles session metadata, groups, keybindings |
-| `KeyBindingService` | Resolves keybindings from defaults + config overrides. Builds key→action map |
-| `GitService` | `git worktree add`, `IsGitRepo`, `FetchPrune`, branch name sanitization |
-| `UpdateChecker` | Async GitHub API check for newer releases |
-| `CrashLog` | Exception logging to `~/.ccc/crash.log` with auto-trim |
+| Service             | Purpose                                                                                                |
+|---------------------|--------------------------------------------------------------------------------------------------------|
+| `TmuxService`       | All tmux interaction — create/kill/attach sessions, capture panes, send keys, detect waiting-for-input |
+| `ConfigService`     | JSON persistence to `~/.ccc/config.json`. Handles session metadata, groups, keybindings                |
+| `KeyBindingService` | Resolves keybindings from defaults + config overrides. Builds key→action map                           |
+| `GitService`        | `git worktree add`, `IsGitRepo`, `FetchPrune`, branch name sanitization                                |
+| `UpdateChecker`     | Async GitHub API check for newer releases                                                              |
+| `CrashLog`          | Exception logging to `~/.ccc/crash.log` with auto-trim                                                 |
 
 ### UI Layer
 
-| File | Purpose |
-|------|---------|
-| `AppState` | Mutable state container: sessions, cursor, view mode, input buffer, groups |
-| `Renderer` | Stateless rendering — builds Spectre.Console `IRenderable` from `AppState` |
-| `AnsiParser` | Converts tmux ANSI escape sequences to Spectre styles (256-color + truecolor) |
-| `SettingsDefinition` | Builds settings categories and items for the settings view |
+| File                 | Purpose                                                                       |
+|----------------------|-------------------------------------------------------------------------------|
+| `AppState`           | Mutable state container: sessions, cursor, view mode, input buffer, groups    |
+| `Renderer`           | Stateless rendering — builds Spectre.Console `IRenderable` from `AppState`    |
+| `AnsiParser`         | Converts tmux ANSI escape sequences to Spectre styles (256-color + truecolor) |
+| `SettingsDefinition` | Builds settings categories and items for the settings view                    |
 
 ### Models
 

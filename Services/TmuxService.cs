@@ -95,7 +95,7 @@ public abstract partial class TmuxService
     }
 
     // Matches status bar timer suffixes like "45s", "24m24s", "1h2m", "1h30m24s"
-    private static readonly Regex _statusBarTimerPattern = MyRegex();
+    private static readonly Regex _statusBarTimerPattern = StatusBarTimerRegex();
 
     private static string GetContentAboveStatusBar(string paneOutput)
     {
@@ -369,5 +369,5 @@ public abstract partial class TmuxService
     }
 
     [GeneratedRegex(@"\d+[hms]\d*[ms]?\s*$", RegexOptions.Compiled)]
-    private static partial Regex MyRegex();
+    private static partial Regex StatusBarTimerRegex();
 }

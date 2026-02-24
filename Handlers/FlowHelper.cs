@@ -1,0 +1,451 @@
+using System.Diagnostics;
+using System.Text.Json;
+using ClaudeCommandCenter.Models;
+using ClaudeCommandCenter.Services;
+using ClaudeCommandCenter.UI;
+using Spectre.Console;
+
+namespace ClaudeCommandCenter.Handlers;
+
+public class FlowHelper(CccConfig config)
+{
+    private static string? _flowTitle;
+
+    public const string CancelChoice = "Cancel";
+    public const string CustomPathChoice = "Custom path...";
+    public const string WorktreePrefix = "\u2442 "; // ⑂
+
+    public static readonly (string Label, string SpectreColor)[] ColorPalette =
+    [
+        ("Steel Blue", "SteelBlue"),
+        ("Indian Red", "IndianRed"),
+        ("Medium Purple", "MediumPurple"),
+        ("Cadet Blue", "CadetBlue"),
+        ("Light Salmon", "LightSalmon3"),
+        ("Dark Sea Green", "DarkSeaGreen"),
+        ("Dark Khaki", "DarkKhaki"),
+        ("Plum", "Plum4"),
+        ("Rosy Brown", "RosyBrown"),
+        ("Grey Violet", "MediumPurple4"),
+        ("Slate", "LightSlateGrey"),
+        ("Dusty Teal", "DarkCyan"),
+        ("Thistle", "Thistle3"),
+    ];
+
+    public static void RunFlow(string title, Action body, AppState state)
+    {
+        Console.CursorVisible = true;
+        _flowTitle = title;
+        Console.Clear();
+        AnsiConsole.MarkupLine($"[mediumpurple3 bold] Claude Command Center[/]  [grey]\u203a[/]  [white bold]{Markup.Escape(title)}[/]\n");
+        try
+        {
+            body();
+        }
+        catch (FlowCancelledException ex)
+        {
+            state.SetStatus(ex.Message);
+        }
+        finally
+        {
+            Console.CursorVisible = false;
+            _flowTitle = null;
+        }
+    }
+
+    public static void PrintStep(int current, int total, string label)
+    {
+        Console.Clear();
+        var title = _flowTitle ?? "";
+        AnsiConsole.MarkupLine($"[mediumpurple3 bold] Claude Command Center[/]  [grey]\u203a[/]  [white bold]{Markup.Escape(title)}[/]\n");
+        var dots = new string[total];
+        for (var i = 0; i < total; i++)
+            dots[i] = i < current ? "[mediumpurple3]\u25cf[/]" : "[grey42]\u25cb[/]";
+        AnsiConsole.MarkupLine($"{string.Join(" ", dots)}  [grey50]Step {current}/{total} \u2014 {Markup.Escape(label)}[/]");
+    }
+
+    public static string RequireText(string prompt)
+    {
+        var result = AnsiConsole.Prompt(
+            new TextPrompt<string>(prompt)
+                .AllowEmpty()
+                .PromptStyle(new Style(Color.White)));
+        if (string.IsNullOrWhiteSpace(result))
+            throw new FlowCancelledException();
+        return result;
+    }
+
+    public static string? PromptCustomPath()
+    {
+        var path = AnsiConsole.Prompt(
+            new TextPrompt<string>("[grey70]Working directory:[/]")
+                .AllowEmpty()
+                .PromptStyle(new Style(Color.White)));
+
+        return string.IsNullOrWhiteSpace(path) ? null : path;
+    }
+
+    public static string? CreateWorktreeWithProgress(string repoPath, string worktreeDest, string branchName)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(worktreeDest)!);
+
+        string? error = null;
+        AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .SpinnerStyle(new Style(Color.Grey70))
+            .Start($"[grey70]Creating worktree [white]{branchName}[/]...[/]", _ =>
+            {
+                GitService.FetchPrune(repoPath);
+                error = GitService.CreateWorktree(repoPath, worktreeDest, branchName);
+            });
+
+        if (error != null)
+        {
+            AnsiConsole.MarkupLine($"[red]Worktree failed:[/] {Markup.Escape(error)}");
+            AnsiConsole.MarkupLine("[grey](Press any key)[/]");
+            Console.ReadKey(true);
+            return null;
+        }
+
+        return worktreeDest;
+    }
+
+    public static string SanitizeTmuxSessionName(string name)
+    {
+        // tmux silently replaces dots and colons with underscores in session names
+        return name.Replace('.', '_').Replace(':', '_');
+    }
+
+    public static string UniqueSessionName(string baseName, ICollection<string> existing, string separator = "-")
+    {
+        if (!existing.Contains(baseName))
+            return baseName;
+
+        for (var i = 2; i <= 99; i++)
+        {
+            var candidate = $"{baseName}{separator}{i}";
+            if (!existing.Contains(candidate))
+                return candidate;
+        }
+
+        return baseName; // Shouldn't happen with max 8 sessions
+    }
+
+    public static List<WorktreeFeature> ScanWorktreeFeatures(string basePath)
+    {
+        var features = new List<WorktreeFeature>();
+
+        foreach (var dir in Directory.GetDirectories(basePath))
+        {
+            var contextFile = Path.Combine(dir, ".feature-context.json");
+            if (File.Exists(contextFile))
+            {
+                try
+                {
+                    var json = File.ReadAllText(contextFile);
+                    using var doc = JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+
+                    var name = root.GetProperty("feature").GetString() ?? "";
+                    var description = root.GetProperty("description").GetString() ?? "";
+
+                    var repos = new Dictionary<string, string>();
+                    if (root.TryGetProperty("repos", out var reposEl))
+                    {
+                        foreach (var repo in reposEl.EnumerateObject())
+                        {
+                            var worktreePath = repo.Value.GetProperty("worktree").GetString();
+                            if (worktreePath != null && Directory.Exists(worktreePath))
+                                repos[repo.Name] = worktreePath;
+                        }
+                    }
+
+                    if (repos.Count > 0)
+                        features.Add(new WorktreeFeature(name, description, dir, repos));
+                }
+                catch
+                {
+                    // Skip malformed context files
+                }
+            }
+            else
+            {
+                // No context file — detect git worktree subdirectories
+                var repos = new Dictionary<string, string>();
+                foreach (var subDir in Directory.GetDirectories(dir))
+                {
+                    var gitFile = Path.Combine(subDir, ".git");
+                    if (File.Exists(gitFile) || Directory.Exists(gitFile))
+                        repos[Path.GetFileName(subDir)] = subDir;
+                }
+
+                if (repos.Count > 0)
+                {
+                    var name = Path.GetFileName(dir);
+                    features.Add(new WorktreeFeature(name, "", dir, repos));
+                }
+            }
+        }
+
+        return features;
+    }
+
+    public static void WriteFeatureContext(string featurePath, string featureName, Dictionary<string, string> worktrees)
+    {
+        var repos = new Dictionary<string, object>();
+        foreach (var (name, path) in worktrees)
+            repos[name] = new
+            {
+                worktree = path
+            };
+
+        var context = new
+        {
+            feature = featureName,
+            description = "",
+            repos,
+        };
+
+        var json = JsonSerializer.Serialize(context, new JsonSerializerOptions
+        {
+            WriteIndented = true
+        });
+        File.WriteAllText(Path.Combine(featurePath, ".feature-context.json"), json);
+    }
+
+    public static bool LaunchWithIde(string command, string path)
+    {
+        // On macOS, app names like "rider" aren't on PATH — use "open -a" to launch by app name
+        if (OperatingSystem.IsMacOS() && !command.StartsWith('/') && !command.Contains('/'))
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "open",
+                    ArgumentList =
+                    {
+                        "-a",
+                        command,
+                        path
+                    },
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                });
+                return true;
+            }
+            catch
+            {
+                // Fall through to direct launch
+            }
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = command,
+                ArgumentList =
+                {
+                    path
+                },
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            });
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static string GetFileManagerCommand()
+    {
+        if (OperatingSystem.IsMacOS())
+            return "open";
+
+        if (OperatingSystem.IsWindows())
+            return "explorer";
+
+        // Linux — check for WSL where explorer.exe is available
+        try
+        {
+            var version = File.ReadAllText("/proc/version");
+            if (version.Contains("microsoft", StringComparison.OrdinalIgnoreCase))
+                return "explorer.exe";
+        }
+        catch
+        {
+            /* not WSL */
+        }
+
+        return "xdg-open";
+    }
+
+    public string PromptWithDefault(string label, string defaultValue)
+    {
+        const string changeChoice = "Change...";
+        var selected = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title($"[grey70]{Markup.Escape(label)}[/]")
+                .HighlightStyle(new Style(Color.White, Color.Grey70))
+                .AddChoices(Markup.Escape(defaultValue), changeChoice, CancelChoice));
+
+        if (selected == CancelChoice)
+            throw new FlowCancelledException();
+        if (selected == changeChoice)
+            return RequireText($"[grey70]{Markup.Escape(label)}:[/]");
+        return defaultValue;
+    }
+
+    public string PromptOptional(string label, string? currentValue)
+    {
+        const string changeChoice = "Change...";
+        var skipLabel = !string.IsNullOrWhiteSpace(currentValue)
+            ? $"Keep \"{Markup.Escape(currentValue)}\""
+            : "Skip";
+
+        var selected = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title($"[grey70]{Markup.Escape(label)}[/]")
+                .HighlightStyle(new Style(Color.White, Color.Grey70))
+                .AddChoices(skipLabel, changeChoice, CancelChoice));
+
+        if (selected == CancelChoice)
+            throw new FlowCancelledException();
+        if (selected == changeChoice)
+            return AnsiConsole.Prompt(
+                new TextPrompt<string>($"[grey70]{Markup.Escape(label)}:[/]")
+                    .AllowEmpty()
+                    .PromptStyle(new Style(Color.White)));
+        return "";
+    }
+
+    public string? PickDirectory(string? worktreeBranchHint = null, Action<string>? onWorktreeBranchCreated = null)
+    {
+        var favorites = config.FavoriteFolders;
+        var gitFavorites = favorites.Where(f => GitService.IsGitRepo(ConfigService.ExpandPath(f.Path))).ToList();
+
+        while (true)
+        {
+            var prompt = new SelectionPrompt<string>()
+                .Title("[grey70]Pick a directory[/]")
+                .PageSize(15)
+                .HighlightStyle(new Style(Color.White, Color.Grey70))
+                .MoreChoicesText("[grey](Move up and down to reveal more)[/]");
+
+            foreach (var fav in favorites)
+                prompt.AddChoice($"{fav.Name}  [grey50]{fav.Path}[/]");
+
+            if (gitFavorites.Count > 0)
+            {
+                foreach (var fav in gitFavorites)
+                    prompt.AddChoice($"{WorktreePrefix}{fav.Name}  [grey50](new worktree)[/]");
+            }
+
+            prompt.AddChoice(CustomPathChoice);
+            prompt.AddChoice(CancelChoice);
+
+            var selected = AnsiConsole.Prompt(prompt);
+            switch (selected)
+            {
+                case CancelChoice:
+                    return null;
+                case CustomPathChoice:
+                {
+                    var custom = PromptCustomPath();
+                    if (custom != null)
+                        return custom;
+                    continue; // empty input -> back to picker
+                }
+            }
+
+            // Handle worktree selection
+            if (selected.StartsWith(WorktreePrefix))
+            {
+                var repoName = selected[WorktreePrefix.Length..].Split("  ")[0];
+                var fav = gitFavorites.FirstOrDefault(f => f.Name == repoName);
+                if (fav == null)
+                    continue;
+
+                var hint = worktreeBranchHint;
+                if (string.IsNullOrWhiteSpace(hint))
+                {
+                    hint = AnsiConsole.Prompt(
+                        new TextPrompt<string>("[grey70]Name[/] [grey](used for branch and session)[/][grey70]:[/]")
+                            .AllowEmpty()
+                            .PromptStyle(new Style(Color.White)));
+                    if (string.IsNullOrWhiteSpace(hint))
+                        continue; // back to picker
+                }
+
+                var repoPath = ConfigService.ExpandPath(fav.Path);
+                var branchName = GitService.SanitizeBranchName(hint);
+                var basePath = ConfigService.ExpandPath(config.WorktreeBasePath);
+                var worktreeDest = Path.Combine(basePath, branchName, repoName);
+
+                var result = CreateWorktreeWithProgress(repoPath, worktreeDest, branchName);
+                if (result != null)
+                    onWorktreeBranchCreated?.Invoke(branchName);
+                return result;
+            }
+
+            // Match back to the favorite by prefix (name before the spacing)
+            var selectedName = selected.Split("  ")[0];
+            var match = favorites.FirstOrDefault(f => f.Name == selectedName);
+            return match?.Path;
+        }
+    }
+
+    public string? PickColor()
+    {
+        var prompt = new SelectionPrompt<string>()
+            .Title("[grey70]Color[/] [grey](optional)[/]")
+            .HighlightStyle(new Style(Color.White, Color.Grey70));
+
+        var usedColors = new HashSet<string>(config.SessionColors.Values, StringComparer.OrdinalIgnoreCase);
+        var hasUnused = ColorPalette.Any(c => !usedColors.Contains(c.SpectreColor));
+
+        if (hasUnused)
+            prompt.AddChoice("[grey70]\ud83c\udfb2  Just give me one[/]");
+        prompt.AddChoice("None");
+        foreach (var (label, spectreColor) in ColorPalette)
+            prompt.AddChoice($"[{spectreColor}]\u2588\u2588\u2588\u2588[/]  {label}");
+        prompt.AddChoice(CancelChoice);
+
+        var selected = AnsiConsole.Prompt(prompt);
+
+        if (selected == CancelChoice)
+            throw new FlowCancelledException();
+        if (selected == "None")
+            return null;
+
+        if (selected.Contains("Just give me one"))
+        {
+            var unused = ColorPalette.Where(c => !usedColors.Contains(c.SpectreColor)).ToArray();
+            return unused[Random.Shared.Next(unused.Length)].SpectreColor;
+        }
+
+        foreach (var (label, spectreColor) in ColorPalette)
+            if (selected.EndsWith(label))
+                return spectreColor;
+
+        return null;
+    }
+
+    public static string ResolveKeyId(ConsoleKeyInfo key)
+    {
+        return key.Key switch
+        {
+            ConsoleKey.Enter => "Enter",
+            ConsoleKey.Spacebar => "Space",
+            ConsoleKey.Tab => "Tab",
+            ConsoleKey.UpArrow => "UpArrow",
+            ConsoleKey.DownArrow => "DownArrow",
+            _ => key.KeyChar.ToString(),
+        };
+    }
+}
