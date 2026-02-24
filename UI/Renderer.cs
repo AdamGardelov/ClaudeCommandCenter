@@ -899,7 +899,7 @@ public static class Renderer
         }
 
         var totalLines = state.DiffOverlayLines.Length;
-        var viewportHeight = Math.Max(1, Console.WindowHeight - 4);
+        var viewportHeight = Math.Max(1, Console.WindowHeight - 4 - DiffStatRowCount(state));
         var maxScroll = Math.Max(0, totalLines - viewportHeight);
         var pct = maxScroll > 0 ? (int)(100.0 * state.DiffScrollOffset / maxScroll) : 100;
         var scrollInfo = $"[grey50]{state.DiffScrollOffset + 1}-{Math.Min(state.DiffScrollOffset + viewportHeight, totalLines)}/{totalLines} ({pct}%)[/]";
@@ -915,12 +915,17 @@ public static class Renderer
         var rows = new List<IRenderable>();
         var maxWidth = Math.Max(20, Console.WindowWidth - 4);
 
-        // Stat summary at top
-        if (!string.IsNullOrWhiteSpace(state.DiffOverlayStatSummary))
+        // Stat summary at top (collapsed by default, toggle with keybinding)
+        if (state.DiffStatExpanded && !string.IsNullOrWhiteSpace(state.DiffOverlayStatSummary))
         {
             var statLines = state.DiffOverlayStatSummary.Split('\n');
-            foreach (var line in statLines)
+            var maxStatLines = MaxDiffStatLines();
+            var truncated = statLines.Length > maxStatLines;
+            var displayLines = truncated ? statLines[..maxStatLines] : statLines;
+            foreach (var line in displayLines)
                 rows.Add(FormatDiffStatLine(line));
+            if (truncated)
+                rows.Add(new Markup($"[grey50]  … and {statLines.Length - maxStatLines} more files[/]"));
             rows.Add(new Rule().RuleStyle(Style.Parse("grey27")));
         }
 
@@ -993,6 +998,21 @@ public static class Renderer
         return new Markup($"[grey58]{escaped}[/]");
     }
 
+    /// <summary>Max stat lines shown when the diff stat section is expanded (1/3 of screen, minimum 5).</summary>
+    public static int MaxDiffStatLines() => Math.Max(5, (Console.WindowHeight - 4) / 3);
+
+    /// <summary>Number of rows the stat section occupies (0 when collapsed).</summary>
+    public static int DiffStatRowCount(AppState state)
+    {
+        if (!state.DiffStatExpanded || string.IsNullOrWhiteSpace(state.DiffOverlayStatSummary))
+            return 0;
+        var rawLines = state.DiffOverlayStatSummary.Split('\n').Length;
+        var maxLines = MaxDiffStatLines();
+        return Math.Min(rawLines, maxLines)
+            + (rawLines > maxLines ? 1 : 0) // truncation indicator
+            + 1; // separator rule
+    }
+
     private static Markup BuildDiffOverlayStatusBar(AppState state)
     {
         var kb = state.Keybindings;
@@ -1022,6 +1042,11 @@ public static class Renderer
         parts.Add("[grey70 bold]PgUp[/][grey] page up [/]");
         parts.Add(HintFor(kb, "diff-top"));
         parts.Add(HintFor(kb, "diff-bottom"));
+        // Toggle file stats
+        var toggleStats = kb.FirstOrDefault(b => b.ActionId == "diff-toggle-stats" && b.Enabled);
+        if (toggleStats != null)
+            parts.Add($"[grey70 bold]{Markup.Escape(toggleStats.Key)}[/][grey] {(state.DiffStatExpanded ? "hide" : "show")} files [/]");
+
         parts.Add("[grey]│[/]");
 
         // Close: Esc always works + rebindable key

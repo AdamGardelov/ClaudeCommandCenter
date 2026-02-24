@@ -38,9 +38,9 @@ public class DiffHandler(AppState state)
     public void HandleKey(ConsoleKeyInfo key)
     {
         var totalLines = state.DiffOverlayLines.Length;
-        // viewport = terminal height - header(1) - status bar(1) - panel border(2) - stat section estimate
-        var statLines = state.DiffOverlayStatSummary?.Split('\n').Length ?? 0;
-        var viewportHeight = Math.Max(1, Console.WindowHeight - 4 - statLines - 1); // -1 for separator
+        // viewport = terminal height - header(1) - status bar(1) - panel border(2) - stat section
+        var statOverhead = Renderer.DiffStatRowCount(state);
+        var viewportHeight = Math.Max(1, Console.WindowHeight - 4 - statOverhead);
         var maxScroll = Math.Max(0, totalLines - viewportHeight);
 
         // Non-rebindable keys (always work)
@@ -85,6 +85,9 @@ public class DiffHandler(AppState state)
                 break;
             case "diff-bottom":
                 state.DiffScrollOffset = maxScroll;
+                break;
+            case "diff-toggle-stats":
+                state.DiffStatExpanded = !state.DiffStatExpanded;
                 break;
             case "diff-close":
                 state.LeaveDiffOverlay();

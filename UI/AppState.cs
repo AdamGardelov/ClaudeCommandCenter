@@ -230,6 +230,7 @@ public class AppState
     public string? LatestVersion { get; set; }
 
     public int[] DiffFileBoundaries { get; set; } = [];
+    public bool DiffStatExpanded { get; set; }
 
     public List<KeyBinding> Keybindings { get; set; } = [];
 
@@ -258,6 +259,7 @@ public class AppState
             if (lines[i].StartsWith("diff --git "))
                 boundaries.Add(i);
         DiffFileBoundaries = boundaries.ToArray();
+        DiffStatExpanded = false;
     }
 
     public void LeaveDiffOverlay()

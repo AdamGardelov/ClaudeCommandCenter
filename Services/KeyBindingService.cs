@@ -213,6 +213,14 @@ public static class KeyBindingService
         },
         new()
         {
+            ActionId = "diff-toggle-stats",
+            Key = "s",
+            Label = "files",
+            CanDisable = true,
+            StatusBarOrder = -1
+        },
+        new()
+        {
             ActionId = "diff-close",
             Key = "q",
             Label = "back",
