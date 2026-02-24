@@ -143,13 +143,19 @@ public abstract partial class TmuxService
             var trimmed = lines[i].Trim();
             if (trimmed.Length >= 3 && trimmed.All(c => c == '─'))
             {
-                // Found top separator — check the last content line above it
+                // Found top separator — find Claude's last message above it.
+                // Skip tool output (⎿), collapsed lines (…), user input (❯),
+                // tool headers (●), and thinking markers (✻).
                 for (var j = i - 1; j >= 0; j--)
                 {
                     if (string.IsNullOrWhiteSpace(lines[j]))
                         continue;
-                    // If it ends with ?, Claude asked a question — not idle
-                    return !lines[j].TrimEnd().EndsWith('?');
+                    var line = lines[j].TrimStart();
+                    if (line.StartsWith('⎿') || line.StartsWith('…') || line.StartsWith('❯')
+                        || line.StartsWith('●') || line.StartsWith('✻'))
+                        continue;
+                    // If Claude's last message ends with ?, it's asking a question
+                    return !line.TrimEnd().EndsWith('?');
                 }
                 return true; // No content above separator (fresh session)
             }
