@@ -77,7 +77,10 @@ public static class Renderer
         var excludedInfo = excludedCount > 0 ? $" [grey50]· {excludedCount} excluded[/]" : "";
         var right = new Markup($"[grey]{state.Sessions.Count} session(s)[/]{excludedInfo}{groupInfo} ");
 
-        return new Columns(left, right) { Expand = true };
+        return new Columns(left, right)
+        {
+            Expand = true
+        };
     }
 
     private static IRenderable BuildSessionPanel(AppState state)
@@ -160,11 +163,13 @@ public static class Renderer
                     return new Markup($"[grey50 on grey19] [grey42]†[/] {name,-22} [/]");
                 return new Markup($" [grey42]†[/] [grey35]{name,-22}[/]");
             }
+
             if (isSelected)
             {
                 var bg = session.ColorTag ?? "grey37";
                 return new Markup($"[white on {bg}] † {name,-22} [/]");
             }
+
             return new Markup($" [red]†[/] [grey50]{name,-22}[/]");
         }
 
@@ -317,6 +322,7 @@ public static class Renderer
                 else
                     result.Add($"[grey]{Markup.Escape(trimmed)}[/]");
             }
+
             return new Markup(" " + string.Join("[grey],[/] ", result));
         }
 
@@ -628,7 +634,10 @@ public static class Renderer
         var filterLabel = state.GetGroupFilterLabel();
         var left = new Markup($"[mediumpurple3 bold] CCC[/] [grey50]v{_version}[/] [grey]- {sessionCount} sessions[/]");
         var right = new Markup($"[grey50][[{Markup.Escape(filterLabel)}]][/] ");
-        return new Columns(left, right) { Expand = true };
+        return new Columns(left, right)
+        {
+            Expand = true
+        };
     }
 
     private static Rows BuildMobileSessionList(AppState state, List<TmuxSession> sessions, int listHeight)
@@ -670,11 +679,13 @@ public static class Renderer
                     return new Markup($"[grey50 on grey19] [grey42]†[/] {name} [/]");
                 return new Markup($" [grey42]†[/] [grey35]{name}[/]");
             }
+
             if (isSelected)
             {
                 var bg = session.ColorTag ?? "grey37";
                 return new Markup($"[white on {bg}] † {name} [/]");
             }
+
             return new Markup($" [red]†[/] [grey50]{name}[/]");
         }
 
@@ -728,10 +739,12 @@ public static class Renderer
         var statusText = session.IsDead
             ? "[red]session ended[/]"
             : session.IsWaitingForInput
-            ? "[yellow bold]waiting for input[/]"
-            : session.IsIdle
-            ? "[grey50]idle[/]"
-            : session.IsAttached ? "[green]attached[/]" : "[grey]working[/]";
+                ? "[yellow bold]waiting for input[/]"
+                : session.IsIdle
+                    ? "[grey50]idle[/]"
+                    : session.IsAttached
+                        ? "[green]attached[/]"
+                        : "[grey]working[/]";
         var desc = !string.IsNullOrWhiteSpace(session.Description)
             ? $" [grey50]- {Markup.Escape(session.Description)}[/]"
             : "";
@@ -809,8 +822,16 @@ public static class Renderer
         if (visible.Count == 0)
             return new Markup(" ");
 
-        var sessionOnlyActions = new HashSet<string> { "approve", "reject", "send-text" };
-        var hiddenWhenNoGroups = new HashSet<string> { "move-to-group" };
+        var sessionOnlyActions = new HashSet<string>
+        {
+            "approve",
+            "reject",
+            "send-text"
+        };
+        var hiddenWhenNoGroups = new HashSet<string>
+        {
+            "move-to-group"
+        };
         var onGroup = state.ActiveSection == ActiveSection.Groups;
         var hasGroups = state.Groups.Count > 0;
 
@@ -844,7 +865,10 @@ public static class Renderer
 
     private static Padder CenterFiglet(string text, int availableWidth, Color color)
     {
-        var figlet = new FigletText(text) { Pad = false }.Color(color).LeftJustified();
+        var figlet = new FigletText(text)
+        {
+            Pad = false
+        }.Color(color).LeftJustified();
         var options = RenderOptions.Create(AnsiConsole.Console, AnsiConsole.Console.Profile.Capabilities);
         var measured = ((IRenderable)figlet).Measure(options, availableWidth);
         var leftPad = Math.Max(0, (availableWidth - measured.Max) / 2);
@@ -910,7 +934,10 @@ public static class Renderer
         var left = new Markup($"[mediumpurple3 bold] Diff[/] [white bold]{Markup.Escape(name)}[/]{branch}");
         var right = new Markup($"{fileInfo} {scrollInfo} ");
 
-        return new Columns(left, right) { Expand = true };
+        return new Columns(left, right)
+        {
+            Expand = true
+        };
     }
 
     private static Panel BuildDiffOverlayContent(AppState state)
@@ -984,25 +1011,23 @@ public static class Renderer
             return new Markup($"[red on #2e1a1a]{escaped}{pad}[/]");
 
         // Hunk header — cyan markers, grey function context
-        if (line.StartsWith("@@"))
-        {
-            // Split at closing @@ to separate line range from function context
-            var endMarker = line.IndexOf("@@", 2, StringComparison.Ordinal);
-            if (endMarker > 0)
-            {
-                var marker = Markup.Escape(line[..(endMarker + 2)]);
-                var context = Markup.Escape(line[(endMarker + 2)..]);
-                return new Markup($"[cyan]{marker}[/][italic grey50]{context}[/]");
-            }
+        if (!line.StartsWith("@@"))
+            return new Markup($"[grey58]{escaped}[/]");
+
+        // Split at closing @@ to separate line range from function context
+        var endMarker = line.IndexOf("@@", 2, StringComparison.Ordinal);
+        if (endMarker <= 0)
             return new Markup($"[cyan]{escaped}[/]");
-        }
+
+        var marker = Markup.Escape(line[..(endMarker + 2)]);
+        var context = Markup.Escape(line[(endMarker + 2)..]);
+        return new Markup($"[cyan]{marker}[/][italic grey50]{context}[/]");
 
         // Context lines — subtle
-        return new Markup($"[grey58]{escaped}[/]");
     }
 
     /// <summary>Max stat lines shown when the diff stat section is expanded (1/3 of screen, minimum 5).</summary>
-    public static int MaxDiffStatLines() => Math.Max(5, (Console.WindowHeight - 4) / 3);
+    private static int MaxDiffStatLines() => Math.Max(5, (Console.WindowHeight - 4) / 3);
 
     /// <summary>Number of rows the stat section occupies (0 when collapsed).</summary>
     public static int DiffStatRowCount(AppState state)
@@ -1012,8 +1037,8 @@ public static class Renderer
         var rawLines = state.DiffOverlayStatSummary.Split('\n').Length;
         var maxLines = MaxDiffStatLines();
         return Math.Min(rawLines, maxLines)
-            + (rawLines > maxLines ? 1 : 0) // truncation indicator
-            + 1; // separator rule
+               + (rawLines > maxLines ? 1 : 0) // truncation indicator
+               + 1; // separator rule
     }
 
     private static Markup BuildDiffOverlayStatusBar(AppState state)
@@ -1030,7 +1055,10 @@ public static class Renderer
         var scrollUp = kb.FirstOrDefault(b => b.ActionId == "diff-scroll-up" && b.Enabled);
         if (scrollDown != null || scrollUp != null)
         {
-            var keys = new[] { scrollDown?.Key, scrollUp?.Key }
+            var keys = new[]
+                {
+                    scrollDown?.Key, scrollUp?.Key
+                }
                 .Where(k => k != null).Select(k => Markup.Escape(k!));
             parts.Add($"[grey70 bold]{string.Join("/", keys)}[/][grey] scroll [/]");
         }
@@ -1094,7 +1122,10 @@ public static class Renderer
     {
         var left = new Markup("[mediumpurple3 bold] Claude Command Center[/] [grey50]Settings[/]");
         var right = new Markup("[grey50]Esc to return [/]");
-        return new Columns(left, right) { Expand = true };
+        return new Columns(left, right)
+        {
+            Expand = true
+        };
     }
 
     private static Panel BuildCategoryPanel(List<SettingsCategory> categories, AppState state)
@@ -1196,7 +1227,8 @@ public static class Renderer
                 }
 
                 var displayValue = value.Length > maxValueWidth
-                    ? value[..(maxValueWidth - 2)] + ".." : value;
+                    ? value[..(maxValueWidth - 2)] + ".."
+                    : value;
                 var valueColor = string.IsNullOrEmpty(value) ? "grey42 italic" : "white";
                 var displayText = string.IsNullOrEmpty(value) ? "(not set)" : Markup.Escape(displayValue);
 
@@ -1222,7 +1254,8 @@ public static class Renderer
         if (state.IsSettingsRebinding)
         {
             var statusMsg = state.SettingsEditBuffer.Length > 0
-                ? $" [yellow]{Markup.Escape(state.SettingsEditBuffer)}[/]  " : " ";
+                ? $" [yellow]{Markup.Escape(state.SettingsEditBuffer)}[/]  "
+                : " ";
             return new Markup(
                 statusMsg +
                 "[grey70 bold]Press a key[/][grey] to bind · [/]" +
@@ -1232,7 +1265,8 @@ public static class Renderer
         if (state.IsSettingsEditing)
         {
             var limit = state.SettingsEditBuffer.Length >= 200
-                ? $" [grey50]({state.SettingsEditBuffer.Length}/250)[/]" : "";
+                ? $" [grey50]({state.SettingsEditBuffer.Length}/250)[/]"
+                : "";
             return new Markup(
                 $" [grey70]Editing>[/] [white]{Markup.Escape(state.SettingsEditBuffer)}[/][grey]▌[/]{limit}" +
                 "  [grey50]Enter[/][grey] save · [/][grey50]Esc[/][grey] cancel[/]");

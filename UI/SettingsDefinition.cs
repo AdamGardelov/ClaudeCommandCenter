@@ -73,9 +73,9 @@ public static class SettingsDefinition
                 Label = kbConfig.Label ?? actionId,
                 Type = SettingsItemType.Toggle,
                 ActionId = actionId,
-                GetValue = c => (c.Keybindings.TryGetValue(actionId, out var kb)
-                    ? kb.Enabled ?? true : true)
-                    ? "ON" : "OFF",
+                GetValue = c => (!c.Keybindings.TryGetValue(actionId, out var kb) || (kb.Enabled ?? true))
+                    ? "ON"
+                    : "OFF",
                 SetValue = (c, _) =>
                 {
                     if (c.Keybindings.TryGetValue(actionId, out var kb))
@@ -142,7 +142,8 @@ public static class SettingsDefinition
                 Label = config.FavoriteFolders[index].Name,
                 Type = SettingsItemType.Text,
                 GetValue = c => index < c.FavoriteFolders.Count
-                    ? c.FavoriteFolders[index].Path : "",
+                    ? c.FavoriteFolders[index].Path
+                    : "",
                 SetValue = (c, v) =>
                 {
                     if (index < c.FavoriteFolders.Count)

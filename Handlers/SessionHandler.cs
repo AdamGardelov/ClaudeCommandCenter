@@ -195,14 +195,10 @@ public class SessionHandler(
             // Session just got excluded from grid — clamp cursor
             var gridSessions = state.GetGridSessions();
             if (gridSessions.Count < 2)
-            {
                 // Not enough sessions for grid, switch to list
                 state.ViewMode = ViewMode.List;
-            }
             else
-            {
                 state.CursorIndex = Math.Clamp(state.CursorIndex, 0, gridSessions.Count - 1);
-            }
         }
 
         var label = session.IsExcluded ? "Excluded from grid" : "Restored to grid";

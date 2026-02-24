@@ -12,10 +12,10 @@ public class FlowHelper(CccConfig config)
     private static string? _flowTitle;
 
     public const string CancelChoice = "Cancel";
-    public const string CustomPathChoice = "Custom path...";
-    public const string WorktreePrefix = "\u2442 "; // ⑂
+    private const string _customPathChoice = "Custom path...";
+    private const string _worktreePrefix = "\u2442 "; // ⑂
 
-    public static readonly (string Label, string SpectreColor)[] ColorPalette =
+    private static readonly (string Label, string SpectreColor)[] _colorPalette =
     [
         ("Steel Blue", "SteelBlue"),
         ("Indian Red", "IndianRed"),
@@ -70,12 +70,13 @@ public class FlowHelper(CccConfig config)
             new TextPrompt<string>(prompt)
                 .AllowEmpty()
                 .PromptStyle(new Style(Color.White)));
-        if (string.IsNullOrWhiteSpace(result))
-            throw new FlowCancelledException();
-        return result;
+
+        return string.IsNullOrWhiteSpace(result)
+            ? throw new FlowCancelledException()
+            : result;
     }
 
-    public static string? PromptCustomPath()
+    private static string? PromptCustomPath()
     {
         var path = AnsiConsole.Prompt(
             new TextPrompt<string>("[grey70]Working directory:[/]")
@@ -85,7 +86,7 @@ public class FlowHelper(CccConfig config)
         return string.IsNullOrWhiteSpace(path) ? null : path;
     }
 
-    public static string? CreateWorktreeWithProgress(string repoPath, string worktreeDest, string branchName)
+    private static string? CreateWorktreeWithProgress(string repoPath, string worktreeDest, string branchName)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(worktreeDest)!);
 
@@ -343,10 +344,10 @@ public class FlowHelper(CccConfig config)
             if (gitFavorites.Count > 0)
             {
                 foreach (var fav in gitFavorites)
-                    prompt.AddChoice($"{WorktreePrefix}{fav.Name}  [grey50](new worktree)[/]");
+                    prompt.AddChoice($"{_worktreePrefix}{fav.Name}  [grey50](new worktree)[/]");
             }
 
-            prompt.AddChoice(CustomPathChoice);
+            prompt.AddChoice(_customPathChoice);
             prompt.AddChoice(CancelChoice);
 
             var selected = AnsiConsole.Prompt(prompt);
@@ -354,7 +355,7 @@ public class FlowHelper(CccConfig config)
             {
                 case CancelChoice:
                     return null;
-                case CustomPathChoice:
+                case _customPathChoice:
                 {
                     var custom = PromptCustomPath();
                     if (custom != null)
@@ -364,9 +365,9 @@ public class FlowHelper(CccConfig config)
             }
 
             // Handle worktree selection
-            if (selected.StartsWith(WorktreePrefix))
+            if (selected.StartsWith(_worktreePrefix))
             {
-                var repoName = selected[WorktreePrefix.Length..].Split("  ")[0];
+                var repoName = selected[_worktreePrefix.Length..].Split("  ")[0];
                 var fav = gitFavorites.FirstOrDefault(f => f.Name == repoName);
                 if (fav == null)
                     continue;
@@ -407,12 +408,12 @@ public class FlowHelper(CccConfig config)
             .HighlightStyle(new Style(Color.White, Color.Grey70));
 
         var usedColors = new HashSet<string>(config.SessionColors.Values, StringComparer.OrdinalIgnoreCase);
-        var hasUnused = ColorPalette.Any(c => !usedColors.Contains(c.SpectreColor));
+        var hasUnused = _colorPalette.Any(c => !usedColors.Contains(c.SpectreColor));
 
         if (hasUnused)
             prompt.AddChoice("[grey70]\ud83c\udfb2  Just give me one[/]");
         prompt.AddChoice("None");
-        foreach (var (label, spectreColor) in ColorPalette)
+        foreach (var (label, spectreColor) in _colorPalette)
             prompt.AddChoice($"[{spectreColor}]\u2588\u2588\u2588\u2588[/]  {label}");
         prompt.AddChoice(CancelChoice);
 
@@ -425,11 +426,11 @@ public class FlowHelper(CccConfig config)
 
         if (selected.Contains("Just give me one"))
         {
-            var unused = ColorPalette.Where(c => !usedColors.Contains(c.SpectreColor)).ToArray();
+            var unused = _colorPalette.Where(c => !usedColors.Contains(c.SpectreColor)).ToArray();
             return unused[Random.Shared.Next(unused.Length)].SpectreColor;
         }
 
-        foreach (var (label, spectreColor) in ColorPalette)
+        foreach (var (label, spectreColor) in _colorPalette)
             if (selected.EndsWith(label))
                 return spectreColor;
 

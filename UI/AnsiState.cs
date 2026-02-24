@@ -8,6 +8,6 @@ public struct AnsiState
     public Color? Background;
     public Decoration Decoration;
 
-    public readonly Style ToStyle()
-        => new(Foreground, Background, Decoration);
+    public readonly Style ToStyle() =>
+        new(Foreground, Background, Decoration);
 }

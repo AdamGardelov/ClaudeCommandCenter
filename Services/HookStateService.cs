@@ -53,10 +53,4 @@ public static class HookStateService
             // Best effort cleanup
         }
     }
-
-    /// <summary>
-    /// Checks whether any session has a hook state file (hooks are configured).
-    /// </summary>
-    public static bool HooksAvailable() => Directory.Exists(_stateDir)
-                                            && Directory.GetFiles(_stateDir).Length > 0;
 }

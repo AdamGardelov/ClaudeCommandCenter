@@ -147,7 +147,7 @@ public class GroupHandler(
             }
             else
             {
-                AnsiConsole.MarkupLine($"\n[grey50]Group is full (9/9 sessions)[/]");
+                AnsiConsole.MarkupLine("\n[grey50]Group is full (9/9 sessions)[/]");
             }
 
             // Pick new color

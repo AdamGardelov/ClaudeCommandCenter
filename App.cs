@@ -60,7 +60,11 @@ public class App(bool mobileMode = false)
         _groupHandler = new GroupHandler(
             _state, _config, _flow, LoadSessions, Render,
             () => _lastSelectedSession = null,
-            () => { _lastGridWidth = 0; _lastGridHeight = 0; },
+            () =>
+            {
+                _lastGridWidth = 0;
+                _lastGridHeight = 0;
+            },
             ResizeGridPanes);
 
         _claudeAvailable = TmuxService.HasClaude();
@@ -157,6 +161,7 @@ public class App(bool mobileMode = false)
                     ResizeGridPanes();
                     ResizePreviewPane();
                 }
+
                 if (UpdateCapturedPane())
                     Render();
                 _lastCapture = DateTime.Now;
@@ -851,5 +856,4 @@ public class App(bool mobileMode = false)
         });
         process?.WaitForExit();
     }
-
 }

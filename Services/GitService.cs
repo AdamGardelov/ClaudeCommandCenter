@@ -21,24 +21,6 @@ public static class GitService
     }
 
     /// <summary>
-    /// Returns the default branch (development, main, or master) for a repo.
-    /// </summary>
-    public static string GetDefaultBranch(string repoPath)
-    {
-        foreach (var candidate in new[]
-                 {
-                     "development", "main", "master"
-                 })
-        {
-            var (success, _) = RunGit(repoPath, "rev-parse", "--verify", candidate);
-            if (success)
-                return candidate;
-        }
-
-        return "main";
-    }
-
-    /// <summary>
     /// Fetches with prune to clean up deleted remote branches before creating worktrees.
     /// </summary>
     public static void FetchPrune(string repoPath) =>

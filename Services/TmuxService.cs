@@ -167,6 +167,7 @@ public abstract partial class TmuxService
                     // If Claude's last message ends with ?, it's asking a question
                     return !line.TrimEnd().EndsWith('?');
                 }
+
                 return true; // No content above separator (fresh session)
             }
 
