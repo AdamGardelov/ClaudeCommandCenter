@@ -98,40 +98,66 @@ public abstract partial class TmuxService
     }
 
     /// <summary>
-    /// Detects the Claude Code idle prompt: a ❯ line followed by a ─ separator line.
-    /// When this pattern is at the bottom of the content, Claude finished its work and
-    /// is sitting at the prompt — not blocked or asking for input.
+    /// Detects the Claude Code idle prompt: a ❯ line between two ─ separator lines.
+    /// Returns false if Claude's last message ends with '?' (asking a question).
     /// </summary>
     private static bool IsIdlePrompt(string content)
     {
         var lines = content.Split('\n');
 
-        // Find the last two non-empty lines
-        int lastIdx = -1, promptIdx = -1;
+        // Find the last two non-empty lines: bottom ─ separator and ❯ prompt
+        int bottomSep = -1, prompt = -1;
         for (var i = lines.Length - 1; i >= 0; i--)
         {
             if (string.IsNullOrWhiteSpace(lines[i]))
                 continue;
 
-            if (lastIdx < 0)
-                lastIdx = i;
+            if (bottomSep < 0)
+                bottomSep = i;
             else
             {
-                promptIdx = i;
+                prompt = i;
                 break;
             }
         }
 
-        if (promptIdx < 0)
+        if (prompt < 0)
             return false;
 
         // Last non-empty line: horizontal rule (all ─)
-        var rule = lines[lastIdx].Trim();
+        var rule = lines[bottomSep].Trim();
         if (rule.Length < 3 || rule.Any(c => c != '─'))
             return false;
 
         // Line above: starts with ❯ (Claude Code's input prompt)
-        return lines[promptIdx].TrimStart().StartsWith('❯');
+        if (!lines[prompt].TrimStart().StartsWith('❯'))
+            return false;
+
+        // Found the idle prompt. Scan upward for the top ─ separator,
+        // then check if Claude's last message above it ends with '?'
+        for (var i = prompt - 1; i >= 0; i--)
+        {
+            if (string.IsNullOrWhiteSpace(lines[i]))
+                continue;
+
+            var trimmed = lines[i].Trim();
+            if (trimmed.Length >= 3 && trimmed.All(c => c == '─'))
+            {
+                // Found top separator — check the last content line above it
+                for (var j = i - 1; j >= 0; j--)
+                {
+                    if (string.IsNullOrWhiteSpace(lines[j]))
+                        continue;
+                    // If it ends with ?, Claude asked a question — not idle
+                    return !lines[j].TrimEnd().EndsWith('?');
+                }
+                return true; // No content above separator (fresh session)
+            }
+
+            return true; // No top separator — still idle
+        }
+
+        return true;
     }
 
     // Matches status bar timer suffixes like "45s", "24m24s", "1h2m", "1h30m24s"
