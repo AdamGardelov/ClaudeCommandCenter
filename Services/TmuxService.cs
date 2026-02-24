@@ -89,9 +89,48 @@ public abstract partial class TmuxService
                 session.PreviousContent = content;
             }
 
-            // Content unchanged for consecutive polls → waiting for input
-            session.IsWaitingForInput = session.StableContentCount >= _stableThreshold;
+            // Content unchanged for consecutive polls → waiting for input,
+            // but only if the session isn't just sitting at the idle prompt (❯).
+            session.IsWaitingForInput = session.StableContentCount >= _stableThreshold
+                                       && !IsIdlePrompt(content);
         }
+    }
+
+    /// <summary>
+    /// Detects the Claude Code idle prompt: a ❯ line followed by a ─ separator line.
+    /// When this pattern is at the bottom of the content, Claude finished its work and
+    /// is sitting at the prompt — not blocked or asking for input.
+    /// </summary>
+    private static bool IsIdlePrompt(string content)
+    {
+        var lines = content.Split('\n');
+
+        // Find the last two non-empty lines
+        int lastIdx = -1, promptIdx = -1;
+        for (var i = lines.Length - 1; i >= 0; i--)
+        {
+            if (string.IsNullOrWhiteSpace(lines[i]))
+                continue;
+
+            if (lastIdx < 0)
+                lastIdx = i;
+            else
+            {
+                promptIdx = i;
+                break;
+            }
+        }
+
+        if (promptIdx < 0)
+            return false;
+
+        // Last non-empty line: horizontal rule (all ─)
+        var rule = lines[lastIdx].Trim();
+        if (rule.Length < 3 || rule.Any(c => c != '─'))
+            return false;
+
+        // Line above: starts with ❯ (Claude Code's input prompt)
+        return lines[promptIdx].TrimStart().StartsWith('❯');
     }
 
     // Matches status bar timer suffixes like "45s", "24m24s", "1h2m", "1h30m24s"
