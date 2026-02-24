@@ -599,7 +599,13 @@ public class App
                 _state.SetStatus("Refreshed");
                 break;
             case "quit":
-                _state.Running = false;
+                _state.SetStatus("Quit? (y/n)");
+                Render();
+                var quitConfirm = Console.ReadKey(true);
+                if (quitConfirm.Key == ConsoleKey.Y)
+                    _state.Running = false;
+                else
+                    _state.SetStatus("Cancelled");
                 break;
         }
     }
@@ -1080,7 +1086,13 @@ public class App
                 _state.SetStatus("Refreshed");
                 break;
             case "quit":
-                _state.Running = false;
+                _state.SetStatus("Quit? (y/n)");
+                Render();
+                var quitConfirm2 = Console.ReadKey(true);
+                if (quitConfirm2.Key == ConsoleKey.Y)
+                    _state.Running = false;
+                else
+                    _state.SetStatus("Cancelled");
                 break;
         }
     }
