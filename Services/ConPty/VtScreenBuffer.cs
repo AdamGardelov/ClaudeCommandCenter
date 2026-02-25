@@ -35,11 +35,13 @@ internal class VtScreenBuffer
     private int _savedCursorRow;
     private int _savedCursorCol;
     private SgrState _savedSgr;
+    private int _savedScrollTop;
+    private int _savedScrollBottom;
     private bool _inAlternateScreen;
 
     // Application cursor key mode (DECCKM) — when true, arrow keys send \eOA instead of \e[A
     internal bool ApplicationCursorKeys => _applicationCursorKeys;
-    private bool _applicationCursorKeys;
+    private volatile bool _applicationCursorKeys;
 
     // Scroll region (DECSTBM) — top and bottom margins (0-based, inclusive)
     private int _scrollTop;
@@ -159,6 +161,21 @@ internal class VtScreenBuffer
             _cursorCol = Math.Min(_cursorCol, newWidth - 1);
             _scrollTop = 0;
             _scrollBottom = newHeight - 1;
+
+            // Resize saved main screen buffer if we're in alternate screen
+            if (_inAlternateScreen && _savedCells != null)
+            {
+                var newSaved = new Cell[newHeight, newWidth];
+                var savedRows = Math.Min(_savedCells.GetLength(0), newHeight);
+                var savedCols = Math.Min(_savedCells.GetLength(1), newWidth);
+                for (var r = 0; r < savedRows; r++)
+                    for (var c = 0; c < savedCols; c++)
+                        newSaved[r, c] = _savedCells[r, c];
+                _savedCells = newSaved;
+                _savedCursorRow = Math.Min(_savedCursorRow, newHeight - 1);
+                _savedCursorCol = Math.Min(_savedCursorCol, newWidth - 1);
+            }
+
             _version++;
         }
     }
@@ -210,6 +227,8 @@ internal class VtScreenBuffer
         _savedCursorRow = _cursorRow;
         _savedCursorCol = _cursorCol;
         _savedSgr = _sgr;
+        _savedScrollTop = _scrollTop;
+        _savedScrollBottom = _scrollBottom;
         _inAlternateScreen = true;
 
         // Clear the screen for alt buffer (alt screen starts blank)
@@ -219,6 +238,8 @@ internal class VtScreenBuffer
         _cursorRow = 0;
         _cursorCol = 0;
         _sgr = SgrState.Default;
+        _scrollTop = 0;
+        _scrollBottom = _height - 1;
         _version++;
     }
 
@@ -244,6 +265,8 @@ internal class VtScreenBuffer
         _cursorRow = Math.Min(_savedCursorRow, _height - 1);
         _cursorCol = Math.Min(_savedCursorCol, _width - 1);
         _sgr = _savedSgr;
+        _scrollTop = _savedScrollTop;
+        _scrollBottom = Math.Min(_savedScrollBottom, _height - 1);
         _inAlternateScreen = false;
         _version++;
     }
