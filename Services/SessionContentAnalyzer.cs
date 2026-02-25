@@ -8,13 +8,22 @@ namespace ClaudeCommandCenter.Services;
 /// </summary>
 internal static partial class SessionContentAnalyzer
 {
+    private static readonly Regex AnsiEscapePattern = AnsiEscapeRegex();
+
+    /// <summary>
+    /// Strips all ANSI escape sequences from a string.
+    /// Required because VtScreenBuffer.GetContent() embeds SGR codes that
+    /// interfere with content analysis (status bar detection, idle prompt detection).
+    /// </summary>
+    public static string StripAnsi(string text) =>
+        AnsiEscapePattern.Replace(text, "");
     /// <summary>
     /// Detects the Claude Code idle prompt: a ❯ line between two ─ separator lines.
     /// Returns false if Claude's last message ends with '?' (asking a question).
     /// </summary>
     public static bool IsIdlePrompt(string content)
     {
-        var lines = content.Split('\n');
+        var lines = StripAnsi(content).Split('\n');
 
         int bottomSep = -1, prompt = -1;
         for (var i = lines.Length - 1; i >= 0; i--)
@@ -77,7 +86,7 @@ internal static partial class SessionContentAnalyzer
     /// </summary>
     public static string GetContentAboveStatusBar(string paneOutput)
     {
-        var lines = paneOutput.Split('\n');
+        var lines = StripAnsi(paneOutput).Split('\n');
 
         var statusBarIndex = -1;
         for (var i = lines.Length - 1; i >= 0; i--)
@@ -137,4 +146,7 @@ internal static partial class SessionContentAnalyzer
 
     [GeneratedRegex(@"\d+[hms]\d*[ms]?\s*$", RegexOptions.Compiled)]
     private static partial Regex StatusBarTimerRegex();
+
+    [GeneratedRegex(@"\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\a]*(?:\a|\x1b\\)|\x1b[()][A-Z0-9]", RegexOptions.Compiled)]
+    private static partial Regex AnsiEscapeRegex();
 }

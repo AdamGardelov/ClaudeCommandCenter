@@ -354,6 +354,9 @@ public class ConPtyBackend : ISessionBackend
         InitializeProcThreadAttributeList(nint.Zero, 1, 0, ref attrSize);
         var attrList = Marshal.AllocHGlobal(attrSize);
 
+        // Build environment block with CCC_SESSION_NAME so hooks can identify the session
+        var envBlock = BuildEnvironmentBlock(name);
+
         try
         {
             if (!InitializeProcThreadAttributeList(attrList, 1, 0, ref attrSize))
@@ -381,7 +384,7 @@ public class ConPtyBackend : ISessionBackend
                     nint.Zero, nint.Zero,
                     false,
                     ExtendedStartupInfoPresent | CreateUnicodeEnvironment,
-                    nint.Zero,
+                    envBlock,
                     workingDirectory,
                     in startupInfo,
                     out var procInfo))
@@ -437,6 +440,7 @@ public class ConPtyBackend : ISessionBackend
         }
         finally
         {
+            Marshal.FreeHGlobal(envBlock);
             DeleteProcThreadAttributeList(attrList);
             Marshal.FreeHGlobal(attrList);
         }
@@ -586,5 +590,34 @@ public class ConPtyBackend : ISessionBackend
         var isStable = session.StableContentCount >= StableThreshold;
         session.IsIdle = isStable && SessionContentAnalyzer.IsIdlePrompt(content);
         session.IsWaitingForInput = isStable && !session.IsIdle;
+    }
+
+    /// <summary>
+    /// Builds a Unicode environment block for CreateProcessW with CCC_SESSION_NAME injected.
+    /// Format: sorted KEY=VALUE\0 pairs, terminated by an extra \0.
+    /// </summary>
+    private static nint BuildEnvironmentBlock(string sessionName)
+    {
+        // Start with current environment
+        var env = Environment.GetEnvironmentVariables();
+        var entries = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (System.Collections.DictionaryEntry entry in env)
+            entries[(string)entry.Key] = (string)entry.Value!;
+
+        // Inject CCC_SESSION_NAME
+        entries["CCC_SESSION_NAME"] = sessionName;
+
+        // Build the block: KEY=VALUE\0KEY=VALUE\0...\0
+        var sb = new StringBuilder();
+        foreach (var (key, value) in entries)
+        {
+            sb.Append(key);
+            sb.Append('=');
+            sb.Append(value);
+            sb.Append('\0');
+        }
+        sb.Append('\0'); // Double null terminator
+
+        return Marshal.StringToHGlobalUni(sb.ToString());
     }
 }

@@ -43,7 +43,7 @@ public class TmuxBackend : ISessionBackend
     public string? CreateSession(string name, string workingDirectory)
     {
         var shell = Environment.GetEnvironmentVariable("SHELL") ?? "/bin/bash";
-        var (success, error) = RunTmuxWithError("new-session", "-d", "-s", name, "-n", name, "-c", workingDirectory, $"{shell} -lc claude");
+        var (success, error) = RunTmuxWithError("new-session", "-d", "-s", name, "-n", name, "-e", $"CCC_SESSION_NAME={name}", "-c", workingDirectory, $"{shell} -lc claude");
         if (!success)
             return error ?? "Failed to create tmux session";
         RunTmux("set-option", "-t", name, "automatic-rename", "off");
