@@ -56,7 +56,23 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         _flow = new FlowHelper(_config);
         _diffHandler = new DiffHandler(_state);
         _settingsHandler = new SettingsHandler(_state, _config, Render, RefreshKeybindings);
-        _sessionHandler = new SessionHandler(_state, _config, _flow, backend, LoadSessions, Render, () => _lastSelectedSession = null);
+        _sessionHandler = new SessionHandler(_state, _config, _flow, backend, LoadSessions, Render, () =>
+        {
+            _lastSelectedSession = null;
+            _lastPreviewWidth = 0;
+
+            // Resize pane back to preview width and immediately re-capture so
+            // the next render shows fresh content (not stale pre-attach data)
+            var session = _state.GetSelectedSession();
+            if (session != null && !_state.MobileMode)
+            {
+                var previewWidth = Math.Max(20, Console.WindowWidth - 35 - 8);
+                backend.ResizeWindow(session.Name, previewWidth, Console.WindowHeight);
+                _lastPreviewWidth = previewWidth;
+                _capturedPane = backend.CapturePaneContent(session.Name);
+                _lastSelectedSession = session.Name;
+            }
+        });
         _groupHandler = new GroupHandler(
             _state, _config, _flow, backend, LoadSessions, Render,
             () => _lastSelectedSession = null,
