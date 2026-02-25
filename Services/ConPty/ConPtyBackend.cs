@@ -148,11 +148,29 @@ public class ConPtyBackend : ISessionBackend
         // incoming ConPTY data directly to Console.Out in addition to the buffers.
         session.ForwardToConsole = true;
 
+        // Track terminal size so we can detect resizes during attach
+        var lastWidth = Console.WindowWidth;
+        var lastHeight = Console.WindowHeight;
+
         // Input loop: read console keys and forward to session
         try
         {
             while (!_detachRequested && !token.IsCancellationRequested && session.IsAlive)
             {
+                // Check for terminal resize
+                var curWidth = Console.WindowWidth;
+                var curHeight = Console.WindowHeight;
+                if (curWidth != lastWidth || curHeight != lastHeight)
+                {
+                    lastWidth = curWidth;
+                    lastHeight = curHeight;
+                    var coord = new Coord((short)curWidth, (short)curHeight);
+                    ResizePseudoConsole(session.PseudoConsole, coord);
+                    session.Screen.Resize(curWidth, curHeight);
+                    session.Width = (short)curWidth;
+                    session.Height = (short)curHeight;
+                }
+
                 if (!Console.KeyAvailable)
                 {
                     Thread.Sleep(10);
