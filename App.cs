@@ -85,6 +85,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         {
             // Try alternate screen buffer for clean TUI
             Console.Write("\e[?1049h"); // Enter alternate screen
+            Console.Write("\e[?1003l\e[?1006l\e[?1015l\e[?1000l"); // Disable mouse tracking
             Console.CursorVisible = false;
 
             MainLoop();
