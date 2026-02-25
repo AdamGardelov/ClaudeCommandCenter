@@ -17,11 +17,17 @@ internal class ConPtySession : IDisposable
     public required SafeFileHandle OutputReadHandle { get; set; }
     public required StreamWriter Input { get; set; }
     public required Thread ReaderThread { get; set; }
+    public required VtScreenBuffer Screen { get; set; }
     public required RingBuffer OutputBuffer { get; set; }
     public required CancellationTokenSource Cts { get; set; }
     public DateTime Created { get; set; } = DateTime.Now;
     public short Width { get; set; } = 120;
     public short Height { get; set; } = 40;
+
+    /// <summary>
+    /// When true, the ReaderLoop forwards raw ConPTY output to Console.Out (attach mode).
+    /// </summary>
+    public volatile bool ForwardToConsole;
 
     private bool _disposed;
 

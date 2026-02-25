@@ -33,9 +33,6 @@ public class App(ISessionBackend backend, bool mobileMode = false)
     private DateTime _lastUpdateCheck = DateTime.UtcNow;
     private static readonly TimeSpan _updateCheckInterval = TimeSpan.FromMinutes(20);
     private bool _wantsUpdate;
-    private int _lastGridWidth;
-    private int _lastGridHeight;
-    private int _lastPreviewWidth;
     private int _startupPollCount;
 
     public void Run()
@@ -59,7 +56,6 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         _sessionHandler = new SessionHandler(_state, _config, _flow, backend, LoadSessions, Render, () =>
         {
             _lastSelectedSession = null;
-            _lastPreviewWidth = 0;
 
             // Resize pane back to preview width and immediately re-capture so
             // the next render shows fresh content (not stale pre-attach data)
@@ -68,7 +64,6 @@ public class App(ISessionBackend backend, bool mobileMode = false)
             {
                 var previewWidth = Math.Max(20, Console.WindowWidth - 35 - 8);
                 backend.ResizeWindow(session.Name, previewWidth, Console.WindowHeight);
-                _lastPreviewWidth = previewWidth;
                 _capturedPane = backend.CapturePaneContent(session.Name);
                 _lastSelectedSession = session.Name;
             }
@@ -76,11 +71,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         _groupHandler = new GroupHandler(
             _state, _config, _flow, backend, LoadSessions, Render,
             () => _lastSelectedSession = null,
-            () =>
-            {
-                _lastGridWidth = 0;
-                _lastGridHeight = 0;
-            },
+            () => { },
             ResizeGridPanes);
 
         _claudeAvailable = backend.HasClaude();
@@ -329,7 +320,6 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         if (sessionName != _lastSelectedSession)
         {
             _lastSelectedSession = sessionName;
-            _lastPreviewWidth = 0; // Force resize for newly selected session
             _capturedPane = session != null ? backend.CapturePaneContent(session.Name) : null;
             return true;
         }
@@ -396,12 +386,8 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         var targetWidth = Math.Max(20, Console.WindowWidth / cols - 4);
         var targetHeight = Console.WindowHeight;
 
-        if (targetWidth == _lastGridWidth && targetHeight == _lastGridHeight)
-            return;
-
-        _lastGridWidth = targetWidth;
-        _lastGridHeight = targetHeight;
-
+        // Resize every visible session — ResizeWindow is a no-op per-session
+        // when dimensions haven't changed, so this is safe to call every tick.
         foreach (var session in sessions)
             backend.ResizeWindow(session.Name, targetWidth, targetHeight);
     }
@@ -415,13 +401,9 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         if (session == null)
             return;
 
-        // Match the width calculation in Renderer.BuildPreviewPanel
+        // Match the width calculation in Renderer.BuildPreviewPanel.
+        // ResizeWindow is a no-op when the session is already at this size.
         var targetWidth = Math.Max(20, Console.WindowWidth - 35 - 8);
-
-        if (targetWidth == _lastPreviewWidth)
-            return;
-
-        _lastPreviewWidth = targetWidth;
         backend.ResizeWindow(session.Name, targetWidth, Console.WindowHeight);
     }
 
@@ -473,9 +455,6 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         {
             _state.LeaveGroupGrid();
             _lastSelectedSession = null;
-            _lastGridWidth = 0;
-            _lastGridHeight = 0;
-            _lastPreviewWidth = 0;
             return;
         }
 
@@ -853,15 +832,11 @@ public class App(ISessionBackend backend, bool mobileMode = false)
             }
 
             _state.ViewMode = ViewMode.Grid;
-            _lastPreviewWidth = 0;
             ResizeGridPanes();
         }
         else
         {
             _state.ViewMode = ViewMode.List;
-            _lastGridWidth = 0;
-            _lastGridHeight = 0;
-            _lastPreviewWidth = 0;
         }
 
         _lastSelectedSession = null;
