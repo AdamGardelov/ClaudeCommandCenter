@@ -53,6 +53,26 @@ try {
     }
 
     Write-Host "Installed ccc $version to $installDir\$binary"
+
+    # Install notification hook script
+    $hookDir = Join-Path $env:USERPROFILE '.ccc\hooks'
+    if (-not (Test-Path $hookDir)) {
+        New-Item -ItemType Directory -Path $hookDir -Force | Out-Null
+    }
+    $hookUrl = "https://raw.githubusercontent.com/$repo/main/hooks/ccc-state.sh"
+    $hookPath = Join-Path $hookDir 'ccc-state.sh'
+    Write-Host "Downloading notification hook..."
+    try {
+        Invoke-WebRequest -Uri $hookUrl -OutFile $hookPath
+        Write-Host "Installed hook to $hookPath"
+        Write-Host ""
+        Write-Host "To enable notifications, add hooks to ~/.claude/settings.json:"
+        Write-Host "  See https://github.com/$repo#notification-hooks"
+    } catch {
+        Write-Host "Note: Could not download hook script. See README for manual setup."
+    }
+
+    Write-Host ""
     Write-Host "Restart your terminal, then run 'ccc' to get started."
 }
 finally {

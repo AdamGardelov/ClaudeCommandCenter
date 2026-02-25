@@ -47,3 +47,18 @@ else
 fi
 
 echo "Installed $BINARY $LATEST to $INSTALL_DIR/$BINARY"
+
+# Install notification hook script
+HOOK_DIR="$HOME/.ccc/hooks"
+HOOK_URL="https://raw.githubusercontent.com/$REPO/main/hooks/ccc-state.sh"
+mkdir -p "$HOOK_DIR"
+echo "Downloading notification hook..."
+if curl -fsSL "$HOOK_URL" -o "$HOOK_DIR/ccc-state.sh"; then
+  chmod +x "$HOOK_DIR/ccc-state.sh"
+  echo "Installed hook to $HOOK_DIR/ccc-state.sh"
+  echo ""
+  echo "To enable notifications, add hooks to ~/.claude/settings.json:"
+  echo "  See https://github.com/$REPO#notification-hooks"
+else
+  echo "Note: Could not download hook script. See README for manual setup."
+fi

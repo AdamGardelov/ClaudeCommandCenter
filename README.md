@@ -368,3 +368,82 @@ Arrow keys always work for navigation regardless of configuration.
 
 **Adding a new keybinding (developer guide):** Add a default entry in `KeyBindingService.Defaults` and a case in
 `App.DispatchAction()`.
+
+### Notification Hooks
+
+CCC can detect when sessions are idle, working, or waiting for input using Claude Code hooks. This enables the `!`
+indicator, terminal bell, and desktop notifications.
+
+**Without hooks**, CCC falls back to content-hash polling — it watches for the terminal output to stop changing and
+pattern-matches the idle prompt. This works but is slower and less reliable.
+
+**With hooks**, Claude Code tells CCC exactly when state changes happen via a small shell script.
+
+#### Setup
+
+1. **Copy the hook script** to `~/.ccc/hooks/`:
+
+```bash
+mkdir -p ~/.ccc/hooks
+cp hooks/ccc-state.sh ~/.ccc/hooks/ccc-state.sh
+chmod +x ~/.ccc/hooks/ccc-state.sh
+```
+
+2. **Add hooks to your Claude Code settings** (`~/.claude/settings.json`):
+
+```json
+{
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "permission_prompt|elicitation_dialog",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.ccc/hooks/ccc-state.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.ccc/hooks/ccc-state.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.ccc/hooks/ccc-state.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+If you already have other hooks configured, merge these entries into your existing `hooks` object.
+
+#### How It Works
+
+CCC injects a `CCC_SESSION_NAME` environment variable into every session it creates. The hook script reads this variable
+and writes the session state (`working`, `idle`, or `waiting`) to `~/.ccc/states/{session-name}`. CCC polls these files
+and updates the UI accordingly.
+
+| Event               | State Written | Meaning                              |
+|---------------------|---------------|--------------------------------------|
+| `UserPromptSubmit`  | `working`     | User sent a message, Claude is busy  |
+| `Stop`              | `idle`        | Claude finished, waiting at prompt   |
+| `Notification`      | `waiting`     | Claude needs permission or input     |
+
+The script exits silently when run outside CCC (no `CCC_SESSION_NAME` set), so it won't interfere with standalone
+Claude Code usage.
