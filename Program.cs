@@ -1,6 +1,10 @@
+using System.Text;
 using ClaudeCommandCenter;
 using ClaudeCommandCenter.Services;
 using ClaudeCommandCenter.Services.ConPty;
+
+Console.OutputEncoding = Encoding.UTF8;
+Console.InputEncoding = Encoding.UTF8;
 
 try
 {
