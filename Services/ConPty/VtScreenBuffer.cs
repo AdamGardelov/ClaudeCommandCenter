@@ -41,6 +41,10 @@ internal class VtScreenBuffer
     internal bool ApplicationCursorKeys => _applicationCursorKeys;
     private bool _applicationCursorKeys;
 
+    // Scroll region (DECSTBM) — top and bottom margins (0-based, inclusive)
+    private int _scrollTop;
+    private int _scrollBottom; // Initialized to _height - 1
+
     /// <summary>
     /// Structured SGR state — tracked as individual fields, serialized only when rendering.
     /// This avoids the accumulation bug where string concatenation grew SGR params endlessly.
@@ -115,6 +119,7 @@ internal class VtScreenBuffer
         _cells = new Cell[height, width];
         _scrollback = new string[ScrollbackCapacity];
         Clear();
+        _scrollBottom = height - 1;
     }
 
     public long Version
@@ -152,6 +157,8 @@ internal class VtScreenBuffer
             _height = newHeight;
             _cursorRow = Math.Min(_cursorRow, newHeight - 1);
             _cursorCol = Math.Min(_cursorCol, newWidth - 1);
+            _scrollTop = 0;
+            _scrollBottom = newHeight - 1;
             _version++;
         }
     }
@@ -187,6 +194,8 @@ internal class VtScreenBuffer
             _sgr = SgrState.Default;
             _parseState = ParseState.Normal;
             _csiParams.Clear();
+            _scrollTop = 0;
+            _scrollBottom = _height - 1;
             _version++;
         }
     }
@@ -260,6 +269,30 @@ internal class VtScreenBuffer
                     break;
             }
         }
+    }
+
+    private void SetScrollRegion(string paramsStr)
+    {
+        if (string.IsNullOrEmpty(paramsStr))
+        {
+            // Reset to full screen
+            _scrollTop = 0;
+            _scrollBottom = _height - 1;
+        }
+        else
+        {
+            ParseTwoParams(paramsStr, out var top, out var bottom, 1, _height);
+            _scrollTop = Math.Clamp(top - 1, 0, _height - 1);
+            _scrollBottom = Math.Clamp(bottom - 1, 0, _height - 1);
+            if (_scrollTop >= _scrollBottom)
+            {
+                _scrollTop = 0;
+                _scrollBottom = _height - 1;
+            }
+        }
+        // DECSTBM resets cursor to home position
+        _cursorRow = 0;
+        _cursorCol = 0;
     }
 
     private void RenderRow(StringBuilder sb, int row)
@@ -370,7 +403,11 @@ internal class VtScreenBuffer
                 _parseState = ParseState.CharsetSelect;
                 break;
             case 'M':
-                if (_cursorRow > 0) _cursorRow--;
+                // Reverse Index — move cursor up, scroll down if at top of scroll region
+                if (_cursorRow == _scrollTop)
+                    ScrollDown();
+                else if (_cursorRow > 0)
+                    _cursorRow--;
                 _parseState = ParseState.Normal;
                 break;
             default:
@@ -561,7 +598,8 @@ internal class VtScreenBuffer
                 break;
 
             case 'r':
-                // DECSTBM — Set scrolling region (will be implemented in Task 2, no-op for now)
+                if (!isPrivate) // Only handle DECSTBM, not private mode 'r'
+                    SetScrollRegion(effectiveParams);
                 break;
 
             case 'n' or 'c' or 't' or 'q':
@@ -644,35 +682,44 @@ internal class VtScreenBuffer
 
     private void LineFeed()
     {
-        if (_cursorRow < _height - 1)
+        if (_cursorRow == _scrollBottom)
+            ScrollUpRegion();
+        else if (_cursorRow < _height - 1)
             _cursorRow++;
-        else
-            ScrollUp();
     }
 
     private void ScrollUp()
     {
-        _scrollback[_scrollbackHead] = RenderRowToString(0);
-        _scrollbackHead = (_scrollbackHead + 1) % ScrollbackCapacity;
-        if (_scrollbackCount < ScrollbackCapacity)
-            _scrollbackCount++;
+        ScrollUpRegion();
+    }
 
-        for (var r = 0; r < _height - 1; r++)
+    private void ScrollUpRegion()
+    {
+        // Save the top row to scrollback only if scrolling the full screen
+        if (_scrollTop == 0)
+        {
+            _scrollback[_scrollbackHead] = RenderRowToString(0);
+            _scrollbackHead = (_scrollbackHead + 1) % ScrollbackCapacity;
+            if (_scrollbackCount < ScrollbackCapacity)
+                _scrollbackCount++;
+        }
+
+        for (var r = _scrollTop; r < _scrollBottom; r++)
             for (var c = 0; c < _width; c++)
                 _cells[r, c] = _cells[r + 1, c];
 
         for (var c = 0; c < _width; c++)
-            _cells[_height - 1, c] = Cell.Empty;
+            _cells[_scrollBottom, c] = Cell.Empty;
     }
 
     private void ScrollDown()
     {
-        for (var r = _height - 1; r > 0; r--)
+        for (var r = _scrollBottom; r > _scrollTop; r--)
             for (var c = 0; c < _width; c++)
                 _cells[r, c] = _cells[r - 1, c];
 
         for (var c = 0; c < _width; c++)
-            _cells[0, c] = Cell.Empty;
+            _cells[_scrollTop, c] = Cell.Empty;
     }
 
     private void EraseDisplay(int mode)
@@ -727,9 +774,10 @@ internal class VtScreenBuffer
 
     private void InsertLines(int n)
     {
+        var bottom = _scrollBottom;
         for (var i = 0; i < n; i++)
         {
-            for (var r = _height - 1; r > _cursorRow; r--)
+            for (var r = bottom; r > _cursorRow; r--)
                 for (var c = 0; c < _width; c++)
                     _cells[r, c] = _cells[r - 1, c];
             for (var c = 0; c < _width; c++)
@@ -739,13 +787,14 @@ internal class VtScreenBuffer
 
     private void DeleteLines(int n)
     {
+        var bottom = _scrollBottom;
         for (var i = 0; i < n; i++)
         {
-            for (var r = _cursorRow; r < _height - 1; r++)
+            for (var r = _cursorRow; r < bottom; r++)
                 for (var c = 0; c < _width; c++)
                     _cells[r, c] = _cells[r + 1, c];
             for (var c = 0; c < _width; c++)
-                _cells[_height - 1, c] = Cell.Empty;
+                _cells[bottom, c] = Cell.Empty;
         }
     }
 
