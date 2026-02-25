@@ -105,6 +105,7 @@ public class RingBuffer(int capacity = 500)
         {
             _head = 0;
             _count = 0;
+            _totalWritten = 0;
         }
     }
 }
