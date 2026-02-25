@@ -174,6 +174,7 @@ public class SessionHandler(
         // Re-enter alternate screen buffer and clear — tmux detach may
         // have exited alt screen, leaving Termius in normal mode with scrollback
         Console.Write("\e[?1049h"); // Enter alternate screen buffer
+        Console.Write("\e[?1003l\e[?1006l\e[?1015l\e[?1000l"); // Disable mouse tracking
         Console.Write("\e[2J"); // Clear screen
         Console.Write("\e[H"); // Cursor home
         Console.Write("\e[?25l"); // Re-hide cursor

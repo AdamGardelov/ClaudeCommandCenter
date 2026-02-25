@@ -97,7 +97,7 @@ jobs:
 
       - name: Package (Windows)
         if: matrix.rid == 'win-x64'
-        run: Compress-Archive -Path publish/ccc.exe -DestinationPath ccc-win-x64.zip
+        run: Compress-Archive -Path publish/ccc.exe -DestinationPath ccc-${{ matrix.rid }}.zip
         shell: pwsh
 
       - name: Upload artifact

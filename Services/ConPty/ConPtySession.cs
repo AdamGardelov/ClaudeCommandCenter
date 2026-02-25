@@ -14,6 +14,7 @@ internal class ConPtySession : IDisposable
     public required nint ProcessHandle { get; set; }
     public required int ProcessId { get; set; }
     public required SafeFileHandle InputWriteHandle { get; set; }
+    public required SafeFileHandle OutputReadHandle { get; set; }
     public required StreamWriter Input { get; set; }
     public required Thread ReaderThread { get; set; }
     public required RingBuffer OutputBuffer { get; set; }
@@ -35,11 +36,18 @@ internal class ConPtySession : IDisposable
         }
     }
 
+    ~ConPtySession()
+    {
+        Dispose();
+    }
+
     public void Dispose()
     {
         if (_disposed)
             return;
         _disposed = true;
+
+        GC.SuppressFinalize(this);
 
         Cts.Cancel();
 
@@ -65,6 +73,11 @@ internal class ConPtySession : IDisposable
         // Reader thread will exit on its own when the pipe closes
         if (ReaderThread.IsAlive)
             ReaderThread.Join(2000);
+
+        // OutputReadHandle is owned by the ReaderLoop's FileStream (using var),
+        // but dispose explicitly as a safety net
+        if (!OutputReadHandle.IsClosed)
+            OutputReadHandle.Dispose();
 
         Cts.Dispose();
     }

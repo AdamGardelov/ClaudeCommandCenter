@@ -1,11 +1,10 @@
 using System.Diagnostics;
-using System.Text.RegularExpressions;
 using ClaudeCommandCenter.Models;
 using Spectre.Console;
 
 namespace ClaudeCommandCenter.Services;
 
-public partial class TmuxBackend : ISessionBackend
+public class TmuxBackend : ISessionBackend
 {
     public List<Session> ListSessions()
     {
@@ -177,26 +176,11 @@ public partial class TmuxBackend : ISessionBackend
 
     public bool IsInsideHost() => Environment.GetEnvironmentVariable("TMUX") != null;
 
-    public bool HasClaude()
+    public bool HasClaude() => SessionContentAnalyzer.CheckClaudeAvailable();
+
+    public void Dispose()
     {
-        try
-        {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = "claude",
-                Arguments = "--version",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            };
-            var process = Process.Start(startInfo);
-            process?.WaitForExit();
-            return process?.ExitCode == 0;
-        }
-        catch
-        {
-            return false;
-        }
+        // No-op — tmux sessions persist independently of CCC
     }
 
     private void DetectWaitingByPaneContent(Session session)
@@ -208,7 +192,7 @@ public partial class TmuxBackend : ISessionBackend
             return;
         }
 
-        var content = GetContentAboveStatusBar(output);
+        var content = SessionContentAnalyzer.GetContentAboveStatusBar(output);
 
         if (content == session.PreviousContent)
             session.StableContentCount++;
@@ -219,103 +203,8 @@ public partial class TmuxBackend : ISessionBackend
         }
 
         var isStable = session.StableContentCount >= StableThreshold;
-        session.IsIdle = isStable && IsIdlePrompt(content);
+        session.IsIdle = isStable && SessionContentAnalyzer.IsIdlePrompt(content);
         session.IsWaitingForInput = isStable && !session.IsIdle;
-    }
-
-    /// <summary>
-    /// Detects the Claude Code idle prompt: a ❯ line between two ─ separator lines.
-    /// Returns false if Claude's last message ends with '?' (asking a question).
-    /// </summary>
-    private static bool IsIdlePrompt(string content)
-    {
-        var lines = content.Split('\n');
-
-        int bottomSep = -1, prompt = -1;
-        for (var i = lines.Length - 1; i >= 0; i--)
-        {
-            if (string.IsNullOrWhiteSpace(lines[i]))
-                continue;
-
-            if (bottomSep < 0)
-                bottomSep = i;
-            else
-            {
-                prompt = i;
-                break;
-            }
-        }
-
-        if (prompt < 0)
-            return false;
-
-        var rule = lines[bottomSep].Trim();
-        if (rule.Length < 3 || rule.Any(c => c != '─'))
-            return false;
-
-        if (!lines[prompt].TrimStart().StartsWith('❯'))
-            return false;
-
-        for (var i = prompt - 1; i >= 0; i--)
-        {
-            if (string.IsNullOrWhiteSpace(lines[i]))
-                continue;
-
-            var trimmed = lines[i].Trim();
-            if (trimmed.Length >= 3 && trimmed.All(c => c == '─'))
-            {
-                for (var j = i - 1; j >= 0; j--)
-                {
-                    if (string.IsNullOrWhiteSpace(lines[j]))
-                        continue;
-                    var line = lines[j].TrimStart();
-                    if (line.StartsWith('⎿') || line.StartsWith('…') || line.StartsWith('❯')
-                        || line.StartsWith('●') || line.StartsWith('✻'))
-                        continue;
-                    return !line.TrimEnd().EndsWith('?');
-                }
-
-                return true;
-            }
-
-            return true;
-        }
-
-        return true;
-    }
-
-    private static readonly Regex StatusBarTimerPattern = StatusBarTimerRegex();
-
-    private static string GetContentAboveStatusBar(string paneOutput)
-    {
-        var lines = paneOutput.Split('\n');
-
-        var statusBarIndex = -1;
-        for (var i = lines.Length - 1; i >= 0; i--)
-        {
-            if (string.IsNullOrWhiteSpace(lines[i]))
-                continue;
-
-            if (StatusBarTimerPattern.IsMatch(lines[i]))
-            {
-                statusBarIndex = i;
-                break;
-            }
-        }
-
-        if (statusBarIndex >= 0)
-            return string.Join('\n', lines.AsSpan(0, statusBarIndex));
-
-        var lastNonEmpty = -1;
-        for (var i = lines.Length - 1; i >= 0; i--)
-            if (!string.IsNullOrWhiteSpace(lines[i]))
-            {
-                lastNonEmpty = i;
-                break;
-            }
-
-        var end = lastNonEmpty >= 0 ? lastNonEmpty : lines.Length;
-        return string.Join('\n', lines.AsSpan(0, end));
     }
 
     private static (bool Success, string? Error) RunTmuxWithError(params string[] args)
@@ -381,7 +270,4 @@ public partial class TmuxBackend : ISessionBackend
             return null;
         }
     }
-
-    [GeneratedRegex(@"\d+[hms]\d*[ms]?\s*$", RegexOptions.Compiled)]
-    private static partial Regex StatusBarTimerRegex();
 }

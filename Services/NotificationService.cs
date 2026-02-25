@@ -48,7 +48,8 @@ public static class NotificationService
         if (config.DesktopNotify)
             SendDesktopNotification(message);
 
-        SendTmuxDisplayMessage($"⏳ {message}");
+        if (!OperatingSystem.IsWindows())
+            SendTmuxDisplayMessage($"⏳ {message}");
 
         return message;
     }

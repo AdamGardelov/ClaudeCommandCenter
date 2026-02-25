@@ -1,13 +1,12 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.RegularExpressions;
 using ClaudeCommandCenter.Models;
 using Microsoft.Win32.SafeHandles;
 using static ClaudeCommandCenter.Services.ConPty.NativeMethods;
 
 namespace ClaudeCommandCenter.Services.ConPty;
 
-public partial class ConPtyBackend : ISessionBackend
+public class ConPtyBackend : ISessionBackend
 {
     private readonly Dictionary<string, ConPtySession> _sessions = new(StringComparer.Ordinal);
     private readonly Lock _sessionsLock = new();
@@ -65,7 +64,12 @@ public partial class ConPtyBackend : ISessionBackend
             var session = StartProcess(name, workingDirectory);
             lock (_sessionsLock)
             {
-                _sessions[name] = session;
+                if (!_sessions.TryAdd(name, session))
+                {
+                    // Another thread created it between our check and insertion
+                    session.Dispose();
+                    return $"Session '{name}' already exists";
+                }
             }
 
             return null;
@@ -134,8 +138,11 @@ public partial class ConPtyBackend : ISessionBackend
         if (!string.IsNullOrEmpty(currentContent))
             Console.Write(currentContent);
 
+        // Snapshot position after dumping current buffer
+        var bufferPosition = session.OutputBuffer.TotalWritten;
+
         // Start forwarding loop on a background thread
-        var forwardThread = new Thread(() => ForwardOutput(session, token))
+        var forwardThread = new Thread(() => ForwardOutput(session, bufferPosition, token))
         {
             IsBackground = true,
             Name = $"ConPTY-Attach-{name}"
@@ -155,8 +162,9 @@ public partial class ConPtyBackend : ISessionBackend
 
                 var key = Console.ReadKey(true);
 
-                // Detach combo: Ctrl+]
-                if (key is { Key: ConsoleKey.Oem6, Modifiers: ConsoleModifiers.Control })
+                // Detach combo: Ctrl+] or Ctrl+\ (for non-US keyboard layouts)
+                if (key is { Key: ConsoleKey.Oem6, Modifiers: ConsoleModifiers.Control }
+                    or { Key: ConsoleKey.Oem5, Modifiers: ConsoleModifiers.Control })
                 {
                     _detachRequested = true;
                     break;
@@ -238,7 +246,7 @@ public partial class ConPtyBackend : ISessionBackend
     }
 
     // Number of consecutive stable polls before marking as "waiting for input"
-    private const int _stableThreshold = 4;
+    private const int StableThreshold = 4;
 
     public void DetectWaitingForInputBatch(List<Session> sessions)
     {
@@ -280,26 +288,15 @@ public partial class ConPtyBackend : ISessionBackend
         return false;
     }
 
-    public bool HasClaude()
+    public bool HasClaude() => SessionContentAnalyzer.CheckClaudeAvailable();
+
+    public void Dispose()
     {
-        try
+        lock (_sessionsLock)
         {
-            var startInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "claude",
-                Arguments = "--version",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            var process = System.Diagnostics.Process.Start(startInfo);
-            process?.WaitForExit();
-            return process?.ExitCode == 0;
-        }
-        catch
-        {
-            return false;
+            foreach (var session in _sessions.Values)
+                session.Dispose();
+            _sessions.Clear();
         }
     }
 
@@ -396,6 +393,7 @@ public partial class ConPtyBackend : ISessionBackend
                 ProcessHandle = procInfo.hProcess,
                 ProcessId = procInfo.dwProcessId,
                 InputWriteHandle = inputWrite,
+                OutputReadHandle = outputRead,
                 Input = inputWriter,
                 ReaderThread = readerThread,
                 OutputBuffer = buffer,
@@ -404,12 +402,15 @@ public partial class ConPtyBackend : ISessionBackend
         }
         catch
         {
-            DeleteProcThreadAttributeList(attrList);
-            Marshal.FreeHGlobal(attrList);
             ClosePseudoConsole(hPC);
             outputRead.Dispose();
             inputWrite.Dispose();
             throw;
+        }
+        finally
+        {
+            DeleteProcThreadAttributeList(attrList);
+            Marshal.FreeHGlobal(attrList);
         }
     }
 
@@ -440,24 +441,15 @@ public partial class ConPtyBackend : ISessionBackend
         }
     }
 
-    private static void ForwardOutput(ConPtySession session, CancellationToken ct)
+    private static void ForwardOutput(ConPtySession session, long position, CancellationToken ct)
     {
-        // Poll the ring buffer for new content and write to stdout.
-        // This is simpler than tapping the pipe directly during attach,
-        // since the reader thread is already writing to the buffer.
-        var lastContent = "";
         try
         {
             while (!ct.IsCancellationRequested && session.IsAlive)
             {
-                var content = session.OutputBuffer.GetContent();
-                if (content != lastContent && content.Length > lastContent.Length)
-                {
-                    // Write only the new portion
-                    var newContent = content[lastContent.Length..];
+                var newContent = session.OutputBuffer.GetNewContent(ref position);
+                if (newContent != null)
                     Console.Write(newContent);
-                    lastContent = content;
-                }
 
                 Thread.Sleep(16); // ~60fps
             }
@@ -535,7 +527,7 @@ public partial class ConPtyBackend : ISessionBackend
             return;
         }
 
-        content = GetContentAboveStatusBar(content);
+        content = SessionContentAnalyzer.GetContentAboveStatusBar(content);
 
         if (content == session.PreviousContent)
             session.StableContentCount++;
@@ -545,105 +537,8 @@ public partial class ConPtyBackend : ISessionBackend
             session.PreviousContent = content;
         }
 
-        var isStable = session.StableContentCount >= _stableThreshold;
-        session.IsIdle = isStable && IsIdlePrompt(content);
+        var isStable = session.StableContentCount >= StableThreshold;
+        session.IsIdle = isStable && SessionContentAnalyzer.IsIdlePrompt(content);
         session.IsWaitingForInput = isStable && !session.IsIdle;
     }
-
-    // The idle prompt and status bar detection logic is identical to TmuxBackend.
-    // Duplicated here to keep backends self-contained.
-
-    private static bool IsIdlePrompt(string content)
-    {
-        var lines = content.Split('\n');
-
-        int bottomSep = -1, prompt = -1;
-        for (var i = lines.Length - 1; i >= 0; i--)
-        {
-            if (string.IsNullOrWhiteSpace(lines[i]))
-                continue;
-
-            if (bottomSep < 0)
-                bottomSep = i;
-            else
-            {
-                prompt = i;
-                break;
-            }
-        }
-
-        if (prompt < 0)
-            return false;
-
-        var rule = lines[bottomSep].Trim();
-        if (rule.Length < 3 || rule.Any(c => c != '─'))
-            return false;
-
-        if (!lines[prompt].TrimStart().StartsWith('❯'))
-            return false;
-
-        for (var i = prompt - 1; i >= 0; i--)
-        {
-            if (string.IsNullOrWhiteSpace(lines[i]))
-                continue;
-
-            var trimmed = lines[i].Trim();
-            if (trimmed.Length >= 3 && trimmed.All(c => c == '─'))
-            {
-                for (var j = i - 1; j >= 0; j--)
-                {
-                    if (string.IsNullOrWhiteSpace(lines[j]))
-                        continue;
-                    var line = lines[j].TrimStart();
-                    if (line.StartsWith('⎿') || line.StartsWith('…') || line.StartsWith('❯')
-                        || line.StartsWith('●') || line.StartsWith('✻'))
-                        continue;
-                    return !line.TrimEnd().EndsWith('?');
-                }
-            }
-
-            return true;
-        }
-
-        return true;
-    }
-
-    private static readonly Regex _statusBarTimerPattern = StatusBarTimerRegex();
-
-    private static string GetContentAboveStatusBar(string paneOutput)
-    {
-        var lines = paneOutput.Split('\n');
-
-        var statusBarIndex = -1;
-        for (var i = lines.Length - 1; i >= 0; i--)
-        {
-            if (string.IsNullOrWhiteSpace(lines[i]))
-                continue;
-
-            if (!_statusBarTimerPattern.IsMatch(lines[i]))
-                continue;
-
-            statusBarIndex = i;
-            break;
-        }
-
-        if (statusBarIndex >= 0)
-            return string.Join('\n', lines.AsSpan(0, statusBarIndex));
-
-        var lastNonEmpty = -1;
-        for (var i = lines.Length - 1; i >= 0; i--)
-        {
-            if (string.IsNullOrWhiteSpace(lines[i]))
-                continue;
-
-            lastNonEmpty = i;
-            break;
-        }
-
-        var end = lastNonEmpty >= 0 ? lastNonEmpty : lines.Length;
-        return string.Join('\n', lines.AsSpan(0, end));
-    }
-
-    [GeneratedRegex(@"\d+[hms]\d*[ms]?\s*$", RegexOptions.Compiled)]
-    private static partial Regex StatusBarTimerRegex();
 }

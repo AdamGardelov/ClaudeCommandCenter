@@ -2,7 +2,7 @@ using ClaudeCommandCenter.Models;
 
 namespace ClaudeCommandCenter.Services;
 
-public interface ISessionBackend
+public interface ISessionBackend : IDisposable
 {
     // Lifecycle
     List<Session> ListSessions();
