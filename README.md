@@ -105,7 +105,7 @@ PowerShell, or cmd.
 Key differences from the tmux backend:
 
 - **Sessions are ephemeral** — closing CCC ends all sessions. tmux sessions persist independently; ConPTY sessions don't.
-- **Detach with double-tap `Escape`** — press Escape twice quickly to return to the dashboard.
+- **Detach with `Alt+Q`** — press Alt+Q to return to the dashboard.
 - **No status bar color** — tmux shows colored session status bars; on Windows, color is shown in CCC's own UI.
 - **Requires Windows 10 1809+** (build 17763) for ConPTY support.
 
@@ -195,7 +195,7 @@ command center:
 | Platform      | Detach shortcut |
 |---------------|-----------------|
 | Linux / macOS | `Ctrl-b d` (standard tmux detach) |
-| Windows       | Double-tap `Escape` |
+| Windows       | `Alt+Q` |
 
 ### Git Diff View
 
