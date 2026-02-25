@@ -11,13 +11,13 @@ public static class NotificationService
     /// Sends notifications for sessions that just transitioned to waiting-for-input.
     /// Returns the notification message if any were sent, null otherwise.
     /// </summary>
-    public static string? NotifyWaiting(List<TmuxSession> transitioned, NotificationConfig config)
+    public static string? NotifyWaiting(List<Session> transitioned, NotificationConfig config)
     {
         if (!config.Enabled || transitioned.Count == 0)
             return null;
 
         var now = DateTime.UtcNow;
-        var eligible = new List<TmuxSession>();
+        var eligible = new List<Session>();
 
         foreach (var session in transitioned)
         {
@@ -64,7 +64,7 @@ public static class NotificationService
             _cooldowns.Remove(key);
     }
 
-    private static string FormatSession(TmuxSession session) =>
+    private static string FormatSession(Session session) =>
         string.IsNullOrEmpty(session.Description) ? session.Name : $"{session.Name} ({session.Description})";
 
     private static void SendOscNotification(string title, string body)

@@ -16,14 +16,19 @@
 
 ![Diff View](Images/6.png)
 
-A terminal UI for managing multiple Claude Code sessions via tmux. Lists your sessions, shows a live preview of the
-selected pane, and highlights sessions waiting for input.
+A terminal UI for managing multiple Claude Code sessions. Lists your sessions, shows a live preview of the selected
+pane, and highlights sessions waiting for input.
 
 ## Requirements
 
-- [.NET 10](https://dotnet.microsoft.com/download) SDK or runtime
-- [tmux](https://github.com/tmux/tmux)
-- Linux or macOS (Windows via [WSL2](docs/WSL2-SETUP.md))
+| Platform        | Backend | Requirements                                                                     |
+|-----------------|---------|----------------------------------------------------------------------------------|
+| Linux / macOS   | tmux    | [.NET 10](https://dotnet.microsoft.com/download), [tmux](https://github.com/tmux/tmux) |
+| Windows         | ConPTY  | [.NET 10](https://dotnet.microsoft.com/download), Windows 10 1809+              |
+| Windows (WSL2)  | tmux    | [.NET 10](https://dotnet.microsoft.com/download), tmux (inside WSL)              |
+
+On Linux and macOS, CCC uses tmux as the session backend — sessions persist independently of CCC. On Windows, CCC uses
+the native ConPTY (pseudoconsole) API — no WSL or tmux required, but sessions are tied to the CCC process.
 
 ## Build
 
@@ -35,14 +40,16 @@ dotnet build
 
 ### From GitHub Release
 
-Download and install the latest release automatically:
+Download and install the latest release automatically (Linux / macOS):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AdamGardelov/ClaudeCommandCenter/main/install.sh | bash
 ```
 
 This detects your platform (Linux, macOS Intel/ARM), downloads the latest release, and installs to `/usr/local/bin`.
-Windows users should run this inside WSL.
+
+**Windows:** Download `ccc-win-x64.zip` from the [latest release](https://github.com/AdamGardelov/ClaudeCommandCenter/releases),
+extract `ccc.exe`, and add it to your PATH.
 
 ### From Source
 
@@ -57,12 +64,19 @@ dotnet publish -c Release -r osx-arm64 --self-contained -p:PublishSingleFile=tru
 
 # macOS Intel
 dotnet publish -c Release -r osx-x64 --self-contained -p:PublishSingleFile=true -o dist
+
+# Windows
+dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o dist
 ```
 
 Then copy to your PATH:
 
 ```bash
+# Linux / macOS
 sudo cp dist/ccc /usr/local/bin/ccc
+
+# Windows (PowerShell) — copy to a directory in your PATH
+Copy-Item dist\ccc.exe "$env:LOCALAPPDATA\Microsoft\WindowsApps\ccc.exe"
 ```
 
 After installing, the `ccc` command is available from any terminal.
@@ -77,6 +91,18 @@ ccc
 
 The app shows a split-panel TUI — sessions on the left, a live pane preview on the right. Sessions that have been idle
 for a few seconds are marked with `!` (waiting for input).
+
+### Windows (ConPTY)
+
+On Windows, CCC uses the native ConPTY pseudoconsole API. No WSL, no tmux — just run `ccc` in Windows Terminal,
+PowerShell, or cmd.
+
+Key differences from the tmux backend:
+
+- **Sessions are ephemeral** — closing CCC ends all sessions. tmux sessions persist independently; ConPTY sessions don't.
+- **Detach with `Ctrl+]`** — instead of tmux's `Ctrl-b d`.
+- **No status bar color** — tmux shows colored session status bars; on Windows, color is shown in CCC's own UI.
+- **Requires Windows 10 1809+** (build 17763) for ConPTY support.
 
 ### Mobile Mode
 
@@ -158,8 +184,13 @@ Press `Enter` on a grid cell to attach directly to that session. Press `G` to sw
 | `Y` / `N` / `S` | Approve, reject, send (same as list view) |
 | `q`             | Quit                                      |
 
-Arrow keys always work for navigation regardless of configuration. When you attach to a session, detach with the
-standard tmux prefix (`Ctrl-b d`) to return to the command center.
+Arrow keys always work for navigation regardless of configuration. When you attach to a session, detach to return to the
+command center:
+
+| Platform      | Detach shortcut |
+|---------------|-----------------|
+| Linux / macOS | `Ctrl-b d` (standard tmux detach) |
+| Windows       | `Ctrl+]`        |
 
 ### Git Diff View
 

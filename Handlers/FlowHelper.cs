@@ -111,7 +111,7 @@ public class FlowHelper(CccConfig config)
         return worktreeDest;
     }
 
-    public static string SanitizeTmuxSessionName(string name)
+    public static string SanitizeSessionName(string name)
     {
         // tmux silently replaces dots and colons with underscores in session names
         return name.Replace('.', '_').Replace(':', '_');

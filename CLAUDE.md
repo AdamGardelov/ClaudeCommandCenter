@@ -14,8 +14,8 @@ No test project exists. Verify changes by building and manual testing.
 
 ## Architecture
 
-**Claude Command Center (ccc)** is a terminal dashboard for managing multiple Claude Code tmux sessions. Single .NET 10
-executable, single dependency (Spectre.Console).
+**Claude Command Center (ccc)** is a terminal dashboard for managing multiple Claude Code sessions. Single .NET 10
+executable, single dependency (Spectre.Console). Uses tmux on Linux/macOS, native ConPTY on Windows.
 
 ### Core Loop
 
@@ -47,17 +47,26 @@ Delegates domain logic to handlers.
 | `SessionHandler`  | Session CRUD — create, delete, edit, attach, exclude, send keys, open folder/IDE                                                     |
 | `GroupHandler`    | Group CRUD — create (3 modes: existing worktree, new worktrees, manual), delete, edit, move session to group                         |
 
-Handlers receive `AppState` and `CccConfig` via primary constructors, plus `Action` callbacks for cross-cutting
-concerns (reload sessions, render, reset caches).
+Handlers receive `AppState`, `CccConfig`, and `ISessionBackend` via primary constructors, plus `Action` callbacks for
+cross-cutting concerns (reload sessions, render, reset caches).
+
+### Session Backend
+
+`ISessionBackend` abstracts all session lifecycle operations. Platform auto-selects at startup:
+
+| Backend        | Platform      | Session persistence                        |
+|----------------|---------------|--------------------------------------------|
+| `TmuxBackend`  | Linux / macOS | Persistent (tmux server survives CCC exit) |
+| `ConPtyBackend`| Windows       | Ephemeral (sessions die with CCC)          |
 
 ### Services (all static)
 
 | Service             | Purpose                                                                                                |
 |---------------------|--------------------------------------------------------------------------------------------------------|
-| `TmuxService`       | All tmux interaction — create/kill/attach sessions, capture panes, send keys, detect waiting-for-input |
 | `ConfigService`     | JSON persistence to `~/.ccc/config.json`. Handles session metadata, groups, keybindings                |
 | `KeyBindingService` | Resolves keybindings from defaults + config overrides. Builds key→action map                           |
-| `GitService`        | `git worktree add`, `IsGitRepo`, `FetchPrune`, branch name sanitization                                |
+| `GitService`        | `git worktree add`, `IsGitRepo`, `FetchPrune`, `DetectGitInfo`, branch name sanitization               |
+| `RingBuffer`        | Thread-safe circular buffer for ConPTY terminal output capture                                         |
 | `UpdateChecker`     | Async GitHub API check for newer releases                                                              |
 | `CrashLog`          | Exception logging to `~/.ccc/crash.log` with auto-trim                                                 |
 
@@ -73,7 +82,7 @@ concerns (reload sessions, render, reset caches).
 ### Models
 
 - `CccConfig`: Root config (favorites, groups, colors, descriptions, keybindings, worktreeBasePath)
-- `TmuxSession`: Runtime session with tmux metadata + git info + waiting-for-input status
+- `Session`: Runtime session with backend metadata + git info + waiting-for-input status
 - `SessionGroup`: Named group of session names with optional worktree path
 - `KeyBinding` / `KeyBindingConfig`: Resolved keybinding and JSON config override
 - `SettingsItem` / `SettingsCategory`: Settings view data structures

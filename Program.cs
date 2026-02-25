@@ -1,10 +1,14 @@
 using ClaudeCommandCenter;
 using ClaudeCommandCenter.Services;
+using ClaudeCommandCenter.Services.ConPty;
 
 try
 {
     var mobile = args.Contains("-m") || args.Contains("--mobile");
-    var app = new App(mobile);
+    ISessionBackend backend = OperatingSystem.IsWindows()
+        ? new ConPtyBackend()
+        : new TmuxBackend();
+    var app = new App(backend, mobile);
     app.Run();
 }
 catch (Exception ex)

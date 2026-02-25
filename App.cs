@@ -8,7 +8,7 @@ using Spectre.Console;
 
 namespace ClaudeCommandCenter;
 
-public class App(bool mobileMode = false)
+public class App(ISessionBackend backend, bool mobileMode = false)
 {
     private readonly AppState _state = new()
     {
@@ -40,25 +40,25 @@ public class App(bool mobileMode = false)
 
     public void Run()
     {
-        if (!TmuxService.HasTmux())
+        if (!backend.IsAvailable())
         {
-            AnsiConsole.MarkupLine("[red]tmux is not installed or not in PATH.[/]");
+            AnsiConsole.MarkupLine("[red]Session backend is not available.[/]");
             return;
         }
 
-        if (TmuxService.IsInsideTmux())
+        if (backend.IsInsideHost())
         {
-            AnsiConsole.MarkupLine("[red]ClaudeCommandCenter should run outside tmux.[/]");
-            AnsiConsole.MarkupLine("[grey]It manages tmux sessions from the outside. Exit tmux first.[/]");
+            AnsiConsole.MarkupLine("[red]ClaudeCommandCenter should run outside the session host.[/]");
+            AnsiConsole.MarkupLine("[grey]It manages sessions from the outside. Exit tmux first.[/]");
             return;
         }
 
         _flow = new FlowHelper(_config);
         _diffHandler = new DiffHandler(_state);
         _settingsHandler = new SettingsHandler(_state, _config, Render, RefreshKeybindings);
-        _sessionHandler = new SessionHandler(_state, _config, _flow, LoadSessions, Render, () => _lastSelectedSession = null);
+        _sessionHandler = new SessionHandler(_state, _config, _flow, backend, LoadSessions, Render, () => _lastSelectedSession = null);
         _groupHandler = new GroupHandler(
-            _state, _config, _flow, LoadSessions, Render,
+            _state, _config, _flow, backend, LoadSessions, Render,
             () => _lastSelectedSession = null,
             () =>
             {
@@ -67,7 +67,7 @@ public class App(bool mobileMode = false)
             },
             ResizeGridPanes);
 
-        _claudeAvailable = TmuxService.HasClaude();
+        _claudeAvailable = backend.HasClaude();
         if (!_claudeAvailable)
         {
             AnsiConsole.MarkupLine("[yellow]Warning: 'claude' was not found in PATH.[/]");
@@ -174,7 +174,7 @@ public class App(bool mobileMode = false)
     private void LoadSessions()
     {
         var oldSessions = _state.Sessions.ToDictionary(s => s.Name);
-        _state.Sessions = TmuxService.ListSessions();
+        _state.Sessions = backend.ListSessions();
         var startCommitsDirty = false;
         foreach (var s in _state.Sessions)
         {
@@ -183,7 +183,7 @@ public class App(bool mobileMode = false)
             if (_config.SessionColors.TryGetValue(s.Name, out var color))
                 s.ColorTag = color;
             s.IsExcluded = _config.ExcludedSessions.Contains(s.Name);
-            TmuxService.ApplyStatusColor(s.Name, color ?? "grey42");
+            backend.ApplyStatusColor(s.Name, color ?? "grey42");
 
             // Preserve content tracking state so sessions don't briefly flash as "working"
             if (oldSessions.TryGetValue(s.Name, out var old))
@@ -267,7 +267,7 @@ public class App(bool mobileMode = false)
             .ToDictionary(s => s.Name, s => s.IsIdle);
 
         // Refresh waiting-for-input status on all sessions (single tmux call)
-        TmuxService.DetectWaitingForInputBatch(_state.Sessions);
+        backend.DetectWaitingForInputBatch(_state.Sessions);
         _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput && !s.IsIdle && !s.IsDead);
 
         // Detect false -> true transitions and notify.
@@ -312,7 +312,7 @@ public class App(bool mobileMode = false)
         {
             _lastSelectedSession = sessionName;
             _lastPreviewWidth = 0; // Force resize for newly selected session
-            _capturedPane = session != null ? TmuxService.CapturePaneContent(session.Name) : null;
+            _capturedPane = session != null ? backend.CapturePaneContent(session.Name) : null;
             return true;
         }
 
@@ -326,7 +326,7 @@ public class App(bool mobileMode = false)
             return statusChanged;
 
         var changed = statusChanged;
-        var newContent = TmuxService.CapturePaneContent(session.Name);
+        var newContent = backend.CapturePaneContent(session.Name);
         if (newContent != _capturedPane)
         {
             _capturedPane = newContent;
@@ -344,7 +344,7 @@ public class App(bool mobileMode = false)
 
         foreach (var session in visibleSessions)
         {
-            var content = TmuxService.CapturePaneContent(session.Name);
+            var content = backend.CapturePaneContent(session.Name);
             if (content != null)
                 newPanes[session.Name] = content;
 
@@ -385,7 +385,7 @@ public class App(bool mobileMode = false)
         _lastGridHeight = targetHeight;
 
         foreach (var session in sessions)
-            TmuxService.ResizeWindow(session.Name, targetWidth, targetHeight);
+            backend.ResizeWindow(session.Name, targetWidth, targetHeight);
     }
 
     private void ResizePreviewPane()
@@ -404,7 +404,7 @@ public class App(bool mobileMode = false)
             return;
 
         _lastPreviewWidth = targetWidth;
-        TmuxService.ResizeWindow(session.Name, targetWidth, Console.WindowHeight);
+        backend.ResizeWindow(session.Name, targetWidth, Console.WindowHeight);
     }
 
     private void Render()
@@ -639,7 +639,7 @@ public class App(bool mobileMode = false)
 
                 if (text.Length > 0 && target != null)
                 {
-                    var sendError = TmuxService.SendKeys(target, text);
+                    var sendError = backend.SendKeys(target, text);
                     if (sendError == null)
                     {
                         _state.SetStatus($"Sent to {target}");

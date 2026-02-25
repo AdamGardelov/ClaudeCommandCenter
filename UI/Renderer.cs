@@ -150,7 +150,7 @@ public static class Renderer
             .Expand();
     }
 
-    private static Markup BuildSessionRow(TmuxSession session, bool isSelected)
+    private static Markup BuildSessionRow(Session session, bool isSelected)
     {
         var name = Markup.Escape(session.Name);
         var spinner = Markup.Escape(GetSpinnerFrame());
@@ -227,7 +227,7 @@ public static class Renderer
     }
 
     private static Panel BuildPreviewPanel(AppState state, string? capturedPane,
-        TmuxSession? sessionOverride = null)
+        Session? sessionOverride = null)
     {
         var session = sessionOverride ?? state.GetSelectedSession();
 
@@ -438,7 +438,7 @@ public static class Renderer
         return grid;
     }
 
-    private static Panel BuildGridCell(TmuxSession session, bool isSelected, string? capturedPane, int outputLines, int gridCols)
+    private static Panel BuildGridCell(Session session, bool isSelected, string? capturedPane, int outputLines, int gridCols)
     {
         var rows = new List<IRenderable>();
         var maxWidth = Math.Max(20, Console.WindowWidth / gridCols - 4);
@@ -640,7 +640,7 @@ public static class Renderer
         };
     }
 
-    private static Rows BuildMobileSessionList(AppState state, List<TmuxSession> sessions, int listHeight)
+    private static Rows BuildMobileSessionList(AppState state, List<Session> sessions, int listHeight)
     {
         var rows = new List<IRenderable>();
 
@@ -666,7 +666,7 @@ public static class Renderer
         return new Rows(rows);
     }
 
-    private static Markup BuildMobileSessionRow(TmuxSession session, bool isSelected)
+    private static Markup BuildMobileSessionRow(Session session, bool isSelected)
     {
         var name = Markup.Escape(session.Name);
         var spinner = Markup.Escape(GetSpinnerFrame());
@@ -875,7 +875,7 @@ public static class Renderer
         return new Padder(figlet).PadLeft(leftPad).PadRight(0).PadTop(0).PadBottom(0);
     }
 
-    private static string StatusLabel(TmuxSession session)
+    private static string StatusLabel(Session session)
     {
         if (session.IsDead)
             return "[red]session ended[/]";

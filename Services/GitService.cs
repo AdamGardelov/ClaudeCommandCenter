@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using ClaudeCommandCenter.Models;
 
 namespace ClaudeCommandCenter.Services;
 
@@ -72,6 +73,23 @@ public static class GitService
             return output;
 
         return string.Join('\n', lines.Take(maxLines)) + $"\n\n... truncated ({lines.Length - maxLines} more lines)";
+    }
+
+    public static void DetectGitInfo(Session session)
+    {
+        if (session.CurrentPath == null)
+            return;
+
+        var (branchOk, branch) = RunGit(session.CurrentPath, "rev-parse", "--abbrev-ref", "HEAD");
+        if (!branchOk || branch == null)
+            return;
+
+        session.GitBranch = branch;
+
+        // A worktree's .git is a file pointing to the main repo's worktrees dir,
+        // so git-dir will contain "/worktrees/" for linked worktrees
+        var (_, gitDir) = RunGit(session.CurrentPath, "rev-parse", "--git-dir");
+        session.IsWorktree = gitDir?.Contains("/worktrees/") == true;
     }
 
     private static (bool Success, string? Output) RunGit(string workingDirectory, params string[] args)

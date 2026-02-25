@@ -8,6 +8,7 @@
     <RootNamespace>ClaudeCommandCenter</RootNamespace>
     <AssemblyName>ccc</AssemblyName>
     <Version>2.14.0</Version>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Authors>Adam Gärdelöv</Authors>
     <Description>A terminal dashboard for managing multiple Claude Code tmux sessions</Description>
     <Copyright>Copyright © 2025 Adam Gärdelöv</Copyright>

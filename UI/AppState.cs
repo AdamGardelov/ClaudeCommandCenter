@@ -5,7 +5,7 @@ namespace ClaudeCommandCenter.UI;
 
 public class AppState
 {
-    public List<TmuxSession> Sessions { get; set; } = [];
+    public List<Session> Sessions { get; set; } = [];
     public int CursorIndex { get; set; }
     public ViewMode ViewMode { get; set; } = ViewMode.List;
     public bool Running { get; set; } = true;
@@ -42,7 +42,7 @@ public class AppState
     public string? DiffOverlayBranch { get; set; }
     public string? DiffOverlayStatSummary { get; set; }
 
-    public TmuxSession? GetSelectedSession()
+    public Session? GetSelectedSession()
     {
         if (MobileMode)
         {
@@ -69,7 +69,7 @@ public class AppState
         return null;
     }
 
-    public List<TmuxSession> GetVisibleSessions()
+    public List<Session> GetVisibleSessions()
     {
         // Group grid: show only group's sessions
         if (ActiveGroup != null)
@@ -86,7 +86,7 @@ public class AppState
         return GetStandaloneSessions();
     }
 
-    public List<TmuxSession> GetStandaloneSessions()
+    public List<Session> GetStandaloneSessions()
     {
         var groupedNames = new HashSet<string>(Groups.SelectMany(g => g.Sessions));
         return Sessions
@@ -97,12 +97,12 @@ public class AppState
             .ToList();
     }
 
-    public List<TmuxSession> GetGridSessions() =>
+    public List<Session> GetGridSessions() =>
         GetVisibleSessions()
             .Where(s => !s.IsExcluded)
             .ToList();
 
-    public List<TmuxSession> GetMobileVisibleSessions()
+    public List<Session> GetMobileVisibleSessions()
     {
         if (GroupFilterIndex == 0)
             return GetStandaloneSessions();

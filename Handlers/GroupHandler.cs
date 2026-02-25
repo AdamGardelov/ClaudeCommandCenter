@@ -10,6 +10,7 @@ public class GroupHandler(
     AppState state,
     CccConfig config,
     FlowHelper flow,
+    ISessionBackend backend,
     Action loadSessions,
     Action render,
     Action resetPaneCache,
@@ -53,7 +54,7 @@ public class GroupHandler(
         {
             foreach (var sessionName in group.Sessions.ToList())
             {
-                TmuxService.KillSession(sessionName);
+                backend.KillSession(sessionName);
                 ConfigService.RemoveDescription(config, sessionName);
                 ConfigService.RemoveColor(config, sessionName);
                 ConfigService.RemoveExcluded(config, sessionName);
@@ -83,7 +84,7 @@ public class GroupHandler(
             var newName = flow.PromptOptional("Name", group.Name);
 
             if (!string.IsNullOrWhiteSpace(newName))
-                newName = FlowHelper.SanitizeTmuxSessionName(newName);
+                newName = FlowHelper.SanitizeSessionName(newName);
 
             if (!string.IsNullOrWhiteSpace(newName) && newName != group.Name && config.Groups.ContainsKey(newName))
                 throw new FlowCancelledException($"Group '{newName}' already exists");
@@ -173,7 +174,7 @@ public class GroupHandler(
                     else
                         newSessionName = effectiveName + "-" + sessionName;
 
-                    var renameError = TmuxService.RenameSession(sessionName, newSessionName);
+                    var renameError = backend.RenameSession(sessionName, newSessionName);
                     if (renameError != null)
                         throw new FlowCancelledException($"Failed to rename session: {renameError}");
 
@@ -194,9 +195,9 @@ public class GroupHandler(
             var usedNames = new HashSet<string>(group.Sessions, StringComparer.Ordinal);
             foreach (var (dir, label) in newDirectories)
             {
-                var sessionName = FlowHelper.UniqueSessionName(FlowHelper.SanitizeTmuxSessionName($"{effectiveName}-{label}"), usedNames);
+                var sessionName = FlowHelper.UniqueSessionName(FlowHelper.SanitizeSessionName($"{effectiveName}-{label}"), usedNames);
                 usedNames.Add(sessionName);
-                var error = TmuxService.CreateSession(sessionName, dir);
+                var error = backend.CreateSession(sessionName, dir);
                 if (error != null)
                     throw new FlowCancelledException($"Failed to create session '{sessionName}': {error}");
 
@@ -204,7 +205,7 @@ public class GroupHandler(
                 if (!string.IsNullOrEmpty(sessionColor))
                 {
                     ConfigService.SaveColor(config, sessionName, sessionColor);
-                    TmuxService.ApplyStatusColor(sessionName, sessionColor);
+                    backend.ApplyStatusColor(sessionName, sessionColor);
                 }
 
                 group.Sessions.Add(sessionName);
@@ -218,7 +219,7 @@ public class GroupHandler(
                 foreach (var sessionName in group.Sessions)
                 {
                     ConfigService.SaveColor(config, sessionName, newColor);
-                    TmuxService.ApplyStatusColor(sessionName, newColor);
+                    backend.ApplyStatusColor(sessionName, newColor);
                 }
 
                 changed = true;
@@ -252,7 +253,7 @@ public class GroupHandler(
         var confirm = Console.ReadKey(true);
         if (confirm.Key == ConsoleKey.Y)
         {
-            TmuxService.KillSession(session.Name);
+            backend.KillSession(session.Name);
             ConfigService.RemoveDescription(config, session.Name);
             ConfigService.RemoveColor(config, session.Name);
             ConfigService.RemoveExcluded(config, session.Name);
@@ -361,15 +362,15 @@ public class GroupHandler(
         var sessionNames = new List<string>();
         foreach (var (repoName, repoPath) in feature.Repos)
         {
-            var sessionName = FlowHelper.SanitizeTmuxSessionName($"{feature.Name}-{repoName}");
-            var error = TmuxService.CreateSession(sessionName, repoPath);
+            var sessionName = FlowHelper.SanitizeSessionName($"{feature.Name}-{repoName}");
+            var error = backend.CreateSession(sessionName, repoPath);
             if (error != null)
                 throw new FlowCancelledException($"Failed to create session '{sessionName}': {error}");
 
             if (color != null)
             {
                 ConfigService.SaveColor(config, sessionName, color);
-                TmuxService.ApplyStatusColor(sessionName, color);
+                backend.ApplyStatusColor(sessionName, color);
             }
 
             sessionNames.Add(sessionName);
@@ -411,7 +412,7 @@ public class GroupHandler(
         FlowHelper.PrintStep(2, 3, "Feature name");
         var featureName = FlowHelper.RequireText("[grey70]Feature name[/] [grey](used for branch + folder)[/][grey70]:[/]");
 
-        var sanitizedName = FlowHelper.SanitizeTmuxSessionName(featureName);
+        var sanitizedName = FlowHelper.SanitizeSessionName(featureName);
         var branchName = GitService.SanitizeBranchName(featureName);
 
         if (config.Groups.ContainsKey(sanitizedName))
@@ -469,15 +470,15 @@ public class GroupHandler(
         var sessionNames = new List<string>();
         foreach (var (repoName, worktreePath) in worktrees)
         {
-            var sessionName = FlowHelper.SanitizeTmuxSessionName($"{sanitizedName}-{repoName}");
-            var sessionError = TmuxService.CreateSession(sessionName, worktreePath);
+            var sessionName = FlowHelper.SanitizeSessionName($"{sanitizedName}-{repoName}");
+            var sessionError = backend.CreateSession(sessionName, worktreePath);
             if (sessionError != null)
                 throw new FlowCancelledException($"Failed to create session '{sessionName}': {sessionError}");
 
             if (color != null)
             {
                 ConfigService.SaveColor(config, sessionName, color);
-                TmuxService.ApplyStatusColor(sessionName, color);
+                backend.ApplyStatusColor(sessionName, color);
             }
 
             sessionNames.Add(sessionName);
@@ -499,7 +500,7 @@ public class GroupHandler(
     {
         FlowHelper.PrintStep(1, 3, "Name");
         var name = FlowHelper.RequireText("[grey70]Group name:[/]");
-        name = FlowHelper.SanitizeTmuxSessionName(name);
+        name = FlowHelper.SanitizeSessionName(name);
 
         if (config.Groups.ContainsKey(name))
             throw new FlowCancelledException($"Group '{name}' already exists");
@@ -555,16 +556,16 @@ public class GroupHandler(
         var usedNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (dir, label) in directories)
         {
-            var sessionName = FlowHelper.UniqueSessionName(FlowHelper.SanitizeTmuxSessionName($"{name}-{label}"), usedNames);
+            var sessionName = FlowHelper.UniqueSessionName(FlowHelper.SanitizeSessionName($"{name}-{label}"), usedNames);
             usedNames.Add(sessionName);
-            var error = TmuxService.CreateSession(sessionName, dir);
+            var error = backend.CreateSession(sessionName, dir);
             if (error != null)
                 throw new FlowCancelledException($"Failed to create session '{sessionName}': {error}");
 
             if (color != null)
             {
                 ConfigService.SaveColor(config, sessionName, color);
-                TmuxService.ApplyStatusColor(sessionName, color);
+                backend.ApplyStatusColor(sessionName, color);
             }
 
             sessionNames.Add(sessionName);
@@ -634,7 +635,7 @@ public class GroupHandler(
             if (!string.IsNullOrEmpty(group.Color) && !config.SessionColors.ContainsKey(session.Name))
             {
                 ConfigService.SaveColor(config, session.Name, group.Color);
-                TmuxService.ApplyStatusColor(session.Name, group.Color);
+                backend.ApplyStatusColor(session.Name, group.Color);
             }
 
             loadSessions();
