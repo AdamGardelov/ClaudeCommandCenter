@@ -593,8 +593,7 @@ public class ConPtyBackend : ISessionBackend
     }
 
     /// <summary>
-    /// Builds a Unicode environment block for CreateProcessW with CCC_SESSION_NAME injected
-    /// and CLAUDE_CODE_GIT_BASH_PATH set so Claude Code can find bash for hook execution.
+    /// Builds a Unicode environment block for CreateProcessW with CCC_SESSION_NAME injected.
     /// Format: sorted KEY=VALUE\0 pairs, terminated by an extra \0.
     /// </summary>
     private static nint BuildEnvironmentBlock(string sessionName)
@@ -605,18 +604,8 @@ public class ConPtyBackend : ISessionBackend
         foreach (System.Collections.DictionaryEntry entry in env)
             entries[(string)entry.Key] = (string)entry.Value!;
 
-        // Inject CCC_SESSION_NAME so hooks can identify the session
+        // Inject CCC_SESSION_NAME
         entries["CCC_SESSION_NAME"] = sessionName;
-
-        // Ensure Claude Code can find bash for hook execution.
-        // When launched via CreateProcessW there is no parent Git Bash shell,
-        // so Claude Code can't locate bash unless we tell it explicitly.
-        if (!entries.ContainsKey("CLAUDE_CODE_GIT_BASH_PATH"))
-        {
-            var gitBash = FindGitBash();
-            if (gitBash != null)
-                entries["CLAUDE_CODE_GIT_BASH_PATH"] = gitBash;
-        }
 
         // Build the block: KEY=VALUE\0KEY=VALUE\0...\0
         var sb = new StringBuilder();
@@ -630,25 +619,5 @@ public class ConPtyBackend : ISessionBackend
         sb.Append('\0'); // Double null terminator
 
         return Marshal.StringToHGlobalUni(sb.ToString());
-    }
-
-    /// <summary>
-    /// Finds Git Bash executable on the system.
-    /// </summary>
-    private static string? FindGitBash()
-    {
-        string[] candidates =
-        [
-            @"C:\Program Files\Git\bin\bash.exe",
-            @"C:\Program Files (x86)\Git\bin\bash.exe",
-        ];
-
-        foreach (var path in candidates)
-        {
-            if (File.Exists(path))
-                return path;
-        }
-
-        return null;
     }
 }
