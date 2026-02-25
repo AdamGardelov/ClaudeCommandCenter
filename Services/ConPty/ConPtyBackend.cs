@@ -67,6 +67,7 @@ public partial class ConPtyBackend : ISessionBackend
             {
                 _sessions[name] = session;
             }
+
             return null;
         }
         catch (Exception ex)
@@ -97,6 +98,7 @@ public partial class ConPtyBackend : ISessionBackend
                 _sessions[oldName] = session;
                 return $"Session '{newName}' already exists";
             }
+
             session.Name = newName;
             _sessions[newName] = session;
             return null;
@@ -173,10 +175,7 @@ public partial class ConPtyBackend : ISessionBackend
         }
     }
 
-    public void DetachSession()
-    {
-        _detachRequested = true;
-    }
+    public void DetachSession() => _detachRequested = true;
 
     public string? SendKeys(string sessionName, string text)
     {
@@ -239,7 +238,7 @@ public partial class ConPtyBackend : ISessionBackend
     }
 
     // Number of consecutive stable polls before marking as "waiting for input"
-    private const int StableThreshold = 4;
+    private const int _stableThreshold = 4;
 
     public void DetectWaitingForInputBatch(List<Session> sessions)
     {
@@ -304,7 +303,7 @@ public partial class ConPtyBackend : ISessionBackend
         }
     }
 
-    private ConPtySession StartProcess(string name, string workingDirectory)
+    private static ConPtySession StartProcess(string name, string workingDirectory)
     {
         // Create pipes: CCC writes to inputWrite → process reads from inputRead
         //               Process writes to outputWrite → CCC reads from outputRead
@@ -345,14 +344,17 @@ public partial class ConPtyBackend : ISessionBackend
 
             if (!UpdateProcThreadAttribute(
                     attrList, 0,
-                    (nuint)PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
+                    (nuint)ProcThreadAttributePseudoConsole,
                     hPC, (nuint)nint.Size,
                     nint.Zero, nint.Zero))
                 throw new InvalidOperationException($"UpdateProcThreadAttribute failed: {Marshal.GetLastWin32Error()}");
 
             var startupInfo = new StartupInfoEx
             {
-                StartupInfo = new StartupInfo { cb = Marshal.SizeOf<StartupInfoEx>() },
+                StartupInfo = new StartupInfo
+                {
+                    cb = Marshal.SizeOf<StartupInfoEx>()
+                },
                 lpAttributeList = attrList
             };
 
@@ -361,7 +363,7 @@ public partial class ConPtyBackend : ISessionBackend
                     null, commandLine,
                     nint.Zero, nint.Zero,
                     false,
-                    EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
+                    ExtendedStartupInfoPresent | CreateUnicodeEnvironment,
                     nint.Zero,
                     workingDirectory,
                     in startupInfo,
@@ -374,7 +376,10 @@ public partial class ConPtyBackend : ISessionBackend
             var cts = new CancellationTokenSource();
             var buffer = new RingBuffer();
             var inputStream = new FileStream(inputWrite, FileAccess.Write);
-            var inputWriter = new StreamWriter(inputStream, Encoding.UTF8) { AutoFlush = true };
+            var inputWriter = new StreamWriter(inputStream, Encoding.UTF8)
+            {
+                AutoFlush = true
+            };
 
             var readerThread = new Thread(() => ReaderLoop(outputRead, buffer, cts.Token))
             {
@@ -471,29 +476,29 @@ public partial class ConPtyBackend : ISessionBackend
             ConsoleKey.Enter => "\r",
             ConsoleKey.Backspace => "\x7f",
             ConsoleKey.Tab => "\t",
-            ConsoleKey.Escape => "\x1b",
-            ConsoleKey.UpArrow => "\x1b[A",
-            ConsoleKey.DownArrow => "\x1b[B",
-            ConsoleKey.RightArrow => "\x1b[C",
-            ConsoleKey.LeftArrow => "\x1b[D",
-            ConsoleKey.Home => "\x1b[H",
-            ConsoleKey.End => "\x1b[F",
-            ConsoleKey.PageUp => "\x1b[5~",
-            ConsoleKey.PageDown => "\x1b[6~",
-            ConsoleKey.Delete => "\x1b[3~",
-            ConsoleKey.Insert => "\x1b[2~",
-            ConsoleKey.F1 => "\x1bOP",
-            ConsoleKey.F2 => "\x1bOQ",
-            ConsoleKey.F3 => "\x1bOR",
-            ConsoleKey.F4 => "\x1bOS",
-            ConsoleKey.F5 => "\x1b[15~",
-            ConsoleKey.F6 => "\x1b[17~",
-            ConsoleKey.F7 => "\x1b[18~",
-            ConsoleKey.F8 => "\x1b[19~",
-            ConsoleKey.F9 => "\x1b[20~",
-            ConsoleKey.F10 => "\x1b[21~",
-            ConsoleKey.F11 => "\x1b[23~",
-            ConsoleKey.F12 => "\x1b[24~",
+            ConsoleKey.Escape => "\e",
+            ConsoleKey.UpArrow => "\e[A",
+            ConsoleKey.DownArrow => "\e[B",
+            ConsoleKey.RightArrow => "\e[C",
+            ConsoleKey.LeftArrow => "\e[D",
+            ConsoleKey.Home => "\e[H",
+            ConsoleKey.End => "\e[F",
+            ConsoleKey.PageUp => "\e[5~",
+            ConsoleKey.PageDown => "\e[6~",
+            ConsoleKey.Delete => "\e[3~",
+            ConsoleKey.Insert => "\e[2~",
+            ConsoleKey.F1 => "\e" + "OP",
+            ConsoleKey.F2 => "\e" + "OQ",
+            ConsoleKey.F3 => "\e" + "OR",
+            ConsoleKey.F4 => "\e" + "OS",
+            ConsoleKey.F5 => "\e[15~",
+            ConsoleKey.F6 => "\e[17~",
+            ConsoleKey.F7 => "\e[18~",
+            ConsoleKey.F8 => "\e[19~",
+            ConsoleKey.F9 => "\e[20~",
+            ConsoleKey.F10 => "\e[21~",
+            ConsoleKey.F11 => "\e[23~",
+            ConsoleKey.F12 => "\e[24~",
             _ => null
         };
 
@@ -540,7 +545,7 @@ public partial class ConPtyBackend : ISessionBackend
             session.PreviousContent = content;
         }
 
-        var isStable = session.StableContentCount >= StableThreshold;
+        var isStable = session.StableContentCount >= _stableThreshold;
         session.IsIdle = isStable && IsIdlePrompt(content);
         session.IsWaitingForInput = isStable && !session.IsIdle;
     }
@@ -595,8 +600,6 @@ public partial class ConPtyBackend : ISessionBackend
                         continue;
                     return !line.TrimEnd().EndsWith('?');
                 }
-
-                return true;
             }
 
             return true;
@@ -605,7 +608,7 @@ public partial class ConPtyBackend : ISessionBackend
         return true;
     }
 
-    private static readonly Regex StatusBarTimerPattern = StatusBarTimerRegex();
+    private static readonly Regex _statusBarTimerPattern = StatusBarTimerRegex();
 
     private static string GetContentAboveStatusBar(string paneOutput)
     {
@@ -617,11 +620,11 @@ public partial class ConPtyBackend : ISessionBackend
             if (string.IsNullOrWhiteSpace(lines[i]))
                 continue;
 
-            if (StatusBarTimerPattern.IsMatch(lines[i]))
-            {
-                statusBarIndex = i;
-                break;
-            }
+            if (!_statusBarTimerPattern.IsMatch(lines[i]))
+                continue;
+
+            statusBarIndex = i;
+            break;
         }
 
         if (statusBarIndex >= 0)
@@ -629,11 +632,13 @@ public partial class ConPtyBackend : ISessionBackend
 
         var lastNonEmpty = -1;
         for (var i = lines.Length - 1; i >= 0; i--)
-            if (!string.IsNullOrWhiteSpace(lines[i]))
-            {
-                lastNonEmpty = i;
-                break;
-            }
+        {
+            if (string.IsNullOrWhiteSpace(lines[i]))
+                continue;
+
+            lastNonEmpty = i;
+            break;
+        }
 
         var end = lastNonEmpty >= 0 ? lastNonEmpty : lines.Length;
         return string.Join('\n', lines.AsSpan(0, end));

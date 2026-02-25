@@ -31,7 +31,7 @@ internal class ConPtySession : IDisposable
             if (ProcessHandle == nint.Zero)
                 return false;
             NativeMethods.GetExitCodeProcess(ProcessHandle, out var exitCode);
-            return exitCode == NativeMethods.STILL_ACTIVE;
+            return exitCode == NativeMethods.StillActive;
         }
     }
 

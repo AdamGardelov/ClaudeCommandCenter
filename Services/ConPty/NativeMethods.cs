@@ -9,9 +9,9 @@ namespace ClaudeCommandCenter.Services.ConPty;
 /// </summary>
 internal static partial class NativeMethods
 {
-    internal const uint PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = 0x00020016;
-    internal const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
-    internal const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
+    internal const uint ProcThreadAttributePseudoConsole = 0x00020016;
+    internal const uint ExtendedStartupInfoPresent = 0x00080000;
+    internal const uint CreateUnicodeEnvironment = 0x00000400;
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     internal static partial int CreatePseudoConsole(
@@ -19,13 +19,13 @@ internal static partial class NativeMethods
         SafeFileHandle hInput,
         SafeFileHandle hOutput,
         uint dwFlags,
-        out nint phPC);
+        out nint phPc);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
-    internal static partial int ResizePseudoConsole(nint hPC, Coord size);
+    internal static partial int ResizePseudoConsole(nint hPc, Coord size);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
-    internal static partial void ClosePseudoConsole(nint hPC);
+    internal static partial void ClosePseudoConsole(nint hPc);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -86,19 +86,13 @@ internal static partial class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool GetExitCodeProcess(nint hProcess, out uint lpExitCode);
 
-    internal const uint STILL_ACTIVE = 259;
+    internal const uint StillActive = 259;
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct Coord
+    internal struct Coord(short x, short y)
     {
-        public short X;
-        public short Y;
-
-        public Coord(short x, short y)
-        {
-            X = x;
-            Y = y;
-        }
+        public short X = x;
+        public short Y = y;
     }
 
     [StructLayout(LayoutKind.Sequential)]
