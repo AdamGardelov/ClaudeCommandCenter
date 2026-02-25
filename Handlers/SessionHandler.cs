@@ -161,8 +161,10 @@ public class SessionHandler(
         if (session == null)
             return;
 
-        Console.CursorVisible = true;
-        Console.Clear();
+        // Exit CCC's alternate screen so the ConPTY session renders to normal screen
+        Console.Write("\e[?1049l"); // Leave alternate screen
+        Console.Write("\e[?25h");   // Show cursor
+        Console.Write("\e[2J\e[H"); // Clear screen + cursor home
 
         backend.ResetWindowSize(session.Name);
         backend.AttachSession(session.Name);
@@ -170,14 +172,12 @@ public class SessionHandler(
         // User detached — reset cooldown so next idle transition notifies fresh
         NotificationService.ResetCooldown(session.Name);
 
-        // User detached - back to ClaudeCommandCenter
-        // Re-enter alternate screen buffer and clear — tmux detach may
-        // have exited alt screen, leaving Termius in normal mode with scrollback
+        // Re-enter CCC's alternate screen buffer
         Console.Write("\e[?1049h"); // Enter alternate screen buffer
         Console.Write("\e[?1003l\e[?1006l\e[?1015l\e[?1000l"); // Disable mouse tracking
-        Console.Write("\e[2J"); // Clear screen
-        Console.Write("\e[H"); // Cursor home
-        Console.Write("\e[?25l"); // Re-hide cursor
+        Console.Write("\e[2J");     // Clear screen
+        Console.Write("\e[H");      // Cursor home
+        Console.Write("\e[?25l");   // Re-hide cursor
         loadSessions();
         resetPaneCache();
         render();

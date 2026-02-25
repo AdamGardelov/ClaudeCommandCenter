@@ -14,6 +14,9 @@ public class ConPtyBackend : ISessionBackend
     // Detach signal for inline attach — set by the detach key combo handler
     private volatile bool _detachRequested;
 
+    // Double-tap Escape detection for detach
+    private long _lastEscapeTicks;
+
     public List<Session> ListSessions()
     {
         lock (_sessionsLock)
@@ -119,35 +122,31 @@ public class ConPtyBackend : ISessionBackend
         }
 
         _detachRequested = false;
+        _lastEscapeTicks = 0;
 
         // Save console state
-        var savedMode = Console.OutputEncoding;
+        var savedEncoding = Console.OutputEncoding;
         Console.OutputEncoding = Encoding.UTF8;
-        Console.Clear();
 
-        // Tap the ring buffer's output by temporarily redirecting reader output to stdout.
-        // We do this by reading from the ring buffer and also forwarding new output.
-        // For attach, we set up direct I/O forwarding.
+        // Resize the ConPTY to the full terminal size so the session renders correctly
+        var fullWidth = (short)Console.WindowWidth;
+        var fullHeight = (short)Console.WindowHeight;
+        if (session.Width != fullWidth || session.Height != fullHeight)
+        {
+            var coord = new Coord(fullWidth, fullHeight);
+            ResizePseudoConsole(session.PseudoConsole, coord);
+            session.Screen.Resize(fullWidth, fullHeight);
+            session.Width = fullWidth;
+            session.Height = fullHeight;
+        }
 
-        // Create a pipe reader for direct output from the pseudoconsole
         using var outputCts = CancellationTokenSource.CreateLinkedTokenSource(session.Cts.Token);
         var token = outputCts.Token;
 
-        // Output forwarding: dump current buffer then forward new content
-        var currentContent = session.OutputBuffer.GetContent();
-        if (!string.IsNullOrEmpty(currentContent))
-            Console.Write(currentContent);
-
-        // Snapshot position after dumping current buffer
-        var bufferPosition = session.OutputBuffer.TotalWritten;
-
-        // Start forwarding loop on a background thread
-        var forwardThread = new Thread(() => ForwardOutput(session, bufferPosition, token))
-        {
-            IsBackground = true,
-            Name = $"ConPTY-Attach-{name}"
-        };
-        forwardThread.Start();
+        // Tell the session to forward raw ConPTY output to CCC's console.
+        // We set a volatile flag that the ReaderLoop checks — when set, it writes
+        // incoming ConPTY data directly to Console.Out in addition to the buffers.
+        session.ForwardToConsole = true;
 
         // Input loop: read console keys and forward to session
         try
@@ -162,12 +161,20 @@ public class ConPtyBackend : ISessionBackend
 
                 var key = Console.ReadKey(true);
 
-                // Detach combo: Ctrl+] or Ctrl+\ (for non-US keyboard layouts)
-                if (key is { Key: ConsoleKey.Oem6, Modifiers: ConsoleModifiers.Control }
-                    or { Key: ConsoleKey.Oem5, Modifiers: ConsoleModifiers.Control })
+                // Detach: double-tap Escape (press Escape twice within 500ms)
+                if (key.Key == ConsoleKey.Escape)
                 {
-                    _detachRequested = true;
-                    break;
+                    var now = Environment.TickCount64;
+                    if (now - _lastEscapeTicks <= 500)
+                    {
+                        _detachRequested = true;
+                        break;
+                    }
+
+                    _lastEscapeTicks = now;
+                    // Forward the single Escape to the session
+                    ForwardKeyToSession(session, key);
+                    continue;
                 }
 
                 // Forward the key to the session
@@ -176,10 +183,9 @@ public class ConPtyBackend : ISessionBackend
         }
         finally
         {
+            session.ForwardToConsole = false;
             outputCts.Cancel();
-            if (forwardThread.IsAlive)
-                forwardThread.Join(1000);
-            Console.OutputEncoding = savedMode;
+            Console.OutputEncoding = savedEncoding;
         }
     }
 
@@ -216,7 +222,7 @@ public class ConPtyBackend : ISessionBackend
                 return null;
         }
 
-        return session.OutputBuffer.GetContent(lines);
+        return session.Screen.GetContent(lines);
     }
 
     public void ResizeWindow(string sessionName, int width, int height)
@@ -228,8 +234,13 @@ public class ConPtyBackend : ISessionBackend
                 return;
         }
 
+        // Skip if dimensions haven't changed
+        if (session.Width == (short)width && session.Height == (short)height)
+            return;
+
         var coord = new Coord((short)width, (short)height);
         ResizePseudoConsole(session.PseudoConsole, coord);
+        session.Screen.Resize(width, height);
         session.Width = (short)width;
         session.Height = (short)height;
     }
@@ -313,8 +324,12 @@ public class ConPtyBackend : ISessionBackend
             throw new InvalidOperationException($"CreatePipe (output) failed: {Marshal.GetLastWin32Error()}");
         }
 
-        // Create pseudoconsole
-        var size = new Coord(120, 40);
+        // Create pseudoconsole sized to match the preview pane so content renders correctly from the start.
+        // Preview width = terminal width - session panel (35) - borders (6) - padding (2).
+        var initialWidth = (short)Math.Max(20, Console.WindowWidth - 35 - 8);
+        var initialHeight = (short)Math.Max(10, Console.WindowHeight);
+
+        var size = new Coord(initialWidth, initialHeight);
         var hr = CreatePseudoConsole(size, inputRead, outputWrite, 0, out var hPC);
         if (hr != 0)
         {
@@ -372,20 +387,15 @@ public class ConPtyBackend : ISessionBackend
 
             var cts = new CancellationTokenSource();
             var buffer = new RingBuffer();
+            var screen = new VtScreenBuffer(size.X, size.Y);
             var inputStream = new FileStream(inputWrite, FileAccess.Write);
             var inputWriter = new StreamWriter(inputStream, Encoding.UTF8)
             {
                 AutoFlush = true
             };
 
-            var readerThread = new Thread(() => ReaderLoop(outputRead, buffer, cts.Token))
-            {
-                IsBackground = true,
-                Name = $"ConPTY-Reader-{name}"
-            };
-            readerThread.Start();
-
-            return new ConPtySession
+            // Create session first so ReaderLoop can check ForwardToConsole
+            var session = new ConPtySession
             {
                 Name = name,
                 WorkingDirectory = workingDirectory,
@@ -395,10 +405,23 @@ public class ConPtyBackend : ISessionBackend
                 InputWriteHandle = inputWrite,
                 OutputReadHandle = outputRead,
                 Input = inputWriter,
-                ReaderThread = readerThread,
+                ReaderThread = null!, // Set below
+                Screen = screen,
                 OutputBuffer = buffer,
                 Cts = cts,
+                Width = size.X,
+                Height = size.Y,
             };
+
+            var readerThread = new Thread(() => ReaderLoop(outputRead, buffer, screen, session, cts.Token))
+            {
+                IsBackground = true,
+                Name = $"ConPTY-Reader-{name}"
+            };
+            session.ReaderThread = readerThread;
+            readerThread.Start();
+
+            return session;
         }
         catch
         {
@@ -414,21 +437,33 @@ public class ConPtyBackend : ISessionBackend
         }
     }
 
-    private static void ReaderLoop(SafeFileHandle outputRead, RingBuffer buffer, CancellationToken ct)
+    private static void ReaderLoop(SafeFileHandle outputRead, RingBuffer buffer, VtScreenBuffer screen, ConPtySession session, CancellationToken ct)
     {
         using var stream = new FileStream(outputRead, FileAccess.Read);
-        var buf = new byte[4096];
+        // StreamReader handles UTF-8 decoding across read boundaries, preventing
+        // garbled characters when multi-byte sequences are split across reads.
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        var charBuf = new char[4096];
+        var stdout = Console.Out;
 
         try
         {
             while (!ct.IsCancellationRequested)
             {
-                var bytesRead = stream.Read(buf, 0, buf.Length);
-                if (bytesRead == 0)
+                var charsRead = reader.Read(charBuf, 0, charBuf.Length);
+                if (charsRead == 0)
                     break; // Pipe closed
 
-                var text = Encoding.UTF8.GetString(buf, 0, bytesRead);
+                var text = new string(charBuf, 0, charsRead);
                 buffer.AppendChunk(text);
+                screen.Feed(text);
+
+                // In attach mode, forward raw ConPTY output directly to the terminal
+                if (session.ForwardToConsole)
+                {
+                    stdout.Write(text);
+                    stdout.Flush();
+                }
             }
         }
         catch (IOException)
@@ -438,25 +473,6 @@ public class ConPtyBackend : ISessionBackend
         catch (OperationCanceledException)
         {
             // Expected on shutdown
-        }
-    }
-
-    private static void ForwardOutput(ConPtySession session, long position, CancellationToken ct)
-    {
-        try
-        {
-            while (!ct.IsCancellationRequested && session.IsAlive)
-            {
-                var newContent = session.OutputBuffer.GetNewContent(ref position);
-                if (newContent != null)
-                    Console.Write(newContent);
-
-                Thread.Sleep(16); // ~60fps
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected
         }
     }
 
