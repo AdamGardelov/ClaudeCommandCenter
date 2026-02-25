@@ -14,9 +14,6 @@ public class ConPtyBackend : ISessionBackend
     // Detach signal for inline attach — set by the detach key combo handler
     private volatile bool _detachRequested;
 
-    // Double-tap Escape detection for detach
-    private long _lastEscapeTicks;
-
     public List<Session> ListSessions()
     {
         lock (_sessionsLock)
@@ -122,7 +119,6 @@ public class ConPtyBackend : ISessionBackend
         }
 
         _detachRequested = false;
-        _lastEscapeTicks = 0;
 
         // Save console state
         var savedEncoding = Console.OutputEncoding;
@@ -179,20 +175,11 @@ public class ConPtyBackend : ISessionBackend
 
                 var key = Console.ReadKey(true);
 
-                // Detach: double-tap Escape (press Escape twice within 500ms)
-                if (key.Key == ConsoleKey.Escape)
+                // Detach: Alt+Q
+                if (key.Key == ConsoleKey.Q && key.Modifiers.HasFlag(ConsoleModifiers.Alt))
                 {
-                    var now = Environment.TickCount64;
-                    if (now - _lastEscapeTicks <= 500)
-                    {
-                        _detachRequested = true;
-                        break;
-                    }
-
-                    _lastEscapeTicks = now;
-                    // Forward the single Escape to the session
-                    ForwardKeyToSession(session, key);
-                    continue;
+                    _detachRequested = true;
+                    break;
                 }
 
                 // Forward the key to the session
