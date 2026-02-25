@@ -16,8 +16,23 @@
 
 ![Diff View](Images/6.png)
 
-A terminal UI for managing multiple Claude Code sessions. Lists your sessions, shows a live preview of the selected
-pane, and highlights sessions waiting for input.
+A terminal UI for managing multiple Claude Code sessions. Run dozens of Claude agents in parallel, see what they're all doing at a glance, and jump into any session instantly.
+
+## Features
+
+- **Live preview** — see each session's terminal output in real-time without attaching
+- **Grid view** — monitor up to 9 sessions simultaneously in an auto-scaling grid
+- **Waiting-for-input detection** — sessions that need your attention are marked with `!` and trigger notifications
+- **Session groups** — organize related sessions together, create them in bulk from git worktrees
+- **Git worktree integration** — create worktrees on the fly, one branch per session, shared feature folders with auto-discovery
+- **Git diff view** — see what changed since a session started, with full colorized scrollable diff overlay
+- **Notifications** — terminal bell, OSC, and desktop notifications when sessions go idle
+- **Cross-platform** — tmux on Linux/macOS (sessions persist), native ConPTY on Windows (no WSL needed)
+- **Mobile mode** — single-column layout for SSH from your phone
+- **Customizable keybindings** — rebind any action, disable what you don't need, all from the in-app settings page
+- **IDE integration** — open any session's directory in your editor with one keypress
+- **Auto-update** — checks GitHub for new releases and installs in-place
+- **Single binary, single dependency** — just .NET 10 and tmux (or Windows 10+)
 
 ## Requirements
 
