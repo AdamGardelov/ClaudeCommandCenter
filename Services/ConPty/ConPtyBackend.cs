@@ -497,10 +497,17 @@ public class ConPtyBackend : ISessionBackend
 
     private static string? MapKeyToSequence(ConPtySession session, ConsoleKeyInfo key)
     {
-        var ctrl = key.Modifiers.HasFlag(ConsoleModifiers.Control);
-        var alt = key.Modifiers.HasFlag(ConsoleModifiers.Alt);
+        var rawCtrl = key.Modifiers.HasFlag(ConsoleModifiers.Control);
+        var rawAlt = key.Modifiers.HasFlag(ConsoleModifiers.Alt);
         var shift = key.Modifiers.HasFlag(ConsoleModifiers.Shift);
         var appCursor = session.Screen.ApplicationCursorKeys;
+
+        // AltGr on international keyboards sends Ctrl+Alt. When the key produces a printable
+        // character (e.g. '\' or '@' on Swedish/German layouts), treat it as a plain keystroke
+        // rather than a Ctrl+Alt combo. Otherwise '\' sends ESC+\ which corrupts input.
+        var isAltGr = rawCtrl && rawAlt && key.KeyChar >= ' ';
+        var ctrl = rawCtrl && !isAltGr;
+        var alt = rawAlt && !isAltGr;
 
         var hasModifier = ctrl || alt || shift;
 
