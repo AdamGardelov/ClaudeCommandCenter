@@ -496,60 +496,85 @@ public class ConPtyBackend : ISessionBackend
 
     private static void ForwardKeyToSession(ConPtySession session, ConsoleKeyInfo key)
     {
-        // Map special keys to VT escape sequences
-        var sequence = key.Key switch
-        {
-            ConsoleKey.Enter => "\r",
-            ConsoleKey.Backspace => "\x7f",
-            ConsoleKey.Tab => "\t",
-            ConsoleKey.Escape => "\e",
-            ConsoleKey.UpArrow => "\e[A",
-            ConsoleKey.DownArrow => "\e[B",
-            ConsoleKey.RightArrow => "\e[C",
-            ConsoleKey.LeftArrow => "\e[D",
-            ConsoleKey.Home => "\e[H",
-            ConsoleKey.End => "\e[F",
-            ConsoleKey.PageUp => "\e[5~",
-            ConsoleKey.PageDown => "\e[6~",
-            ConsoleKey.Delete => "\e[3~",
-            ConsoleKey.Insert => "\e[2~",
-            ConsoleKey.F1 => "\e" + "OP",
-            ConsoleKey.F2 => "\e" + "OQ",
-            ConsoleKey.F3 => "\e" + "OR",
-            ConsoleKey.F4 => "\e" + "OS",
-            ConsoleKey.F5 => "\e[15~",
-            ConsoleKey.F6 => "\e[17~",
-            ConsoleKey.F7 => "\e[18~",
-            ConsoleKey.F8 => "\e[19~",
-            ConsoleKey.F9 => "\e[20~",
-            ConsoleKey.F10 => "\e[21~",
-            ConsoleKey.F11 => "\e[23~",
-            ConsoleKey.F12 => "\e[24~",
-            _ => null
-        };
-
+        var sequence = MapKeyToSequence(session, key);
         if (sequence != null)
         {
             session.Input.Write(sequence);
             session.Input.Flush();
-            return;
+        }
+    }
+
+    private static string? MapKeyToSequence(ConPtySession session, ConsoleKeyInfo key)
+    {
+        var ctrl = key.Modifiers.HasFlag(ConsoleModifiers.Control);
+        var alt = key.Modifiers.HasFlag(ConsoleModifiers.Alt);
+        var shift = key.Modifiers.HasFlag(ConsoleModifiers.Shift);
+        var appCursor = session.Screen.ApplicationCursorKeys;
+
+        var hasModifier = ctrl || alt || shift;
+
+        // Arrow keys and navigation keys
+        switch (key.Key)
+        {
+            case ConsoleKey.UpArrow:
+                if (hasModifier) return $"\e[1;{ModifierCode(shift, alt, ctrl)}A";
+                return appCursor ? "\eOA" : "\e[A";
+            case ConsoleKey.DownArrow:
+                if (hasModifier) return $"\e[1;{ModifierCode(shift, alt, ctrl)}B";
+                return appCursor ? "\eOB" : "\e[B";
+            case ConsoleKey.RightArrow:
+                if (hasModifier) return $"\e[1;{ModifierCode(shift, alt, ctrl)}C";
+                return appCursor ? "\eOC" : "\e[C";
+            case ConsoleKey.LeftArrow:
+                if (hasModifier) return $"\e[1;{ModifierCode(shift, alt, ctrl)}D";
+                return appCursor ? "\eOD" : "\e[D";
+            case ConsoleKey.Home:
+                if (hasModifier) return $"\e[1;{ModifierCode(shift, alt, ctrl)}H";
+                return appCursor ? "\eOH" : "\e[H";
+            case ConsoleKey.End:
+                if (hasModifier) return $"\e[1;{ModifierCode(shift, alt, ctrl)}F";
+                return appCursor ? "\eOF" : "\e[F";
+            case ConsoleKey.Enter:     return "\r";
+            case ConsoleKey.Backspace: return "\x7f";
+            case ConsoleKey.Tab:
+                return shift ? "\e[Z" : "\t";
+            case ConsoleKey.Escape:    return "\e";
+            case ConsoleKey.PageUp:    return "\e[5~";
+            case ConsoleKey.PageDown:  return "\e[6~";
+            case ConsoleKey.Delete:    return "\e[3~";
+            case ConsoleKey.Insert:    return "\e[2~";
+            case ConsoleKey.F1:        return "\eOP";
+            case ConsoleKey.F2:        return "\eOQ";
+            case ConsoleKey.F3:        return "\eOR";
+            case ConsoleKey.F4:        return "\eOS";
+            case ConsoleKey.F5:        return "\e[15~";
+            case ConsoleKey.F6:        return "\e[17~";
+            case ConsoleKey.F7:        return "\e[18~";
+            case ConsoleKey.F8:        return "\e[19~";
+            case ConsoleKey.F9:        return "\e[20~";
+            case ConsoleKey.F10:       return "\e[21~";
+            case ConsoleKey.F11:       return "\e[23~";
+            case ConsoleKey.F12:       return "\e[24~";
         }
 
-        // Ctrl+key combinations
-        if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && key.Key >= ConsoleKey.A && key.Key <= ConsoleKey.Z)
+        // Ctrl+key combinations (A-Z -> 0x01-0x1A)
+        if (ctrl && key.Key >= ConsoleKey.A && key.Key <= ConsoleKey.Z)
         {
             var ctrlChar = (char)(key.Key - ConsoleKey.A + 1);
-            session.Input.Write(ctrlChar);
-            session.Input.Flush();
-            return;
+            return alt ? $"\e{ctrlChar}" : $"{ctrlChar}";
         }
 
-        // Regular character
+        // Regular character with Alt -> ESC prefix
         if (key.KeyChar != '\0')
-        {
-            session.Input.Write(key.KeyChar);
-            session.Input.Flush();
-        }
+            return alt ? $"\e{key.KeyChar}" : $"{key.KeyChar}";
+
+        return null;
+    }
+
+    private static int ModifierCode(bool shift, bool alt, bool ctrl)
+    {
+        // xterm modifier encoding: value = 1 + (shift?1:0) + (alt?2:0) + (ctrl?4:0)
+        return 1 + (shift ? 1 : 0) + (alt ? 2 : 0) + (ctrl ? 4 : 0);
     }
 
     private void DetectWaitingByContent(Session session)
