@@ -48,8 +48,13 @@ curl -fsSL https://raw.githubusercontent.com/AdamGardelov/ClaudeCommandCenter/ma
 
 This detects your platform (Linux, macOS Intel/ARM), downloads the latest release, and installs to `/usr/local/bin`.
 
-**Windows:** Download `ccc-win-x64.zip` from the [latest release](https://github.com/AdamGardelov/ClaudeCommandCenter/releases),
-extract `ccc.exe`, and add it to your PATH.
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/AdamGardelov/ClaudeCommandCenter/main/install.ps1 | iex
+```
+
+This downloads the latest release and installs to `%LOCALAPPDATA%\Programs\ccc`, adding it to your PATH automatically.
 
 ### From Source
 
