@@ -93,6 +93,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         {
             Console.CursorVisible = true;
             Console.Write("\e[?1049l"); // Leave alternate screen
+            backend.Dispose();
         }
 
         if (_wantsUpdate)
@@ -610,7 +611,11 @@ public class App(ISessionBackend backend, bool mobileMode = false)
                 _state.SetStatus("Refreshed");
                 break;
             case "quit":
-                _state.SetStatus("Quit? (y/n)");
+                var activeCount = _state.Sessions.Count(s => !s.IsDead);
+                var quitMsg = OperatingSystem.IsWindows() && activeCount > 0
+                    ? $"Quit? This will terminate {activeCount} active session(s). (y/n)"
+                    : "Quit? (y/n)";
+                _state.SetStatus(quitMsg);
                 Render();
                 var quitConfirm = Console.ReadKey(true);
                 if (quitConfirm.Key == ConsoleKey.Y)
@@ -793,7 +798,11 @@ public class App(ISessionBackend backend, bool mobileMode = false)
                 _state.SetStatus("Refreshed");
                 break;
             case "quit":
-                _state.SetStatus("Quit? (y/n)");
+                var mobileActiveCount = _state.Sessions.Count(s => !s.IsDead);
+                var mobileQuitMsg = OperatingSystem.IsWindows() && mobileActiveCount > 0
+                    ? $"Quit? This will terminate {mobileActiveCount} active session(s). (y/n)"
+                    : "Quit? (y/n)";
+                _state.SetStatus(mobileQuitMsg);
                 Render();
                 var quitConfirm2 = Console.ReadKey(true);
                 if (quitConfirm2.Key == ConsoleKey.Y)
@@ -844,16 +853,31 @@ public class App(ISessionBackend backend, bool mobileMode = false)
     private void RunUpdate()
     {
         AnsiConsole.MarkupLine($"[yellow]Updating to v{_state.LatestVersion}...[/]\n");
-        var process = Process.Start(new ProcessStartInfo
+
+        if (OperatingSystem.IsWindows())
         {
-            FileName = "bash",
-            ArgumentList =
+            var script = "irm https://raw.githubusercontent.com/AdamGardelov/ClaudeCommandCenter/main/install.ps1 | iex";
+            var process = Process.Start(new ProcessStartInfo
             {
-                "-c",
-                "curl -fsSL https://raw.githubusercontent.com/AdamGardelov/ClaudeCommandCenter/main/install.sh | bash"
-            },
-            UseShellExecute = false,
-        });
-        process?.WaitForExit();
+                FileName = "powershell",
+                ArgumentList = { "-NoProfile", "-Command", script },
+                UseShellExecute = false,
+            });
+            process?.WaitForExit();
+        }
+        else
+        {
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = "bash",
+                ArgumentList =
+                {
+                    "-c",
+                    "curl -fsSL https://raw.githubusercontent.com/AdamGardelov/ClaudeCommandCenter/main/install.sh | bash"
+                },
+                UseShellExecute = false,
+            });
+            process?.WaitForExit();
+        }
     }
 }
