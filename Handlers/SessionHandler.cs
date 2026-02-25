@@ -10,6 +10,7 @@ public class SessionHandler(
     AppState state,
     CccConfig config,
     FlowHelper flow,
+    ISessionBackend backend,
     Action loadSessions,
     Action render,
     Action resetPaneCache)
@@ -35,7 +36,7 @@ public class SessionHandler(
                 throw new FlowCancelledException("Invalid directory");
 
             FlowHelper.PrintStep(2, 4, "Name");
-            var defaultName = FlowHelper.SanitizeTmuxSessionName(worktreeBranch ?? new DirectoryInfo(dir).Name);
+            var defaultName = FlowHelper.SanitizeSessionName(worktreeBranch ?? new DirectoryInfo(dir).Name);
             var existingNames = new HashSet<string>(state.Sessions.Select(s => s.Name), StringComparer.Ordinal);
             defaultName = FlowHelper.UniqueSessionName(defaultName, existingNames, " ");
             var name = flow.PromptWithDefault("Session name", defaultName);
@@ -46,7 +47,7 @@ public class SessionHandler(
             FlowHelper.PrintStep(4, 4, "Color");
             var color = flow.PickColor();
 
-            var error = TmuxService.CreateSession(name, dir);
+            var error = backend.CreateSession(name, dir);
             if (error != null)
                 throw new FlowCancelledException(error);
 
@@ -54,8 +55,8 @@ public class SessionHandler(
                 ConfigService.SaveDescription(config, name, description);
             if (color != null)
                 ConfigService.SaveColor(config, name, color);
-            TmuxService.ApplyStatusColor(name, color ?? "grey42");
-            TmuxService.AttachSession(name);
+            backend.ApplyStatusColor(name, color ?? "grey42");
+            backend.AttachSession(name);
             loadSessions();
             resetPaneCache();
         }, state);
@@ -73,7 +74,7 @@ public class SessionHandler(
         var confirm = Console.ReadKey(true);
         if (confirm.Key == ConsoleKey.Y)
         {
-            var killError = TmuxService.KillSession(session.Name);
+            var killError = backend.KillSession(session.Name);
             if (killError == null)
             {
                 ConfigService.RemoveDescription(config, session.Name);
@@ -117,7 +118,7 @@ public class SessionHandler(
 
             if (!string.IsNullOrWhiteSpace(newName) && newName != currentName)
             {
-                var renameError = TmuxService.RenameSession(currentName, newName);
+                var renameError = backend.RenameSession(currentName, newName);
                 if (renameError != null)
                     throw new FlowCancelledException(renameError);
 
@@ -138,7 +139,7 @@ public class SessionHandler(
             if (newColor != null)
             {
                 ConfigService.SaveColor(config, currentName, newColor);
-                TmuxService.ApplyStatusColor(currentName, newColor);
+                backend.ApplyStatusColor(currentName, newColor);
                 changed = true;
             }
 
@@ -163,8 +164,8 @@ public class SessionHandler(
         Console.CursorVisible = true;
         Console.Clear();
 
-        TmuxService.ResetWindowSize(session.Name);
-        TmuxService.AttachSession(session.Name);
+        backend.ResetWindowSize(session.Name);
+        backend.AttachSession(session.Name);
 
         // User detached — reset cooldown so next idle transition notifies fresh
         NotificationService.ResetCooldown(session.Name);
@@ -212,7 +213,7 @@ public class SessionHandler(
         if (session == null)
             return;
 
-        var error = TmuxService.SendKeys(session.Name, key);
+        var error = backend.SendKeys(session.Name, key);
         if (error == null)
         {
             state.SetStatus($"Sent '{key}' to {session.Name}");

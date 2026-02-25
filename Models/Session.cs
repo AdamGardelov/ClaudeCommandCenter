@@ -1,6 +1,6 @@
 namespace ClaudeCommandCenter.Models;
 
-public class TmuxSession
+public class Session
 {
     public required string Name { get; set; }
     public string? Description { get; set; }
