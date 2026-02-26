@@ -14,4 +14,6 @@ public class CccConfig
     public NotificationConfig Notifications { get; set; } = new();
     public List<ClaudeConfigRoute> ClaudeConfigRoutes { get; set; } = [];
     public string DefaultClaudeConfigDir { get; set; } = "";
+    public List<RemoteHost> RemoteHosts { get; set; } = [];
+    public Dictionary<string, string> SessionRemoteHosts { get; set; } = new();
 }
