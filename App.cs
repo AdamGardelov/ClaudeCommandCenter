@@ -234,6 +234,8 @@ public class App(ISessionBackend backend, bool mobileMode = false)
             if (_config.SessionColors.TryGetValue(s.Name, out var color))
                 s.ColorTag = color;
             s.IsExcluded = _config.ExcludedSessions.Contains(s.Name);
+            if (_config.SessionRemoteHosts.TryGetValue(s.Name, out var remoteHostName))
+                s.RemoteHostName = remoteHostName;
             backend.ApplyStatusColor(s.Name, color ?? "grey42");
 
             // Preserve content tracking state so sessions don't briefly flash as "working"
@@ -252,7 +254,8 @@ public class App(ISessionBackend backend, bool mobileMode = false)
             }
             else if (s.CurrentPath != null && s.GitBranch != null)
             {
-                var headSha = GitService.GetCurrentCommitSha(s.CurrentPath);
+                var host = _config.RemoteHosts.FirstOrDefault(h => h.Name == s.RemoteHostName);
+                var headSha = GitService.GetCurrentCommitSha(s.CurrentPath, host?.Host);
                 if (headSha != null)
                 {
                     s.StartCommitSha = headSha;
@@ -260,6 +263,14 @@ public class App(ISessionBackend backend, bool mobileMode = false)
                     startCommitsDirty = true;
                 }
             }
+        }
+
+        // Re-detect git info for remote sessions (backend only does local detection)
+        foreach (var s in _state.Sessions.Where(s => s.RemoteHostName != null))
+        {
+            var host = _config.RemoteHosts.FirstOrDefault(h => h.Name == s.RemoteHostName);
+            if (host != null)
+                GitService.DetectGitInfo(s, host.Host);
         }
 
         if (startCommitsDirty)
