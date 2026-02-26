@@ -3,6 +3,7 @@ using ClaudeCommandCenter.Enums;
 using ClaudeCommandCenter.Models;
 using ClaudeCommandCenter.Services;
 using ClaudeCommandCenter.UI;
+using Spectre.Console;
 
 namespace ClaudeCommandCenter.Handlers;
 
@@ -35,6 +36,21 @@ public class SessionHandler(
             {
                 FlowHelper.PrintStep(++step, totalSteps, "Target");
                 remoteHost = flow.PickTarget();
+
+                if (remoteHost != null)
+                {
+                    var alive = false;
+                    AnsiConsole.Status()
+                        .Spinner(Spinner.Known.Dots)
+                        .SpinnerStyle(new Style(Color.Grey70))
+                        .Start($"[grey70]Checking connection to [white]{remoteHost.Name}[/]...[/]", _ =>
+                        {
+                            alive = SshService.CheckConnectivity(remoteHost.Host);
+                        });
+
+                    if (!alive)
+                        throw new FlowCancelledException($"Cannot reach {remoteHost.Name} ({remoteHost.Host})");
+                }
             }
 
             // Step: Directory

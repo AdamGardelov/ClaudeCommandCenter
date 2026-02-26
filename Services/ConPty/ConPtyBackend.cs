@@ -414,7 +414,7 @@ public class ConPtyBackend : ISessionBackend
             if (remoteHost != null)
             {
                 var (sshFile, sshArgs) = SshService.BuildSessionCommand(remoteHost, workingDirectory);
-                commandLine = $"{sshFile} {string.Join(" ", sshArgs)}";
+                commandLine = $"{sshFile} {string.Join(" ", sshArgs.ConvertAll(QuoteWindowsArg))}";
                 processWorkDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             }
             else
@@ -620,6 +620,12 @@ public class ConPtyBackend : ISessionBackend
         // xterm modifier encoding: value = 1 + (shift?1:0) + (alt?2:0) + (ctrl?4:0)
         return 1 + (shift ? 1 : 0) + (alt ? 2 : 0) + (ctrl ? 4 : 0);
     }
+
+    /// <summary>
+    /// Wraps an argument in double quotes for CreateProcessW if it contains spaces.
+    /// </summary>
+    private static string QuoteWindowsArg(string arg) =>
+        arg.Contains(' ') ? $"\"{arg}\"" : arg;
 
     private void DetectWaitingByContent(Session session)
     {

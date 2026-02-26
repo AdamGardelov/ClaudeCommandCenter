@@ -14,6 +14,45 @@ public static class SshService
     }
 
     /// <summary>
+    /// Quick connectivity check with a timeout. Returns true if the host responds.
+    /// </summary>
+    public static bool CheckConnectivity(string remoteHost, int timeoutSeconds = 5)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "ssh",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            startInfo.ArgumentList.Add("-o");
+            startInfo.ArgumentList.Add($"ConnectTimeout={timeoutSeconds}");
+            startInfo.ArgumentList.Add(remoteHost);
+            startInfo.ArgumentList.Add("echo ok");
+
+            using var process = Process.Start(startInfo);
+            if (process == null)
+                return false;
+
+            var exited = process.WaitForExit(timeoutSeconds * 1000 + 2000);
+            if (!exited)
+            {
+                process.Kill();
+                return false;
+            }
+
+            return process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Builds the filename and arguments for launching a Claude session.
     /// Local: shell -lc claude
     /// Remote: ssh -t host 'cd path && claude'
