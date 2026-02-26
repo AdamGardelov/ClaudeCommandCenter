@@ -225,7 +225,10 @@ public class SessionHandler(
         NotificationService.ResetCooldown(session.Name);
 
         // Re-enter CCC's alternate screen buffer
+        Console.Write("\e(B");      // Reset charset on main screen
         Console.Write("\e[?1049h"); // Enter alternate screen buffer
+        Console.Write("\e(B");      // Reset charset on alternate screen (separate state)
+        Console.Write("\e[0m");     // Reset all attributes
         Console.Write("\e[?1003l\e[?1006l\e[?1015l\e[?1000l"); // Disable mouse tracking
         Console.Write("\e[2J");     // Clear screen
         Console.Write("\e[H");      // Cursor home

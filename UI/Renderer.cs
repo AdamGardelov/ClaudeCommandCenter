@@ -161,14 +161,14 @@ public static class Renderer
             if (session.IsExcluded)
             {
                 if (isSelected)
-                    return new Markup($"[grey50 on grey19] [grey42]†[/] {name,-22} [/]{remote}");
+                    return new Markup($"[grey50 on grey19] [grey42]†[/] {name,-22}[/]{remote}");
                 return new Markup($" [grey42]†[/] [grey35]{name,-22}[/]{remote}");
             }
 
             if (isSelected)
             {
                 var bg = session.ColorTag ?? "grey37";
-                return new Markup($"[white on {bg}] † {name,-22} [/]{remote}");
+                return new Markup($"[white on {bg}] † {name,-22}[/]{remote}");
             }
 
             return new Markup($" [red]†[/] [grey50]{name,-22}[/]{remote}");
@@ -180,14 +180,14 @@ public static class Renderer
         {
             var excludedStatus = session.IsWaitingForInput ? "[grey42]![/]" : session.IsIdle ? "[grey42]✓[/]" : $"[grey35]{spinner}[/]";
             if (isSelected)
-                return new Markup($"[grey50 on grey19] {excludedStatus} {name,-22} [/]{remote}");
+                return new Markup($"[grey50 on grey19] {excludedStatus} {name,-22}[/]{remote}");
             return new Markup($" {excludedStatus} [grey35]{name,-22}[/]{remote}");
         }
 
         if (isSelected)
         {
             var bg = session.ColorTag ?? "grey37";
-            return new Markup($"[white on {bg}] {status} {name,-22} [/]{remote}");
+            return new Markup($"[white on {bg}] {status} {name,-22}[/]{remote}");
         }
 
         if (session.IsWaitingForInput)
