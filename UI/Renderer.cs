@@ -417,8 +417,9 @@ public static class Renderer
                 {
                     var session = visibleSessions[idx];
                     var isSelected = idx == state.CursorIndex;
+                    var isFocused = isSelected && state.IsGridFocused;
                     var pane = allCapturedPanes?.GetValueOrDefault(session.Name);
-                    cellLayout.Update(BuildGridCell(session, isSelected, pane, outputLines, cols));
+                    cellLayout.Update(BuildGridCell(session, isSelected, isFocused, pane, outputLines, cols));
                 }
                 else
                 {
@@ -438,7 +439,7 @@ public static class Renderer
         return grid;
     }
 
-    private static Panel BuildGridCell(Session session, bool isSelected, string? capturedPane, int outputLines, int gridCols)
+    private static Panel BuildGridCell(Session session, bool isSelected, bool isFocused, string? capturedPane, int outputLines, int gridCols)
     {
         var rows = new List<IRenderable>();
         var maxWidth = Math.Max(20, Console.WindowWidth / gridCols - 4);
@@ -515,24 +516,31 @@ public static class Renderer
             ? Style.Parse(session.ColorTag).Foreground
             : Color.Grey42;
 
-        var borderColor = isSelected
-            ? Color.White
-            : new Color(
-                (byte)(sessionColor.R / 2),
-                (byte)(sessionColor.G / 2),
-                (byte)(sessionColor.B / 2));
+        var borderColor = isFocused
+            ? sessionColor
+            : isSelected
+                ? Color.White
+                : new Color(
+                    (byte)(sessionColor.R / 2),
+                    (byte)(sessionColor.G / 2),
+                    (byte)(sessionColor.B / 2));
 
         var headerColor = session.ColorTag ?? "grey50";
         var headerName = Markup.Escape(session.Name);
+        var focusIndicator = isFocused ? " [white bold]▶[/]" : "";
 
         return new Panel(new Rows(rows))
-            .Header($"[{headerColor} bold] {headerName} [/]")
+            .Header($"[{headerColor} bold] {headerName} [/]{focusIndicator}")
+            .Border(isFocused ? BoxBorder.Double : BoxBorder.Rounded)
             .BorderColor(borderColor)
             .Expand();
     }
 
     private static Markup BuildGroupGridStatusBar(AppState state)
     {
+        if (state.IsGridFocused)
+            return BuildGridFocusStatusBar(state);
+
         if (state.IsInputMode)
             return BuildInputStatusBar(state);
 
@@ -549,7 +557,7 @@ public static class Renderer
             "[grey]│[/]",
             "[grey70 bold]arrows[/][grey] navigate [/]",
             "[grey]│[/]",
-            HintFor(kb, "attach"),
+            HintFor(kb, "attach", "focus"),
             HintFor(kb, "approve"),
             HintFor(kb, "reject"),
             HintFor(kb, "send-text", "send"),
@@ -566,6 +574,9 @@ public static class Renderer
 
     private static Markup BuildGridStatusBar(AppState state)
     {
+        if (state.IsGridFocused)
+            return BuildGridFocusStatusBar(state);
+
         if (state.IsInputMode)
             return BuildInputStatusBar(state);
 
@@ -579,7 +590,7 @@ public static class Renderer
         {
             " [grey70 bold]arrows[/][grey] navigate [/]",
             "[grey]│[/]",
-            HintFor(kb, "attach"),
+            HintFor(kb, "attach", "focus"),
             HintFor(kb, "approve"),
             HintFor(kb, "reject"),
             HintFor(kb, "send-text", "send"),
@@ -591,6 +602,13 @@ public static class Renderer
 
         parts.RemoveAll(string.IsNullOrEmpty);
         return new Markup(string.Join(" ", parts));
+    }
+
+    private static Markup BuildGridFocusStatusBar(AppState state)
+    {
+        var session = state.GetSelectedSession();
+        var name = session != null ? Markup.Escape(session.Name) : "session";
+        return new Markup($" [green bold]▶[/] [white]Typing to[/] [aqua]{name}[/] [grey]│[/] [grey70 bold]Esc[/][grey] unfocus [/] [grey70 bold]Ctrl+Arrows[/][grey] switch [/]");
     }
 
     private static Markup BuildInputStatusBar(AppState state)

@@ -97,6 +97,55 @@ public class TmuxBackend : ISessionBackend
         return null;
     }
 
+    public void ForwardKey(string sessionName, ConsoleKeyInfo key)
+    {
+        if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && key.Key >= ConsoleKey.A && key.Key <= ConsoleKey.Z)
+        {
+            RunTmux("send-keys", "-t", sessionName, $"C-{(char)('a' + key.Key - ConsoleKey.A)}");
+            return;
+        }
+
+        var tmuxKey = key.Key switch
+        {
+            ConsoleKey.Enter => "Enter",
+            ConsoleKey.Backspace => "BSpace",
+            ConsoleKey.Delete => "DC",
+            ConsoleKey.Tab => "Tab",
+            ConsoleKey.Escape => "Escape",
+            ConsoleKey.UpArrow => "Up",
+            ConsoleKey.DownArrow => "Down",
+            ConsoleKey.LeftArrow => "Left",
+            ConsoleKey.RightArrow => "Right",
+            ConsoleKey.Home => "Home",
+            ConsoleKey.End => "End",
+            ConsoleKey.PageUp => "PPage",
+            ConsoleKey.PageDown => "NPage",
+            ConsoleKey.Insert => "IC",
+            ConsoleKey.F1 => "F1",
+            ConsoleKey.F2 => "F2",
+            ConsoleKey.F3 => "F3",
+            ConsoleKey.F4 => "F4",
+            ConsoleKey.F5 => "F5",
+            ConsoleKey.F6 => "F6",
+            ConsoleKey.F7 => "F7",
+            ConsoleKey.F8 => "F8",
+            ConsoleKey.F9 => "F9",
+            ConsoleKey.F10 => "F10",
+            ConsoleKey.F11 => "F11",
+            ConsoleKey.F12 => "F12",
+            _ => null,
+        };
+
+        if (tmuxKey != null)
+        {
+            RunTmux("send-keys", "-t", sessionName, tmuxKey);
+            return;
+        }
+
+        if (key.KeyChar != '\0')
+            RunTmux("send-keys", "-t", sessionName, "-l", key.KeyChar.ToString());
+    }
+
     public string? CapturePaneContent(string sessionName, int lines = 500) =>
         RunTmux("capture-pane", "-t", sessionName, "-p", "-e", "-S", $"-{lines}");
 

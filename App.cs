@@ -420,6 +420,12 @@ public class App(ISessionBackend backend, bool mobileMode = false)
 
     private void HandleKey(ConsoleKeyInfo key)
     {
+        if (_state.IsGridFocused)
+        {
+            HandleGridFocusKey(key);
+            return;
+        }
+
         if (_state.IsInputMode)
         {
             HandleInputKey(key);
@@ -559,7 +565,10 @@ public class App(ISessionBackend backend, bool mobileMode = false)
                 _sessionHandler.SendText();
                 break;
             case "attach":
-                _sessionHandler.Attach();
+                if (_state.ViewMode == ViewMode.Grid)
+                    EnterGridFocus();
+                else
+                    _sessionHandler.Attach();
                 break;
             case "toggle-diff":
                 _diffHandler.Open();
@@ -667,6 +676,54 @@ public class App(ISessionBackend backend, bool mobileMode = false)
                 if (key.KeyChar >= ' ' && _state.InputBuffer.Length < 500)
                     _state.InputBuffer += key.KeyChar;
                 break;
+        }
+    }
+
+    private void EnterGridFocus()
+    {
+        var session = _state.GetSelectedSession();
+        if (session == null || session.IsDead)
+            return;
+
+        _state.IsGridFocused = true;
+    }
+
+    private void HandleGridFocusKey(ConsoleKeyInfo key)
+    {
+        var session = _state.GetSelectedSession();
+
+        // Exit focus mode
+        if (key.Key == ConsoleKey.Escape)
+        {
+            _state.IsGridFocused = false;
+            return;
+        }
+
+        // Ctrl+Arrow: navigate between cells while staying focused
+        if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
+        {
+            switch (key.Key)
+            {
+                case ConsoleKey.UpArrow:
+                    MoveGridCursor(0, -1);
+                    return;
+                case ConsoleKey.DownArrow:
+                    MoveGridCursor(0, 1);
+                    return;
+                case ConsoleKey.LeftArrow:
+                    MoveGridCursor(-1, 0);
+                    return;
+                case ConsoleKey.RightArrow:
+                    MoveGridCursor(1, 0);
+                    return;
+            }
+        }
+
+        // Forward everything else to the selected session
+        if (session != null && !session.IsDead)
+        {
+            backend.ForwardKey(session.Name, key);
+            _lastCapture = DateTime.MinValue; // Force capture on next tick (~30ms)
         }
     }
 
@@ -837,6 +894,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         else
         {
             _state.ViewMode = ViewMode.List;
+            _state.IsGridFocused = false;
         }
 
         _lastSelectedSession = null;

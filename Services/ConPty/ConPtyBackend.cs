@@ -218,6 +218,18 @@ public class ConPtyBackend : ISessionBackend
         }
     }
 
+    public void ForwardKey(string sessionName, ConsoleKeyInfo key)
+    {
+        ConPtySession? session;
+        lock (_sessionsLock)
+        {
+            if (!_sessions.TryGetValue(sessionName, out session))
+                return;
+        }
+
+        ForwardKeyToSession(session, key);
+    }
+
     public string? CapturePaneContent(string sessionName, int lines = 500)
     {
         ConPtySession? session;
