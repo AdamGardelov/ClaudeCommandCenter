@@ -17,7 +17,7 @@ mkdir -p "$STATE_DIR"
 
 # Read hook event JSON from stdin
 INPUT=$(cat)
-EVENT=$(echo "$INPUT" | grep -o '"hook_event_name":"[^"]*"' | head -1 | cut -d'"' -f4)
+EVENT=$(echo "$INPUT" | sed -n 's/.*"hook_event_name" *: *"\([^"]*\)".*/\1/p' | head -1)
 
 case "$EVENT" in
     UserPromptSubmit)

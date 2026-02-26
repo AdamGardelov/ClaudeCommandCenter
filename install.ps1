@@ -81,15 +81,19 @@ try {
     }
     $hookUrl = "https://raw.githubusercontent.com/$repo/main/hooks/ccc-state.sh"
     $hookPath = Join-Path $hookDir 'ccc-state.sh'
-    Write-Host "Downloading notification hook..."
-    try {
-        Invoke-WebRequest -Uri $hookUrl -OutFile $hookPath
-        Write-Host "Installed hook to $hookPath"
-        Write-Host ""
-        Write-Host "To enable notifications, add hooks to ~/.claude/settings.json:"
-        Write-Host "  See https://github.com/$repo#notification-hooks"
-    } catch {
-        Write-Host "Note: Could not download hook script. See README for manual setup."
+    if (Test-Path $hookPath) {
+        Write-Host "Hook already exists at $hookPath - skipping (remove it manually to reinstall)."
+    } else {
+        Write-Host "Downloading notification hook..."
+        try {
+            Invoke-WebRequest -Uri $hookUrl -OutFile $hookPath
+            Write-Host "Installed hook to $hookPath"
+            Write-Host ""
+            Write-Host "To enable notifications, add hooks to ~/.claude/settings.json:"
+            Write-Host "  See https://github.com/$repo#notification-hooks"
+        } catch {
+            Write-Host "Note: Could not download hook script. See README for manual setup."
+        }
     }
 
     Write-Host ""
