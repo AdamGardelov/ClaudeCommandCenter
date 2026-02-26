@@ -1,14 +1,18 @@
 #!/bin/bash
 # ccc-state.sh — Writes session state for CCC to read.
-# Called by Claude Code hooks: UserPromptSubmit, Stop.
+# Called by Claude Code hooks with a state argument:
+#   working  — UserPromptSubmit, PostToolUse (Claude is processing)
+#   waiting  — Notification (Claude needs user input)
+#   stop     — Stop (check pane to distinguish idle from waiting)
+#
 # Requires CCC_SESSION_NAME env var (injected by CCC when creating sessions).
 #
-# Notification events are intentionally ignored — they can fire mid-work
-# (e.g. permission prompts where auto-accept continues without a new
-# UserPromptSubmit), causing false "waiting for input" states.
-#
-# On Stop, we check the pane content to instantly distinguish idle (❯ prompt)
-# from waiting-for-input (Claude asked a question).
+# State flow:
+#   UserPromptSubmit → "working"  (user sent input)
+#   Notification     → "waiting"  (permission prompt or question)
+#   PostToolUse      → "working"  (tool completed — corrects false positives
+#                                   from auto-accepted permission prompts)
+#   Stop             → "idle" or "waiting" (pane content check)
 
 set -euo pipefail
 
@@ -22,15 +26,11 @@ fi
 
 mkdir -p "$STATE_DIR"
 
-# Read hook event JSON from stdin
-INPUT=$(cat)
-EVENT=$(echo "$INPUT" | sed -n 's/.*"hook_event_name" *: *"\([^"]*\)".*/\1/p' | head -1)
-
-case "$EVENT" in
-    UserPromptSubmit)
-        echo "working" > "$STATE_DIR/$SESSION_NAME"
+case "${1:-}" in
+    working|waiting)
+        echo "$1" > "$STATE_DIR/$SESSION_NAME"
         ;;
-    Stop)
+    stop)
         # Check pane content to distinguish idle from waiting-for-input.
         # Look for the ❯ prompt (idle) vs a question/permission prompt (waiting).
         PANE=$(tmux capture-pane -t "$SESSION_NAME" -p -S -20 2>/dev/null || true)
