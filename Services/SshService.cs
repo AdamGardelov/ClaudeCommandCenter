@@ -117,6 +117,18 @@ public static class SshService
         }
     }
 
-    internal static string EscapePath(string path) =>
-        $"'{path.Replace("'", "'\\''")}'";
+    internal static string EscapePath(string path)
+    {
+        // Handle tilde prefix: ~/foo → ~/'foo' so the shell expands ~ but quotes the rest
+        if (path.StartsWith("~/"))
+        {
+            var rest = path[2..];
+            return $"~/{EscapeSegment(rest)}";
+        }
+
+        return EscapeSegment(path);
+    }
+
+    private static string EscapeSegment(string value) =>
+        $"'{value.Replace("'", "'\\''")}'";
 }

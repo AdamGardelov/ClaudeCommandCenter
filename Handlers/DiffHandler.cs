@@ -23,6 +23,12 @@ public class DiffHandler(AppState state)
             return;
         }
 
+        if (session.RemoteHostName != null)
+        {
+            state.SetStatus("Diff overlay not available for remote sessions");
+            return;
+        }
+
         var fullDiff = GitService.GetFullDiff(session.CurrentPath, session.StartCommitSha);
         if (string.IsNullOrWhiteSpace(fullDiff))
         {

@@ -279,6 +279,12 @@ public class SessionHandler(
         if (session?.CurrentPath == null)
             return;
 
+        if (session.RemoteHostName != null)
+        {
+            state.SetStatus("Open folder not available for remote sessions");
+            return;
+        }
+
         try
         {
             var command = FlowHelper.GetFileManagerCommand();
@@ -307,6 +313,12 @@ public class SessionHandler(
         var session = state.GetSelectedSession();
         if (session?.CurrentPath == null)
             return;
+
+        if (session.RemoteHostName != null)
+        {
+            state.SetStatus("Open in IDE not available for remote sessions");
+            return;
+        }
 
         if (string.IsNullOrWhiteSpace(config.IdeCommand))
         {
