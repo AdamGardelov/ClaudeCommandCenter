@@ -417,9 +417,8 @@ public static class Renderer
                 {
                     var session = visibleSessions[idx];
                     var isSelected = idx == state.CursorIndex;
-                    var isFocused = isSelected && state.IsGridFocused;
                     var pane = allCapturedPanes?.GetValueOrDefault(session.Name);
-                    cellLayout.Update(BuildGridCell(session, isSelected, isFocused, pane, outputLines, cols));
+                    cellLayout.Update(BuildGridCell(session, isSelected, pane, outputLines, cols));
                 }
                 else
                 {
@@ -439,7 +438,7 @@ public static class Renderer
         return grid;
     }
 
-    private static Panel BuildGridCell(Session session, bool isSelected, bool isFocused, string? capturedPane, int outputLines, int gridCols)
+    private static Panel BuildGridCell(Session session, bool isSelected, string? capturedPane, int outputLines, int gridCols)
     {
         var rows = new List<IRenderable>();
         var maxWidth = Math.Max(20, Console.WindowWidth / gridCols - 4);
@@ -516,99 +515,45 @@ public static class Renderer
             ? Style.Parse(session.ColorTag).Foreground
             : Color.Grey42;
 
-        var borderColor = isFocused
+        var borderColor = isSelected
             ? sessionColor
-            : isSelected
-                ? Color.White
-                : new Color(
-                    (byte)(sessionColor.R / 2),
-                    (byte)(sessionColor.G / 2),
-                    (byte)(sessionColor.B / 2));
+            : new Color(
+                (byte)(sessionColor.R / 2),
+                (byte)(sessionColor.G / 2),
+                (byte)(sessionColor.B / 2));
 
         var headerColor = session.ColorTag ?? "grey50";
         var headerName = Markup.Escape(session.Name);
-        var focusIndicator = isFocused ? " [white bold]▶[/]" : "";
+        var focusIndicator = isSelected ? " [white bold]▶[/]" : "";
 
         return new Panel(new Rows(rows))
             .Header($"[{headerColor} bold] {headerName} [/]{focusIndicator}")
-            .Border(isFocused ? BoxBorder.Double : BoxBorder.Rounded)
+            .Border(isSelected ? BoxBorder.Double : BoxBorder.Rounded)
             .BorderColor(borderColor)
             .Expand();
     }
 
     private static Markup BuildGroupGridStatusBar(AppState state)
     {
-        if (state.IsGridFocused)
-            return BuildGridFocusStatusBar(state);
-
         if (state.IsInputMode)
             return BuildInputStatusBar(state);
 
-        var status = state.GetActiveStatus();
-        if (status != null)
-            return new Markup($" [yellow]{Markup.Escape(status)}[/]");
-
-        var kb = state.Keybindings;
+        var session = state.GetSelectedSession();
+        var name = session != null ? Markup.Escape(session.Name) : "session";
         var groupName = state.ActiveGroup != null ? Markup.Escape(state.ActiveGroup) : "group";
 
-        var parts = new List<string>
-        {
-            $" [mediumpurple3]{groupName}[/]",
-            "[grey]│[/]",
-            "[grey70 bold]arrows[/][grey] navigate [/]",
-            "[grey]│[/]",
-            HintFor(kb, "attach", "focus"),
-            HintFor(kb, "approve"),
-            HintFor(kb, "reject"),
-            HintFor(kb, "send-text", "send"),
-            HintFor(kb, "delete-session", "kill"),
-            HintFor(kb, "toggle-exclude", "hide"),
-            "[grey]│[/]",
-            "[grey70 bold]Esc[/][grey] back [/]",
-            HintFor(kb, "quit")
-        };
-
-        parts.RemoveAll(string.IsNullOrEmpty);
-        return new Markup(string.Join(" ", parts));
+        return new Markup($" [mediumpurple3]{groupName}[/] [grey]│[/] [green bold]▶[/] [white]Typing to[/] [aqua]{name}[/] [grey]│[/] [grey70 bold]Ctrl+Arrows[/][grey] switch [/] [grey70 bold]Esc[/][grey] back [/]");
     }
 
     private static Markup BuildGridStatusBar(AppState state)
     {
-        if (state.IsGridFocused)
-            return BuildGridFocusStatusBar(state);
-
         if (state.IsInputMode)
             return BuildInputStatusBar(state);
 
-        var status = state.GetActiveStatus();
-        if (status != null)
-            return new Markup($" [yellow]{Markup.Escape(status)}[/]");
-
-        var kb = state.Keybindings;
-
-        var parts = new List<string>
-        {
-            " [grey70 bold]arrows[/][grey] navigate [/]",
-            "[grey]│[/]",
-            HintFor(kb, "attach", "focus"),
-            HintFor(kb, "approve"),
-            HintFor(kb, "reject"),
-            HintFor(kb, "send-text", "send"),
-            "[grey]│[/]",
-            HintFor(kb, "toggle-exclude", "hide"),
-            HintFor(kb, "toggle-grid", "list view"),
-            HintFor(kb, "quit")
-        };
-
-        parts.RemoveAll(string.IsNullOrEmpty);
-        return new Markup(string.Join(" ", parts));
-    }
-
-    private static Markup BuildGridFocusStatusBar(AppState state)
-    {
         var session = state.GetSelectedSession();
         var name = session != null ? Markup.Escape(session.Name) : "session";
-        return new Markup($" [green bold]▶[/] [white]Typing to[/] [aqua]{name}[/] [grey]│[/] [grey70 bold]Esc[/][grey] unfocus [/] [grey70 bold]Ctrl+Arrows[/][grey] switch [/]");
+
+        return new Markup($" [green bold]▶[/] [white]Typing to[/] [aqua]{name}[/] [grey]│[/] [grey70 bold]Ctrl+Arrows[/][grey] switch [/] [grey70 bold]Esc[/][grey] list view [/]");
     }
 
     private static Markup BuildInputStatusBar(AppState state)

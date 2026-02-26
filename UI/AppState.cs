@@ -22,8 +22,7 @@ public class AppState
     public string? ActiveGroup { get; set; }
     private int _savedCursorIndex;
 
-    // Grid focus mode — keystrokes forwarded to selected session
-    public bool IsGridFocused { get; set; }
+
 
     // Mobile mode state
     public bool MobileMode { get; set; }
@@ -161,7 +160,6 @@ public class AppState
     {
         ActiveGroup = null;
         ViewMode = ViewMode.List;
-        IsGridFocused = false;
         CursorIndex = _savedCursorIndex;
         ClampCursor();
     }

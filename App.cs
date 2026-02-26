@@ -420,12 +420,6 @@ public class App(ISessionBackend backend, bool mobileMode = false)
 
     private void HandleKey(ConsoleKeyInfo key)
     {
-        if (_state.IsGridFocused)
-        {
-            HandleGridFocusKey(key);
-            return;
-        }
-
         if (_state.IsInputMode)
         {
             HandleInputKey(key);
@@ -450,17 +444,16 @@ public class App(ISessionBackend backend, bool mobileMode = false)
             return;
         }
 
-        if (_state.HasPendingStatus)
+        // Grid mode: always forward keystrokes to selected session
+        if (_state.ViewMode == ViewMode.Grid)
         {
-            _state.ClearStatus();
+            HandleGridKey(key);
             return;
         }
 
-        // Escape from group grid returns to list
-        if (key.Key == ConsoleKey.Escape && _state.ActiveGroup != null)
+        if (_state.HasPendingStatus)
         {
-            _state.LeaveGroupGrid();
-            _lastSelectedSession = null;
+            _state.ClearStatus();
             return;
         }
 
@@ -475,43 +468,21 @@ public class App(ISessionBackend backend, bool mobileMode = false)
             return;
         }
 
-        // Grid mode arrow key handling (both regular grid and group grid)
-        if (_state.ViewMode == ViewMode.Grid)
+        // List view arrow keys
+        switch (key.Key)
         {
-            switch (key.Key)
-            {
-                case ConsoleKey.UpArrow:
-                    MoveGridCursor(0, -1);
-                    return;
-                case ConsoleKey.DownArrow:
-                    MoveGridCursor(0, 1);
-                    return;
-                case ConsoleKey.LeftArrow:
-                    MoveGridCursor(-1, 0);
-                    return;
-                case ConsoleKey.RightArrow:
-                    MoveGridCursor(1, 0);
-                    return;
-            }
-        }
-        else
-        {
-            // List view arrow keys
-            switch (key.Key)
-            {
-                case ConsoleKey.UpArrow:
-                    if (_state.ActiveSection == ActiveSection.Groups)
-                        MoveGroupCursor(-1);
-                    else
-                        MoveCursor(-1);
-                    return;
-                case ConsoleKey.DownArrow:
-                    if (_state.ActiveSection == ActiveSection.Groups)
-                        MoveGroupCursor(1);
-                    else
-                        MoveCursor(1);
-                    return;
-            }
+            case ConsoleKey.UpArrow:
+                if (_state.ActiveSection == ActiveSection.Groups)
+                    MoveGroupCursor(-1);
+                else
+                    MoveCursor(-1);
+                return;
+            case ConsoleKey.DownArrow:
+                if (_state.ActiveSection == ActiveSection.Groups)
+                    MoveGroupCursor(1);
+                else
+                    MoveCursor(1);
+                return;
         }
 
         var keyId = FlowHelper.ResolveKeyId(key);
@@ -565,10 +536,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
                 _sessionHandler.SendText();
                 break;
             case "attach":
-                if (_state.ViewMode == ViewMode.Grid)
-                    EnterGridFocus();
-                else
-                    _sessionHandler.Attach();
+                _sessionHandler.Attach();
                 break;
             case "toggle-diff":
                 _diffHandler.Open();
@@ -679,27 +647,26 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         }
     }
 
-    private void EnterGridFocus()
+    private void HandleGridKey(ConsoleKeyInfo key)
     {
-        var session = _state.GetSelectedSession();
-        if (session == null || session.IsDead)
-            return;
-
-        _state.IsGridFocused = true;
-    }
-
-    private void HandleGridFocusKey(ConsoleKeyInfo key)
-    {
-        var session = _state.GetSelectedSession();
-
-        // Exit focus mode
+        // Escape: exit grid (back to list, or back from group grid)
         if (key.Key == ConsoleKey.Escape)
         {
-            _state.IsGridFocused = false;
+            if (_state.ActiveGroup != null)
+            {
+                _state.LeaveGroupGrid();
+                _lastSelectedSession = null;
+            }
+            else
+            {
+                _state.ViewMode = ViewMode.List;
+                _lastSelectedSession = null;
+            }
+
             return;
         }
 
-        // Ctrl+Arrow: navigate between cells while staying focused
+        // Ctrl+Arrow: navigate between grid cells
         if (key.Modifiers.HasFlag(ConsoleModifiers.Control))
         {
             switch (key.Key)
@@ -720,6 +687,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         }
 
         // Forward everything else to the selected session
+        var session = _state.GetSelectedSession();
         if (session != null && !session.IsDead)
         {
             backend.ForwardKey(session.Name, key);
@@ -894,7 +862,6 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         else
         {
             _state.ViewMode = ViewMode.List;
-            _state.IsGridFocused = false;
         }
 
         _lastSelectedSession = null;
