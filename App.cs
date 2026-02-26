@@ -34,6 +34,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
     private static readonly TimeSpan _updateCheckInterval = TimeSpan.FromMinutes(20);
     private bool _wantsUpdate;
     private int _startupPollCount;
+    private bool _gridKeyForwarded;
 
     public void Run()
     {
@@ -122,6 +123,21 @@ public class App(ISessionBackend backend, bool mobileMode = false)
                 {
                     var key = Console.ReadKey(true);
                     HandleKey(key);
+                }
+
+                // After draining, capture just the active grid session once
+                // (not per-key — avoids N process spawns when typing fast)
+                if (_gridKeyForwarded)
+                {
+                    var session = _state.GetSelectedSession();
+                    if (session != null)
+                    {
+                        var content = backend.CapturePaneContent(session.Name);
+                        if (content != null)
+                            _allCapturedPanes[session.Name] = content;
+                    }
+
+                    _gridKeyForwarded = false;
                 }
 
                 Render();
@@ -410,6 +426,9 @@ public class App(ISessionBackend backend, bool mobileMode = false)
 
     private void Render()
     {
+        // Synchronized output — terminal buffers everything and flips atomically,
+        // eliminating tearing/jumping when redrawing the full screen
+        Console.Write("\e[?2026h");
         Console.SetCursorPosition(0, 0);
         if (_state.ViewMode == ViewMode.Settings)
             AnsiConsole.Write(Renderer.BuildSettingsLayout(_state, _config));
@@ -417,6 +436,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
             AnsiConsole.Write(Renderer.BuildDiffOverlayLayout(_state));
         else
             AnsiConsole.Write(Renderer.BuildLayout(_state, _capturedPane, _allCapturedPanes));
+        Console.Write("\e[?2026l");
     }
 
     private void HandleKey(ConsoleKeyInfo key)
@@ -692,12 +712,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         if (session != null && !session.IsDead)
         {
             backend.ForwardKey(session.Name, key);
-
-            // Immediately capture just this session so the render at line 127
-            // has fresh data — avoids the 30ms+ round-trip through the main loop
-            var content = backend.CapturePaneContent(session.Name);
-            if (content != null)
-                _allCapturedPanes[session.Name] = content;
+            _gridKeyForwarded = true;
         }
     }
 
