@@ -262,6 +262,9 @@ public static class Renderer
         if (!string.IsNullOrWhiteSpace(session.Description))
             rows.Add(new Markup($" [{labelColor}]Desc:[/]     [italic grey70]{Markup.Escape(session.Description)}[/]"));
 
+        if (session.RemoteHostName != null)
+            rows.Add(new Markup($" [{labelColor}]Remote:[/]   [mediumpurple3]{Markup.Escape(session.RemoteHostName)}[/]"));
+
         rows.Add(new Markup($" [{labelColor}]Path:[/]     [white]{Markup.Escape(session.CurrentPath ?? "unknown")}[/]"));
 
         if (session.GitBranch != null)
@@ -376,7 +379,8 @@ public static class Renderer
             var name = Markup.Escape(session.Name);
             var branch = session.GitBranch != null ? $" [aqua]{Markup.Escape(session.GitBranch)}[/]" : "";
             var path = session.CurrentPath != null ? $" [grey50]{Markup.Escape(ShortenPath(session.CurrentPath))}[/]" : "";
-            rows.Add(new Markup($"  {status} [white]{name}[/]{branch}{path}"));
+            var remote = session.RemoteHostName != null ? $" [mediumpurple3]@{Markup.Escape(session.RemoteHostName)}[/]" : "";
+            rows.Add(new Markup($"  {status} [white]{name}[/]{branch}{remote}{path}"));
         }
 
         if (groupSessions.Count == 0)
@@ -693,7 +697,8 @@ public static class Renderer
         }
 
         var color = session.ColorTag ?? "grey70";
-        rows.Add(new Markup($" [{color} bold]{Markup.Escape(session.Name)}[/]"));
+        var remoteTag = session.RemoteHostName != null ? $" [mediumpurple3]@{Markup.Escape(session.RemoteHostName)}[/]" : "";
+        rows.Add(new Markup($" [{color} bold]{Markup.Escape(session.Name)}[/]{remoteTag}"));
 
         var branch = session.GitBranch != null ? $"[aqua]{Markup.Escape(session.GitBranch)}[/]" : "[grey]no branch[/]";
         var path = session.CurrentPath != null ? $" [grey50]{Markup.Escape(ShortenPath(session.CurrentPath))}[/]" : "";
