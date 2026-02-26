@@ -303,10 +303,33 @@ list instead of typing a full path.
 | `ideCommand`          | ``                      | Command to run when pressing `i` (e.g. `rider`, `code`, `cursor`) |
 | `sessionDescriptions` | `{}`                    | Display names shown under sessions in the preview panel           |
 | `sessionColors`       | `{}`                    | Spectre Console color names for session panel borders             |
-| `worktreeBasePath`    | `~/Dev/Wint/worktrees/` | Root directory for created worktrees                              |
-| `keybindings`         | `{}`                    | Keybinding overrides (see below)                                  |
+| `worktreeBasePath`        | `~/Dev/Wint/worktrees/` | Root directory for created worktrees                              |
+| `keybindings`             | `{}`                    | Keybinding overrides (see below)                                  |
+| `claudeConfigRoutes`      | `[]`                    | Directory-based Claude config routing (see below)                 |
+| `defaultClaudeConfigDir`  | ``                      | Fallback `CLAUDE_CONFIG_DIR` when no route matches                |
 
 The config file is created automatically on first run. Tilde (`~`) paths are expanded automatically.
+
+#### Claude Config Routing
+
+If you use multiple Claude Code accounts (e.g. personal + work), configure directory-based routing so each session
+automatically uses the correct config:
+
+```json
+{
+    "claudeConfigRoutes": [
+        {
+            "pathPrefix": "~/code/personal",
+            "configDir": "~/.claude"
+        }
+    ],
+    "defaultClaudeConfigDir": "~/.claude-work"
+}
+```
+
+When creating a session, CCC matches the working directory against `claudeConfigRoutes` (first match wins) and sets
+`CLAUDE_CONFIG_DIR` accordingly. If no route matches, `defaultClaudeConfigDir` is used. If that's also empty, the
+environment variable is not set and Claude uses its default config.
 
 #### Keybinding Configuration
 

@@ -191,6 +191,23 @@ public static class ConfigService
         Save(config);
     }
 
+    public static string? ResolveClaudeConfigDir(CccConfig config, string workingDirectory)
+    {
+        var expandedDir = Path.GetFullPath(ExpandPath(workingDirectory));
+
+        foreach (var route in config.ClaudeConfigRoutes)
+        {
+            var expandedPrefix = Path.GetFullPath(ExpandPath(route.PathPrefix));
+            if (expandedDir.Equals(expandedPrefix, StringComparison.Ordinal) ||
+                expandedDir.StartsWith(expandedPrefix.TrimEnd('/') + "/", StringComparison.Ordinal))
+                return ExpandPath(route.ConfigDir);
+        }
+
+        return string.IsNullOrEmpty(config.DefaultClaudeConfigDir)
+            ? null
+            : ExpandPath(config.DefaultClaudeConfigDir);
+    }
+
     public static string ExpandPath(string path)
     {
         if (path.StartsWith('~'))
