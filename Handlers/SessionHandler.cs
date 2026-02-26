@@ -25,29 +25,61 @@ public class SessionHandler(
 
         FlowHelper.RunFlow("New Session", () =>
         {
-            FlowHelper.PrintStep(1, 4, "Directory");
+            var hasRemotes = config.RemoteHosts.Count > 0;
+            var totalSteps = hasRemotes ? 5 : 4;
+            var step = 0;
+
+            // Step: Target (only if remote hosts configured)
+            RemoteHost? remoteHost = null;
+            if (hasRemotes)
+            {
+                FlowHelper.PrintStep(++step, totalSteps, "Target");
+                remoteHost = flow.PickTarget();
+            }
+
+            // Step: Directory
+            FlowHelper.PrintStep(++step, totalSteps, "Directory");
             string? worktreeBranch = null;
-            var dir = flow.PickDirectory(
+            string? dir;
+
+            if (remoteHost != null)
+            {
+                dir = flow.PickRemoteDirectory(remoteHost,
+                          onWorktreeBranchCreated: branch => worktreeBranch = branch)
+                      ?? throw new FlowCancelledException();
+            }
+            else
+            {
+                dir = flow.PickDirectory(
                           onWorktreeBranchCreated: branch => worktreeBranch = branch)
                       ?? throw new FlowCancelledException();
 
-            dir = ConfigService.ExpandPath(dir);
-            if (!Directory.Exists(dir))
-                throw new FlowCancelledException("Invalid directory");
+                dir = ConfigService.ExpandPath(dir);
+                if (!Directory.Exists(dir))
+                    throw new FlowCancelledException("Invalid directory");
+            }
 
-            FlowHelper.PrintStep(2, 4, "Name");
-            var defaultName = FlowHelper.SanitizeSessionName(worktreeBranch ?? new DirectoryInfo(dir).Name);
+            // Step: Name
+            FlowHelper.PrintStep(++step, totalSteps, "Name");
+            var dirName = worktreeBranch ?? dir.Split('/').LastOrDefault(s => !string.IsNullOrEmpty(s)) ?? "session";
+            var defaultName = FlowHelper.SanitizeSessionName(dirName);
             var existingNames = new HashSet<string>(state.Sessions.Select(s => s.Name), StringComparer.Ordinal);
             defaultName = FlowHelper.UniqueSessionName(defaultName, existingNames, " ");
             var name = flow.PromptWithDefault("Session name", defaultName);
 
-            FlowHelper.PrintStep(3, 4, "Description");
+            // Step: Description
+            FlowHelper.PrintStep(++step, totalSteps, "Description");
             var description = flow.PromptOptional("Description", null);
 
-            FlowHelper.PrintStep(4, 4, "Color");
+            // Step: Color
+            FlowHelper.PrintStep(++step, totalSteps, "Color");
             var color = flow.PickColor();
 
-            var error = backend.CreateSession(name, dir, ConfigService.ResolveClaudeConfigDir(config, dir));
+            // Create session
+            var claudeConfigDir = remoteHost == null
+                ? ConfigService.ResolveClaudeConfigDir(config, dir)
+                : null;
+            var error = backend.CreateSession(name, dir, claudeConfigDir, remoteHost?.Host);
             if (error != null)
                 throw new FlowCancelledException(error);
 
@@ -55,6 +87,8 @@ public class SessionHandler(
                 ConfigService.SaveDescription(config, name, description);
             if (color != null)
                 ConfigService.SaveColor(config, name, color);
+            if (remoteHost != null)
+                ConfigService.SaveRemoteHost(config, name, remoteHost.Name);
             backend.ApplyStatusColor(name, color ?? "grey42");
             backend.AttachSession(name);
             loadSessions();
