@@ -59,6 +59,7 @@ public class GroupHandler(
                 ConfigService.RemoveColor(config, sessionName);
                 ConfigService.RemoveExcluded(config, sessionName);
                 ConfigService.RemoveStartCommit(config, sessionName);
+                ConfigService.RemoveRemoteHost(config, sessionName);
             }
 
             ConfigService.RemoveGroup(config, group.Name);
@@ -181,6 +182,7 @@ public class GroupHandler(
                     ConfigService.RenameDescription(config, sessionName, newSessionName);
                     ConfigService.RenameColor(config, sessionName, newSessionName);
                     ConfigService.RenameStartCommit(config, sessionName, newSessionName);
+                    ConfigService.RenameRemoteHost(config, sessionName, newSessionName);
                     renamedSessions.Add(newSessionName);
                 }
 
@@ -258,6 +260,7 @@ public class GroupHandler(
             ConfigService.RemoveColor(config, session.Name);
             ConfigService.RemoveExcluded(config, session.Name);
             ConfigService.RemoveStartCommit(config, session.Name);
+            ConfigService.RemoveRemoteHost(config, session.Name);
             ConfigService.RemoveSessionFromGroup(config, state.ActiveGroup, session.Name);
             loadSessions();
 
