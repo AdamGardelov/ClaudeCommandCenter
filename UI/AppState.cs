@@ -23,7 +23,6 @@ public class AppState
     private int _savedCursorIndex;
 
 
-
     // Mobile mode state
     public bool MobileMode { get; set; }
     private int GroupFilterIndex { get; set; } // 0 = All, 1+ = group index

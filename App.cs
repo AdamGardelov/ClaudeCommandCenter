@@ -150,14 +150,15 @@ public class App(ISessionBackend backend, bool mobileMode = false)
                     Render();
 
             // Re-render when spinner frame advances (only if sessions were spinning at last poll)
-            // Skip in mobile mode — spinner updates aren't worth the render cost over SSH
-            if (!_state.MobileMode)
+            // Skip in mobile mode and grid mode — spinner updates aren't worth the render
+            // cost over SSH or during active grid typing (full layout rebuild every ~80ms)
+            if (!_state.MobileMode && _state.ViewMode == ViewMode.List)
             {
                 var spinnerFrame = Renderer.GetSpinnerFrame();
                 if (spinnerFrame != _lastSpinnerFrame)
                 {
                     _lastSpinnerFrame = spinnerFrame;
-                    if (_hasSpinningSessions && _state.ViewMode != ViewMode.Settings && _state.ViewMode != ViewMode.DiffOverlay)
+                    if (_hasSpinningSessions)
                         Render();
                 }
             }
@@ -691,7 +692,12 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         if (session != null && !session.IsDead)
         {
             backend.ForwardKey(session.Name, key);
-            _lastCapture = DateTime.MinValue; // Force capture on next tick (~30ms)
+
+            // Immediately capture just this session so the render at line 127
+            // has fresh data — avoids the 30ms+ round-trip through the main loop
+            var content = backend.CapturePaneContent(session.Name);
+            if (content != null)
+                _allCapturedPanes[session.Name] = content;
         }
     }
 
