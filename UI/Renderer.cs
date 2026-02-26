@@ -154,23 +154,24 @@ public static class Renderer
     {
         var name = Markup.Escape(session.Name);
         var spinner = Markup.Escape(GetSpinnerFrame());
+        var remote = session.RemoteHostName != null ? "[mediumpurple3]☁[/]" : " ";
 
         if (session.IsDead)
         {
             if (session.IsExcluded)
             {
                 if (isSelected)
-                    return new Markup($"[grey50 on grey19] [grey42]†[/] {name,-22} [/]");
-                return new Markup($" [grey42]†[/] [grey35]{name,-22}[/]");
+                    return new Markup($"[grey50 on grey19] [grey42]†[/] {name,-22} [/]{remote}");
+                return new Markup($" [grey42]†[/] [grey35]{name,-22}[/]{remote}");
             }
 
             if (isSelected)
             {
                 var bg = session.ColorTag ?? "grey37";
-                return new Markup($"[white on {bg}] † {name,-22} [/]");
+                return new Markup($"[white on {bg}] † {name,-22} [/]{remote}");
             }
 
-            return new Markup($" [red]†[/] [grey50]{name,-22}[/]");
+            return new Markup($" [red]†[/] [grey50]{name,-22}[/]{remote}");
         }
 
         var status = session.IsWaitingForInput ? "!" : session.IsIdle ? "✓" : spinner;
@@ -179,22 +180,22 @@ public static class Renderer
         {
             var excludedStatus = session.IsWaitingForInput ? "[grey42]![/]" : session.IsIdle ? "[grey42]✓[/]" : $"[grey35]{spinner}[/]";
             if (isSelected)
-                return new Markup($"[grey50 on grey19] {excludedStatus} {name,-22} [/]");
-            return new Markup($" {excludedStatus} [grey35]{name,-22}[/]");
+                return new Markup($"[grey50 on grey19] {excludedStatus} {name,-22} [/]{remote}");
+            return new Markup($" {excludedStatus} [grey35]{name,-22}[/]{remote}");
         }
 
         if (isSelected)
         {
             var bg = session.ColorTag ?? "grey37";
-            return new Markup($"[white on {bg}] {status} {name,-22} [/]");
+            return new Markup($"[white on {bg}] {status} {name,-22} [/]{remote}");
         }
 
         if (session.IsWaitingForInput)
-            return new Markup($" [yellow bold]![/] [navajowhite1]{name,-22}[/]");
+            return new Markup($" [yellow bold]![/] [navajowhite1]{name,-22}[/]{remote}");
         if (session.IsIdle)
-            return new Markup($" [grey50]✓[/] [navajowhite1]{name,-22}[/]");
+            return new Markup($" [grey50]✓[/] [navajowhite1]{name,-22}[/]{remote}");
 
-        return new Markup($" [green]{spinner}[/] [navajowhite1]{name,-22}[/]");
+        return new Markup($" [green]{spinner}[/] [navajowhite1]{name,-22}[/]{remote}");
     }
 
     private static Markup BuildGroupRow(SessionGroup group, bool isSelected, AppState state)
@@ -263,9 +264,9 @@ public static class Renderer
             rows.Add(new Markup($" [{labelColor}]Desc:[/]     [italic grey70]{Markup.Escape(session.Description)}[/]"));
 
         if (session.RemoteHostName != null)
-            rows.Add(new Markup($" [{labelColor}]Remote:[/]   [mediumpurple3]{Markup.Escape(session.RemoteHostName)}[/]"));
-
-        rows.Add(new Markup($" [{labelColor}]Path:[/]     [white]{Markup.Escape(session.CurrentPath ?? "unknown")}[/]"));
+            rows.Add(new Markup($" [{labelColor}]Path:[/]     [mediumpurple3]{Markup.Escape(session.RemoteHostName)}[/] [grey]→[/] [white]{Markup.Escape(session.CurrentPath ?? "unknown")}[/]"));
+        else
+            rows.Add(new Markup($" [{labelColor}]Path:[/]     [white]{Markup.Escape(session.CurrentPath ?? "unknown")}[/]"));
 
         if (session.GitBranch != null)
             rows.Add(new Markup($" [{labelColor}]Branch:[/]   [aqua]{Markup.Escape(session.GitBranch)}[/]"));
