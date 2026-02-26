@@ -92,6 +92,59 @@ public static class GitService
         session.IsWorktree = gitDir?.Contains("/worktrees/") == true;
     }
 
+    public static void DetectGitInfo(Session session, string? remoteHost)
+    {
+        if (remoteHost == null)
+        {
+            DetectGitInfo(session);
+            return;
+        }
+
+        if (session.CurrentPath == null)
+            return;
+
+        var (branchOk, branch) = RunGitRemote(remoteHost, session.CurrentPath, "rev-parse", "--abbrev-ref", "HEAD");
+        if (!branchOk || branch == null)
+            return;
+
+        session.GitBranch = branch;
+        var (_, gitDir) = RunGitRemote(remoteHost, session.CurrentPath, "rev-parse", "--git-dir");
+        session.IsWorktree = gitDir?.Contains("/worktrees/") == true;
+    }
+
+    public static string? CreateWorktree(string repoPath, string worktreeDest, string branchName, string? remoteHost)
+    {
+        if (remoteHost == null)
+            return CreateWorktree(repoPath, worktreeDest, branchName);
+
+        // Create parent directory on remote
+        var parentDir = worktreeDest[..worktreeDest.LastIndexOf('/')];
+        SshService.Run(remoteHost, $"mkdir -p {SshService.EscapePath(parentDir)}");
+
+        var (success, output) = RunGitRemote(remoteHost, repoPath, "worktree", "add", "-b", branchName, worktreeDest);
+        return success ? null : output ?? "Failed to create worktree";
+    }
+
+    public static void FetchPrune(string repoPath, string? remoteHost)
+    {
+        if (remoteHost == null)
+        {
+            FetchPrune(repoPath);
+            return;
+        }
+
+        RunGitRemote(remoteHost, repoPath, "fetch", "--prune");
+    }
+
+    public static string? GetCurrentCommitSha(string repoPath, string? remoteHost)
+    {
+        if (remoteHost == null)
+            return GetCurrentCommitSha(repoPath);
+
+        var (success, output) = RunGitRemote(remoteHost, repoPath, "rev-parse", "HEAD");
+        return success ? output : null;
+    }
+
     private static (bool Success, string? Output) RunGit(string workingDirectory, params string[] args)
     {
         try
@@ -125,5 +178,11 @@ public static class GitService
         {
             return (false, ex.Message);
         }
+    }
+
+    private static (bool Success, string? Output) RunGitRemote(string remoteHost, string workingDirectory, params string[] args)
+    {
+        var gitArgs = string.Join(" ", args);
+        return SshService.Run(remoteHost, $"git -C {SshService.EscapePath(workingDirectory)} {gitArgs}");
     }
 }
