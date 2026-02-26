@@ -965,13 +965,13 @@ public static class Renderer
         if (line.StartsWith("index "))
             return new Markup($"[grey30]{escaped}[/]");
 
-        // Additions — green text on subtle dark background
+        // Additions — bright green text on subtle dark background
         if (line.StartsWith('+'))
-            return new Markup($"[green on #1a2e1a]{escaped}{pad}[/]");
+            return new Markup($"[#80e080 on #1a3320]{escaped}{pad}[/]");
 
-        // Deletions — red text on subtle dark background
+        // Deletions — bright red text on subtle dark background
         if (line.StartsWith('-'))
-            return new Markup($"[red on #2e1a1a]{escaped}{pad}[/]");
+            return new Markup($"[#f0a0a0 on #3d1e1e]{escaped}{pad}[/]");
 
         // Hunk header — cyan markers, grey function context
         if (!line.StartsWith("@@"))
