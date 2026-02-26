@@ -42,7 +42,27 @@ try {
     if (-not (Test-Path $installDir)) {
         New-Item -ItemType Directory -Path $installDir -Force | Out-Null
     }
-    Copy-Item (Join-Path $tmpDir $binary) (Join-Path $installDir $binary) -Force
+
+    $targetPath = Join-Path $installDir $binary
+    $oldPath = Join-Path $installDir 'ccc.old.exe'
+
+    # If the binary is currently running, we can't overwrite it directly.
+    # Windows allows renaming a locked file, so move it out of the way first.
+    if (Test-Path $targetPath) {
+        # Clean up any previous .old file
+        if (Test-Path $oldPath) {
+            Remove-Item $oldPath -Force -ErrorAction SilentlyContinue
+        }
+        try {
+            Rename-Item $targetPath $oldPath -Force -ErrorAction Stop
+        } catch {
+            # If rename also fails, the file might be truly locked (unlikely on Windows)
+            Write-Error "Cannot replace $targetPath — is it in use? Try closing ccc first."
+            exit 1
+        }
+    }
+
+    Copy-Item (Join-Path $tmpDir $binary) $targetPath -Force
 
     # Add to PATH if not already there
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
