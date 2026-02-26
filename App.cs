@@ -35,6 +35,8 @@ public class App(ISessionBackend backend, bool mobileMode = false)
     private bool _wantsUpdate;
     private int _startupPollCount;
     private bool _gridKeyForwarded;
+    private readonly List<ConsoleKeyInfo> _gridKeyBatch = [];
+    private DateTime _lastGridActivity = DateTime.MinValue;
 
     public void Run()
     {
@@ -115,8 +117,12 @@ public class App(ISessionBackend backend, bool mobileMode = false)
 
         while (_state.Running)
         {
+            var hadInput = false;
+
             if (Console.KeyAvailable)
             {
+                hadInput = true;
+
                 // Drain all buffered keys before rendering once —
                 // prevents input lag over slow SSH connections
                 while (Console.KeyAvailable)
@@ -125,22 +131,21 @@ public class App(ISessionBackend backend, bool mobileMode = false)
                     HandleKey(key);
                 }
 
-                // After draining, capture just the active grid session once
-                // (not per-key — avoids N process spawns when typing fast)
+                // Flush batched literal grid keys in one tmux call
+                FlushGridKeyBatch();
+
                 if (_gridKeyForwarded)
                 {
-                    var session = _state.GetSelectedSession();
-                    if (session != null)
-                    {
-                        var content = backend.CapturePaneContent(session.Name);
-                        if (content != null)
-                            _allCapturedPanes[session.Name] = content;
-                    }
-
+                    // Don't capture or render here — let the tight periodic
+                    // capture below handle visual updates. This keeps the input
+                    // path non-blocking so keystrokes never stall.
                     _gridKeyForwarded = false;
+                    _lastGridActivity = DateTime.UtcNow;
                 }
-
-                Render();
+                else
+                {
+                    Render();
+                }
             }
 
             // Check if update check completed
@@ -179,21 +184,41 @@ public class App(ISessionBackend backend, bool mobileMode = false)
                 }
             }
 
-            // Periodically capture pane content for preview
-            if (_state.ViewMode != ViewMode.Settings && _state.ViewMode != ViewMode.DiffOverlay && (DateTime.Now - _lastCapture).TotalMilliseconds > 500)
+            // Periodically capture pane content for preview/grid.
+            // Use a tighter interval (80ms) during active grid typing so visual
+            // feedback arrives quickly without blocking the input path.
+            var isActiveGridTyping = _state.ViewMode == ViewMode.Grid
+                && (DateTime.UtcNow - _lastGridActivity).TotalMilliseconds < 1000;
+            var captureInterval = isActiveGridTyping ? 80 : 500;
+
+            if (_state.ViewMode != ViewMode.Settings && _state.ViewMode != ViewMode.DiffOverlay
+                && (DateTime.Now - _lastCapture).TotalMilliseconds > captureInterval)
             {
-                if (!_state.MobileMode)
+                if (isActiveGridTyping)
                 {
-                    ResizeGridPanes();
-                    ResizePreviewPane();
+                    // Fast path: only capture the active session, skip resize/detection.
+                    // This is 1 tmux call instead of ~20 (resize + detect + capture × N).
+                    if (UpdateActiveGridPane())
+                        Render();
+                }
+                else
+                {
+                    if (!_state.MobileMode)
+                    {
+                        ResizeGridPanes();
+                        ResizePreviewPane();
+                    }
+
+                    if (UpdateCapturedPane())
+                        Render();
                 }
 
-                if (UpdateCapturedPane())
-                    Render();
                 _lastCapture = DateTime.Now;
             }
 
-            Thread.Sleep(30);
+            // During active grid typing: tight 5ms poll so we hit the 80ms
+            // capture window quickly. Otherwise 30ms idle poll.
+            Thread.Sleep(hadInput || isActiveGridTyping ? 5 : 30);
         }
     }
 
@@ -359,6 +384,28 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         }
 
         return changed;
+    }
+
+    /// <summary>
+    /// Lightweight capture during active grid typing — only grabs the selected
+    /// session's pane (1 tmux call) instead of all sessions + resize + detection.
+    /// </summary>
+    private bool UpdateActiveGridPane()
+    {
+        var session = _state.GetSelectedSession();
+        if (session == null)
+            return false;
+
+        var content = backend.CapturePaneContent(session.Name);
+        if (content == null)
+            return false;
+
+        _allCapturedPanes.TryGetValue(session.Name, out var oldContent);
+        if (content == oldContent)
+            return false;
+
+        _allCapturedPanes[session.Name] = content;
+        return true;
     }
 
     private bool UpdateAllCapturedPanes()
@@ -673,6 +720,8 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         // G (Shift+G): toggle grid off — same key that enters grid mode
         if (key.Key == ConsoleKey.G && key.KeyChar == 'G')
         {
+            FlushGridKeyBatch();
+
             if (_state.ActiveGroup != null)
             {
                 _state.LeaveGroupGrid();
@@ -709,11 +758,56 @@ public class App(ISessionBackend backend, bool mobileMode = false)
 
         // Forward everything else to the selected session
         var session = _state.GetSelectedSession();
-        if (session != null && !session.IsDead)
+        if (session == null || session.IsDead)
+            return;
+
+        // Buffer literal characters for batch sending (one tmux call instead of N).
+        // Special keys and Ctrl combos flush the buffer first, then send individually.
+        var isCtrlCombo = key.Modifiers.HasFlag(ConsoleModifiers.Control) && key.Key >= ConsoleKey.A && key.Key <= ConsoleKey.Z;
+        var isSpecialKey = key.Key is ConsoleKey.Enter or ConsoleKey.Backspace or ConsoleKey.Delete
+            or ConsoleKey.Tab or ConsoleKey.Escape or ConsoleKey.UpArrow or ConsoleKey.DownArrow
+            or ConsoleKey.LeftArrow or ConsoleKey.RightArrow or ConsoleKey.Home or ConsoleKey.End
+            or ConsoleKey.PageUp or ConsoleKey.PageDown or ConsoleKey.Insert
+            or ConsoleKey.F1 or ConsoleKey.F2 or ConsoleKey.F3 or ConsoleKey.F4
+            or ConsoleKey.F5 or ConsoleKey.F6 or ConsoleKey.F7 or ConsoleKey.F8
+            or ConsoleKey.F9 or ConsoleKey.F10 or ConsoleKey.F11 or ConsoleKey.F12;
+
+        if (!isCtrlCombo && !isSpecialKey && key.KeyChar != '\0')
         {
+            _gridKeyBatch.Add(key);
+            _gridKeyForwarded = true;
+        }
+        else
+        {
+            // Flush any buffered literals before the special key
+            FlushGridKeyBatch();
             backend.ForwardKey(session.Name, key);
             _gridKeyForwarded = true;
         }
+    }
+
+    private void FlushGridKeyBatch()
+    {
+        if (_gridKeyBatch.Count == 0)
+            return;
+
+        var session = _state.GetSelectedSession();
+        if (session == null || session.IsDead)
+        {
+            _gridKeyBatch.Clear();
+            return;
+        }
+
+        // Send all buffered literal characters in one tmux call
+        var batch = string.Create(_gridKeyBatch.Count, _gridKeyBatch,
+            (span, keys) =>
+            {
+                for (var i = 0; i < keys.Count; i++)
+                    span[i] = keys[i].KeyChar;
+            });
+
+        backend.ForwardLiteralBatch(session.Name, batch);
+        _gridKeyBatch.Clear();
     }
 
     private void RefreshKeybindings()

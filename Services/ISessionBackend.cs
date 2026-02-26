@@ -15,6 +15,7 @@ public interface ISessionBackend : IDisposable
     void DetachSession();
     string? SendKeys(string sessionName, string text);
     void ForwardKey(string sessionName, ConsoleKeyInfo key);
+    void ForwardLiteralBatch(string sessionName, string text);
     string? CapturePaneContent(string sessionName, int lines = 500);
 
     // Display

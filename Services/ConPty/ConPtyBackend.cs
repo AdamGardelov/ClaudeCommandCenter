@@ -230,6 +230,19 @@ public class ConPtyBackend : ISessionBackend
         ForwardKeyToSession(session, key);
     }
 
+    public void ForwardLiteralBatch(string sessionName, string text)
+    {
+        ConPtySession? session;
+        lock (_sessionsLock)
+        {
+            if (!_sessions.TryGetValue(sessionName, out session))
+                return;
+        }
+
+        session.Input.Write(text);
+        session.Input.Flush();
+    }
+
     public string? CapturePaneContent(string sessionName, int lines = 500)
     {
         ConPtySession? session;

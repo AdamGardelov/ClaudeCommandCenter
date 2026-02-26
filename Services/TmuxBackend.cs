@@ -146,6 +146,12 @@ public class TmuxBackend : ISessionBackend
             RunTmux("send-keys", "-t", sessionName, "-l", key.KeyChar.ToString());
     }
 
+    public void ForwardLiteralBatch(string sessionName, string text)
+    {
+        if (text.Length > 0)
+            RunTmux("send-keys", "-t", sessionName, "-l", text);
+    }
+
     public string? CapturePaneContent(string sessionName, int lines = 500) =>
         RunTmux("capture-pane", "-t", sessionName, "-p", "-e", "-S", $"-{lines}");
 
