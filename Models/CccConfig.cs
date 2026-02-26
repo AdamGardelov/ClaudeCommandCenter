@@ -12,4 +12,6 @@ public class CccConfig
     public string WorktreeBasePath { get; set; } = "~/Dev/Wint/worktrees/";
     public Dictionary<string, string> SessionStartCommits { get; set; } = new();
     public NotificationConfig Notifications { get; set; } = new();
+    public List<ClaudeConfigRoute> ClaudeConfigRoutes { get; set; } = [];
+    public string DefaultClaudeConfigDir { get; set; } = "";
 }

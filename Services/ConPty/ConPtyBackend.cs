@@ -51,7 +51,7 @@ public class ConPtyBackend : ISessionBackend
         }
     }
 
-    public string? CreateSession(string name, string workingDirectory)
+    public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null)
     {
         lock (_sessionsLock)
         {
@@ -61,7 +61,7 @@ public class ConPtyBackend : ISessionBackend
 
         try
         {
-            var session = StartProcess(name, workingDirectory);
+            var session = StartProcess(name, workingDirectory, claudeConfigDir);
             lock (_sessionsLock)
             {
                 if (!_sessions.TryAdd(name, session))
@@ -328,7 +328,7 @@ public class ConPtyBackend : ISessionBackend
         }
     }
 
-    private static ConPtySession StartProcess(string name, string workingDirectory)
+    private static ConPtySession StartProcess(string name, string workingDirectory, string? claudeConfigDir)
     {
         // Create pipes: CCC writes to inputWrite → process reads from inputRead
         //               Process writes to outputWrite → CCC reads from outputRead
@@ -371,7 +371,10 @@ public class ConPtyBackend : ISessionBackend
         // then restore the old value. This avoids building a custom env block which can
         // cause issues with Unicode rendering in the child process.
         var previousSessionName = Environment.GetEnvironmentVariable("CCC_SESSION_NAME");
+        var previousConfigDir = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
         Environment.SetEnvironmentVariable("CCC_SESSION_NAME", name);
+        if (!string.IsNullOrEmpty(claudeConfigDir))
+            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", claudeConfigDir);
 
         try
         {
@@ -456,8 +459,9 @@ public class ConPtyBackend : ISessionBackend
         }
         finally
         {
-            // Restore previous CCC_SESSION_NAME (null removes it)
+            // Restore previous env vars (null removes them)
             Environment.SetEnvironmentVariable("CCC_SESSION_NAME", previousSessionName);
+            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", previousConfigDir);
             DeleteProcThreadAttributeList(attrList);
             Marshal.FreeHGlobal(attrList);
         }

@@ -47,7 +47,7 @@ public class SessionHandler(
             FlowHelper.PrintStep(4, 4, "Color");
             var color = flow.PickColor();
 
-            var error = backend.CreateSession(name, dir);
+            var error = backend.CreateSession(name, dir, ConfigService.ResolveClaudeConfigDir(config, dir));
             if (error != null)
                 throw new FlowCancelledException(error);
 

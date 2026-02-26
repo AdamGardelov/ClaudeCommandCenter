@@ -197,7 +197,7 @@ public class GroupHandler(
             {
                 var sessionName = FlowHelper.UniqueSessionName(FlowHelper.SanitizeSessionName($"{effectiveName}-{label}"), usedNames);
                 usedNames.Add(sessionName);
-                var error = backend.CreateSession(sessionName, dir);
+                var error = backend.CreateSession(sessionName, dir, ConfigService.ResolveClaudeConfigDir(config, dir));
                 if (error != null)
                     throw new FlowCancelledException($"Failed to create session '{sessionName}': {error}");
 
@@ -363,7 +363,7 @@ public class GroupHandler(
         foreach (var (repoName, repoPath) in feature.Repos)
         {
             var sessionName = FlowHelper.SanitizeSessionName($"{feature.Name}-{repoName}");
-            var error = backend.CreateSession(sessionName, repoPath);
+            var error = backend.CreateSession(sessionName, repoPath, ConfigService.ResolveClaudeConfigDir(config, repoPath));
             if (error != null)
                 throw new FlowCancelledException($"Failed to create session '{sessionName}': {error}");
 
@@ -471,7 +471,7 @@ public class GroupHandler(
         foreach (var (repoName, worktreePath) in worktrees)
         {
             var sessionName = FlowHelper.SanitizeSessionName($"{sanitizedName}-{repoName}");
-            var sessionError = backend.CreateSession(sessionName, worktreePath);
+            var sessionError = backend.CreateSession(sessionName, worktreePath, ConfigService.ResolveClaudeConfigDir(config, worktreePath));
             if (sessionError != null)
                 throw new FlowCancelledException($"Failed to create session '{sessionName}': {sessionError}");
 
@@ -558,7 +558,7 @@ public class GroupHandler(
         {
             var sessionName = FlowHelper.UniqueSessionName(FlowHelper.SanitizeSessionName($"{name}-{label}"), usedNames);
             usedNames.Add(sessionName);
-            var error = backend.CreateSession(sessionName, dir);
+            var error = backend.CreateSession(sessionName, dir, ConfigService.ResolveClaudeConfigDir(config, dir));
             if (error != null)
                 throw new FlowCancelledException($"Failed to create session '{sessionName}': {error}");
 

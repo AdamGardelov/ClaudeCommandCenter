@@ -40,10 +40,21 @@ public class TmuxBackend : ISessionBackend
         return sessions.OrderBy(s => s.Created).ThenBy(s => s.Name).ToList();
     }
 
-    public string? CreateSession(string name, string workingDirectory)
+    public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null)
     {
         var shell = Environment.GetEnvironmentVariable("SHELL") ?? "/bin/bash";
-        var (success, error) = RunTmuxWithError("new-session", "-d", "-s", name, "-n", name, "-e", $"CCC_SESSION_NAME={name}", "-c", workingDirectory, $"{shell} -lc claude");
+        var envArgs = new List<string> { "-e", $"CCC_SESSION_NAME={name}" };
+        if (!string.IsNullOrEmpty(claudeConfigDir))
+        {
+            envArgs.Add("-e");
+            envArgs.Add($"CLAUDE_CONFIG_DIR={claudeConfigDir}");
+        }
+
+        var args = new List<string> { "new-session", "-d", "-s", name, "-n", name };
+        args.AddRange(envArgs);
+        args.AddRange(["-c", workingDirectory, $"{shell} -lc claude"]);
+
+        var (success, error) = RunTmuxWithError(args.ToArray());
         if (!success)
             return error ?? "Failed to create tmux session";
         RunTmux("set-option", "-t", name, "automatic-rename", "off");
