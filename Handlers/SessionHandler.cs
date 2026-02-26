@@ -81,6 +81,7 @@ public class SessionHandler(
                 ConfigService.RemoveColor(config, session.Name);
                 ConfigService.RemoveExcluded(config, session.Name);
                 ConfigService.RemoveStartCommit(config, session.Name);
+                ConfigService.RemoveRemoteHost(config, session.Name);
                 state.SetStatus("Session killed");
             }
             else
@@ -126,6 +127,7 @@ public class SessionHandler(
                 ConfigService.RenameColor(config, currentName, newName);
                 ConfigService.RenameExcluded(config, currentName, newName);
                 ConfigService.RenameStartCommit(config, currentName, newName);
+                ConfigService.RenameRemoteHost(config, currentName, newName);
                 currentName = newName;
                 changed = true;
             }
