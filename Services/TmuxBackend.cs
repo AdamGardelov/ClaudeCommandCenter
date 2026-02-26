@@ -50,7 +50,12 @@ public class TmuxBackend : ISessionBackend
         }
 
         var (cmdFile, cmdArgs) = SshService.BuildSessionCommand(remoteHost, workingDirectory);
-        var shellCommand = $"{cmdFile} {string.Join(" ", cmdArgs)}";
+        // For remote, each SSH arg must be shell-quoted when joined into a flat command
+        // string, because tmux passes the final positional arg to sh -c which re-parses it.
+        var quotedArgs = remoteHost != null
+            ? cmdArgs.ConvertAll(a => a.Contains(' ') || a.Contains('&') ? $"\"{a}\"" : a)
+            : cmdArgs;
+        var shellCommand = $"{cmdFile} {string.Join(" ", quotedArgs)}";
 
         var args = new List<string> { "new-session", "-d", "-s", name, "-n", name };
         args.AddRange(envArgs);
