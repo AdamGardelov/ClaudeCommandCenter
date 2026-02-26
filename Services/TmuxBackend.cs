@@ -40,9 +40,8 @@ public class TmuxBackend : ISessionBackend
         return sessions.OrderBy(s => s.Created).ThenBy(s => s.Name).ToList();
     }
 
-    public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null)
+    public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null, string? remoteHost = null)
     {
-        var shell = Environment.GetEnvironmentVariable("SHELL") ?? "/bin/bash";
         var envArgs = new List<string> { "-e", $"CCC_SESSION_NAME={name}" };
         if (!string.IsNullOrEmpty(claudeConfigDir))
         {
@@ -50,9 +49,19 @@ public class TmuxBackend : ISessionBackend
             envArgs.Add($"CLAUDE_CONFIG_DIR={claudeConfigDir}");
         }
 
+        var (cmdFile, cmdArgs) = SshService.BuildSessionCommand(remoteHost, workingDirectory);
+        var shellCommand = $"{cmdFile} {string.Join(" ", cmdArgs)}";
+
         var args = new List<string> { "new-session", "-d", "-s", name, "-n", name };
         args.AddRange(envArgs);
-        args.AddRange(["-c", workingDirectory, $"{shell} -lc claude"]);
+
+        // For remote sessions, tmux working dir is irrelevant (cd happens on remote),
+        // so use $HOME as a sane fallback
+        var tmuxWorkDir = remoteHost != null
+            ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            : workingDirectory;
+
+        args.AddRange(["-c", tmuxWorkDir, shellCommand]);
 
         var (success, error) = RunTmuxWithError(args.ToArray());
         if (!success)

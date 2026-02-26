@@ -51,7 +51,7 @@ public class ConPtyBackend : ISessionBackend
         }
     }
 
-    public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null)
+    public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null, string? remoteHost = null)
     {
         lock (_sessionsLock)
         {
@@ -61,7 +61,7 @@ public class ConPtyBackend : ISessionBackend
 
         try
         {
-            var session = StartProcess(name, workingDirectory, claudeConfigDir);
+            var session = StartProcess(name, workingDirectory, claudeConfigDir, remoteHost);
             lock (_sessionsLock)
             {
                 if (!_sessions.TryAdd(name, session))
@@ -340,7 +340,7 @@ public class ConPtyBackend : ISessionBackend
         }
     }
 
-    private static ConPtySession StartProcess(string name, string workingDirectory, string? claudeConfigDir)
+    private static ConPtySession StartProcess(string name, string workingDirectory, string? claudeConfigDir, string? remoteHost)
     {
         // Create pipes: CCC writes to inputWrite → process reads from inputRead
         //               Process writes to outputWrite → CCC reads from outputRead
@@ -409,14 +409,27 @@ public class ConPtyBackend : ISessionBackend
                 lpAttributeList = attrList
             };
 
-            var commandLine = "claude";
+            string commandLine;
+            string processWorkDir;
+            if (remoteHost != null)
+            {
+                var (sshFile, sshArgs) = SshService.BuildSessionCommand(remoteHost, workingDirectory);
+                commandLine = $"{sshFile} {string.Join(" ", sshArgs)}";
+                processWorkDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            }
+            else
+            {
+                commandLine = "claude";
+                processWorkDir = workingDirectory;
+            }
+
             if (!CreateProcessW(
                     null, commandLine,
                     nint.Zero, nint.Zero,
                     false,
                     ExtendedStartupInfoPresent | CreateUnicodeEnvironment,
                     nint.Zero,
-                    workingDirectory,
+                    processWorkDir,
                     in startupInfo,
                     out var procInfo))
                 throw new InvalidOperationException($"CreateProcess failed: {Marshal.GetLastWin32Error()}");
