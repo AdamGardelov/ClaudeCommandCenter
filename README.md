@@ -167,7 +167,9 @@ The grid auto-scales based on session count:
 | 7–9      | 3x3                     | ~3 lines              |
 | 10+      | Falls back to list view |
 
-Press `Enter` on a grid cell to attach directly to that session. Press `G` to switch back to list view.
+Press `Enter` on a grid cell to **focus** it — keystrokes are forwarded directly to the session while the grid stays
+visible. Press `Escape` to unfocus, or `Ctrl+Arrow` to switch between cells while staying focused. Press `G` to switch
+back to list view.
 
 ### Keybindings
 
@@ -196,13 +198,15 @@ Press `Enter` on a grid cell to attach directly to that session. Press `G` to sw
 
 #### Grid View
 
-| Key             | Action                                    |
-|-----------------|-------------------------------------------|
-| `↑` `↓` `←` `→` | Navigate grid cells                       |
-| `Enter`         | Attach to selected session                |
-| `G`             | Back to list view                         |
-| `Y` / `N` / `S` | Approve, reject, send (same as list view) |
-| `q`             | Quit                                      |
+| Key               | Action                                         |
+|-------------------|------------------------------------------------|
+| `↑` `↓` `←` `→`  | Navigate grid cells                            |
+| `Enter`           | Focus cell — type directly into the session    |
+| `Escape`          | Unfocus — return to grid navigation            |
+| `Ctrl+Arrows`     | Switch cells while focused                     |
+| `G`               | Back to list view                              |
+| `Y` / `N` / `S`   | Approve, reject, send (same as list view)      |
+| `q`               | Quit                                           |
 
 Arrow keys always work for navigation regardless of configuration. When you attach to a session, detach to return to the
 command center:
