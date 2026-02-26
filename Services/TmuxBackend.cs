@@ -215,6 +215,7 @@ public class TmuxBackend : ISessionBackend
                 continue;
             }
 
+            // No hook state — fall back to pane content stability detection
             DetectWaitingByPaneContent(session);
         }
     }

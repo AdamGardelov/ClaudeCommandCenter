@@ -303,7 +303,6 @@ public class ConPtyBackend : ISessionBackend
                 continue;
             }
 
-            // Prefer hook-based state (same as tmux backend)
             var hookState = HookStateService.ReadState(session.Name);
             if (hookState != null)
             {
@@ -312,7 +311,7 @@ public class ConPtyBackend : ISessionBackend
                 continue;
             }
 
-            // Fallback: content hash stability detection
+            // No hook state — fall back to content stability detection
             DetectWaitingByContent(session);
         }
     }
