@@ -200,7 +200,7 @@ between cells. Press `Escape` to return to list view.
 | Key               | Action                                                  |
 |-------------------|---------------------------------------------------------|
 | `Ctrl+Arrows`    | Switch between grid cells                               |
-| `Escape`          | Back to list view                                       |
+| `G`               | Back to list view (same key toggles in/out)             |
 | All other keys    | Forwarded directly to the selected session              |
 
 Arrow keys always work for navigation regardless of configuration. When you attach to a session, detach to return to the

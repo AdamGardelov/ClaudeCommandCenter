@@ -650,8 +650,8 @@ public class App(ISessionBackend backend, bool mobileMode = false)
 
     private void HandleGridKey(ConsoleKeyInfo key)
     {
-        // Escape: exit grid (back to list, or back from group grid)
-        if (key.Key == ConsoleKey.Escape)
+        // G (Shift+G): toggle grid off — same key that enters grid mode
+        if (key.Key == ConsoleKey.G && key.KeyChar == 'G')
         {
             if (_state.ActiveGroup != null)
             {
