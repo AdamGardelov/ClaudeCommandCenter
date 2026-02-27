@@ -401,6 +401,143 @@ public class FlowHelper(CccConfig config)
         }
     }
 
+    /// <summary>
+    /// Picks between Local and configured remote hosts.
+    /// Returns null for local, or the RemoteHost for remote.
+    /// Skips the picker entirely if no remote hosts are configured.
+    /// </summary>
+    public RemoteHost? PickTarget()
+    {
+        if (config.RemoteHosts.Count == 0)
+            return null;
+
+        var prompt = new SelectionPrompt<string>()
+            .Title("[grey70]Where to run?[/]")
+            .HighlightStyle(new Style(Color.White, Color.Grey70));
+
+        prompt.AddChoice("Local");
+        foreach (var host in config.RemoteHosts)
+            prompt.AddChoice($"{host.Name} ☁");
+        prompt.AddChoice(CancelChoice);
+
+        var selected = AnsiConsole.Prompt(prompt);
+
+        if (selected == CancelChoice)
+            throw new FlowCancelledException();
+        if (selected == "Local")
+            return null;
+
+        return config.RemoteHosts.First(h => selected.StartsWith(h.Name));
+    }
+
+    public string? PickRemoteDirectory(RemoteHost remoteHost, bool sshVerified = true, Action<string>? onWorktreeBranchCreated = null)
+    {
+        var favorites = remoteHost.FavoriteFolders;
+
+        // Check which favorites are git repos via SSH (for worktree icon)
+        // Skip when SSH connectivity wasn't verified (e.g. password-based auth)
+        var gitFavorites = new List<FavoriteFolder>();
+        if (sshVerified)
+        {
+            AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .SpinnerStyle(new Style(Color.Grey70))
+                .Start($"[grey70]Checking repos on {Markup.Escape(remoteHost.Name)}...[/]", _ =>
+                {
+                    foreach (var fav in favorites)
+                    {
+                        if (SshService.IsGitRepo(remoteHost.Host, fav.Path))
+                            gitFavorites.Add(fav);
+                    }
+                });
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("[grey70]Skipping repo detection (no verified connection). Consider setting up SSH keys: [white]ssh-copy-id " + Markup.Escape(remoteHost.Host) + "[/][/]");
+        }
+
+        while (true)
+        {
+            var prompt = new SelectionPrompt<string>()
+                .Title($"[grey70]Pick a directory on[/] [white]{Markup.Escape(remoteHost.Name)}[/]")
+                .PageSize(15)
+                .HighlightStyle(new Style(Color.White, Color.Grey70))
+                .MoreChoicesText("[grey](Move up and down to reveal more)[/]");
+
+            foreach (var fav in favorites)
+                prompt.AddChoice($"{fav.Name}  [grey50]{fav.Path}[/]");
+
+            if (gitFavorites.Count > 0)
+            {
+                foreach (var fav in gitFavorites)
+                    prompt.AddChoice($"{_worktreePrefix}{fav.Name}  [grey50](new worktree)[/]");
+            }
+
+            prompt.AddChoice(_customPathChoice);
+            prompt.AddChoice(CancelChoice);
+
+            var selected = AnsiConsole.Prompt(prompt);
+            switch (selected)
+            {
+                case CancelChoice:
+                    return null;
+                case _customPathChoice:
+                {
+                    var custom = PromptCustomPath();
+                    if (custom != null)
+                        return custom;
+                    continue;
+                }
+            }
+
+            // Handle worktree selection on remote
+            if (selected.StartsWith(_worktreePrefix))
+            {
+                var repoName = selected[_worktreePrefix.Length..].Split("  ")[0];
+                var fav = gitFavorites.FirstOrDefault(f => f.Name == repoName);
+                if (fav == null)
+                    continue;
+
+                var hint = AnsiConsole.Prompt(
+                    new TextPrompt<string>("[grey70]Name[/] [grey](used for branch and session)[/][grey70]:[/]")
+                        .AllowEmpty()
+                        .PromptStyle(new Style(Color.White)));
+                if (string.IsNullOrWhiteSpace(hint))
+                    continue;
+
+                var branchName = GitService.SanitizeBranchName(hint);
+                var basePath = remoteHost.WorktreeBasePath.TrimEnd('/');
+                var worktreeDest = $"{basePath}/{branchName}/{repoName}";
+
+                string? error = null;
+                AnsiConsole.Status()
+                    .Spinner(Spinner.Known.Dots)
+                    .SpinnerStyle(new Style(Color.Grey70))
+                    .Start($"[grey70]Creating worktree [white]{Markup.Escape(branchName)}[/] on {Markup.Escape(remoteHost.Name)}...[/]", _ =>
+                    {
+                        GitService.FetchPrune(fav.Path, remoteHost.Host);
+                        error = GitService.CreateWorktree(fav.Path, worktreeDest, branchName, remoteHost.Host);
+                    });
+
+                if (error != null)
+                {
+                    AnsiConsole.MarkupLine($"[red]Worktree failed:[/] {Markup.Escape(error)}");
+                    AnsiConsole.MarkupLine("[grey](Press any key)[/]");
+                    Console.ReadKey(true);
+                    continue;
+                }
+
+                onWorktreeBranchCreated?.Invoke(branchName);
+                return worktreeDest;
+            }
+
+            // Match back to the favorite by prefix
+            var selectedName = selected.Split("  ")[0];
+            var match = favorites.FirstOrDefault(f => f.Name == selectedName);
+            return match?.Path;
+        }
+    }
+
     public string? PickColor()
     {
         var prompt = new SelectionPrompt<string>()

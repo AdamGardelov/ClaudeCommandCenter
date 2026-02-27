@@ -27,6 +27,7 @@ A terminal UI for managing multiple Claude Code sessions. Run dozens of Claude a
 - **Git worktree integration** — create worktrees on the fly, one branch per session, shared feature folders with auto-discovery
 - **Git diff view** — see what changed since a session started, with full colorized scrollable diff overlay
 - **Notifications** — terminal bell, OSC, and desktop notifications when sessions go idle
+- **Remote sessions** — run Claude on remote machines via SSH, managed from your local dashboard
 - **Cross-platform** — tmux on Linux/macOS (sessions persist), native ConPTY on Windows (no WSL needed)
 - **Mobile mode** — single-column layout for SSH from your phone
 - **Customizable keybindings** — rebind any action, disable what you don't need, all from the in-app settings page
@@ -307,6 +308,7 @@ list instead of typing a full path.
 | `keybindings`             | `{}`                    | Keybinding overrides (see below)                                  |
 | `claudeConfigRoutes`      | `[]`                    | Directory-based Claude config routing (see below)                 |
 | `defaultClaudeConfigDir`  | ``                      | Fallback `CLAUDE_CONFIG_DIR` when no route matches                |
+| `remoteHosts`             | `[]`                    | SSH remote machines for running sessions (see below)              |
 
 The config file is created automatically on first run. Tilde (`~`) paths are expanded automatically.
 
@@ -326,6 +328,38 @@ automatically uses the correct config:
     "defaultClaudeConfigDir": "~/.claude-work"
 }
 ```
+
+#### Remote Sessions
+
+Run Claude Code sessions on remote machines via SSH. The session runs on the remote host while CCC manages it locally
+through tmux or ConPTY — capture, attach, detach, and send keys all work transparently.
+
+```json
+{
+    "remoteHosts": [
+        {
+            "name": "SUPERCOMPUTER",
+            "host": "adam@supercomputer.example.com",
+            "worktreeBasePath": "~/worktrees",
+            "favoriteFolders": [
+                { "name": "Core", "path": "~/Dev/Wint/Core" },
+                { "name": "Salary", "path": "~/Dev/Wint/Wint.Salary" }
+            ]
+        }
+    ]
+}
+```
+
+Each remote host has its own favorite folders and worktree base path. When creating a new session (`n`), you'll be
+prompted to choose between Local and any configured remote hosts. The directory picker then shows that host's favorites.
+
+Remote sessions show the host name in the detail panel (`Remote: SUPERCOMPUTER`) and in group views (`@SUPERCOMPUTER`).
+Git branch detection and worktree creation work over SSH automatically.
+
+**Requirements:**
+- SSH key-based authentication (no interactive password prompts)
+- `claude` must be installed and on PATH on the remote machine
+- `git` on the remote machine (for branch detection and worktree creation)
 
 When creating a session, CCC matches the working directory against `claudeConfigRoutes` (first match wins) and sets
 `CLAUDE_CONFIG_DIR` accordingly. If no route matches, `defaultClaudeConfigDir` is used. If that's also empty, the

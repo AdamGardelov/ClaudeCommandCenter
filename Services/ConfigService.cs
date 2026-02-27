@@ -132,6 +132,27 @@ public static class ConfigService
         }
     }
 
+    public static void SaveRemoteHost(CccConfig config, string sessionName, string remoteHostName)
+    {
+        config.SessionRemoteHosts[sessionName] = remoteHostName;
+        Save(config);
+    }
+
+    public static void RemoveRemoteHost(CccConfig config, string sessionName)
+    {
+        if (config.SessionRemoteHosts.Remove(sessionName))
+            Save(config);
+    }
+
+    public static void RenameRemoteHost(CccConfig config, string oldName, string newName)
+    {
+        if (config.SessionRemoteHosts.Remove(oldName, out var host))
+        {
+            config.SessionRemoteHosts[newName] = host;
+            Save(config);
+        }
+    }
+
     private static bool BackfillKeybindings(CccConfig config)
     {
         var defaults = KeyBindingService.GetDefaultConfigs();

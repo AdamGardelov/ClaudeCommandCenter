@@ -3,6 +3,7 @@ using ClaudeCommandCenter.Enums;
 using ClaudeCommandCenter.Models;
 using ClaudeCommandCenter.Services;
 using ClaudeCommandCenter.UI;
+using Spectre.Console;
 
 namespace ClaudeCommandCenter.Handlers;
 
@@ -25,29 +26,76 @@ public class SessionHandler(
 
         FlowHelper.RunFlow("New Session", () =>
         {
-            FlowHelper.PrintStep(1, 4, "Directory");
+            var hasRemotes = config.RemoteHosts.Count > 0;
+            var totalSteps = hasRemotes ? 5 : 4;
+            var step = 0;
+
+            // Step: Target (only if remote hosts configured)
+            RemoteHost? remoteHost = null;
+            var sshVerified = false;
+            if (hasRemotes)
+            {
+                FlowHelper.PrintStep(++step, totalSteps, "Target");
+                remoteHost = flow.PickTarget();
+
+                if (remoteHost != null)
+                {
+                    AnsiConsole.Status()
+                        .Spinner(Spinner.Known.Dots)
+                        .SpinnerStyle(new Style(Color.Grey70))
+                        .Start($"[grey70]Checking connection to [white]{remoteHost.Name}[/]...[/]", _ =>
+                        {
+                            sshVerified = SshService.CheckConnectivity(remoteHost.Host);
+                        });
+
+                    if (!sshVerified)
+                        AnsiConsole.MarkupLine($"[yellow]⚠ Could not verify connection to {Markup.Escape(remoteHost.Name)} — continuing anyway[/]");
+                }
+            }
+
+            // Step: Directory
+            FlowHelper.PrintStep(++step, totalSteps, "Directory");
             string? worktreeBranch = null;
-            var dir = flow.PickDirectory(
+            string? dir;
+
+            if (remoteHost != null)
+            {
+                dir = flow.PickRemoteDirectory(remoteHost, sshVerified: sshVerified,
+                          onWorktreeBranchCreated: branch => worktreeBranch = branch)
+                      ?? throw new FlowCancelledException();
+            }
+            else
+            {
+                dir = flow.PickDirectory(
                           onWorktreeBranchCreated: branch => worktreeBranch = branch)
                       ?? throw new FlowCancelledException();
 
-            dir = ConfigService.ExpandPath(dir);
-            if (!Directory.Exists(dir))
-                throw new FlowCancelledException("Invalid directory");
+                dir = ConfigService.ExpandPath(dir);
+                if (!Directory.Exists(dir))
+                    throw new FlowCancelledException("Invalid directory");
+            }
 
-            FlowHelper.PrintStep(2, 4, "Name");
-            var defaultName = FlowHelper.SanitizeSessionName(worktreeBranch ?? new DirectoryInfo(dir).Name);
+            // Step: Name
+            FlowHelper.PrintStep(++step, totalSteps, "Name");
+            var dirName = worktreeBranch ?? dir.Split('/').LastOrDefault(s => !string.IsNullOrEmpty(s)) ?? "session";
+            var defaultName = FlowHelper.SanitizeSessionName(dirName);
             var existingNames = new HashSet<string>(state.Sessions.Select(s => s.Name), StringComparer.Ordinal);
             defaultName = FlowHelper.UniqueSessionName(defaultName, existingNames, " ");
             var name = flow.PromptWithDefault("Session name", defaultName);
 
-            FlowHelper.PrintStep(3, 4, "Description");
+            // Step: Description
+            FlowHelper.PrintStep(++step, totalSteps, "Description");
             var description = flow.PromptOptional("Description", null);
 
-            FlowHelper.PrintStep(4, 4, "Color");
+            // Step: Color
+            FlowHelper.PrintStep(++step, totalSteps, "Color");
             var color = flow.PickColor();
 
-            var error = backend.CreateSession(name, dir, ConfigService.ResolveClaudeConfigDir(config, dir));
+            // Create session
+            var claudeConfigDir = remoteHost == null
+                ? ConfigService.ResolveClaudeConfigDir(config, dir)
+                : null;
+            var error = backend.CreateSession(name, dir, claudeConfigDir, remoteHost?.Host);
             if (error != null)
                 throw new FlowCancelledException(error);
 
@@ -55,6 +103,8 @@ public class SessionHandler(
                 ConfigService.SaveDescription(config, name, description);
             if (color != null)
                 ConfigService.SaveColor(config, name, color);
+            if (remoteHost != null)
+                ConfigService.SaveRemoteHost(config, name, remoteHost.Name);
             backend.ApplyStatusColor(name, color ?? "grey42");
             backend.AttachSession(name);
             loadSessions();
@@ -81,6 +131,7 @@ public class SessionHandler(
                 ConfigService.RemoveColor(config, session.Name);
                 ConfigService.RemoveExcluded(config, session.Name);
                 ConfigService.RemoveStartCommit(config, session.Name);
+                ConfigService.RemoveRemoteHost(config, session.Name);
                 state.SetStatus("Session killed");
             }
             else
@@ -126,6 +177,7 @@ public class SessionHandler(
                 ConfigService.RenameColor(config, currentName, newName);
                 ConfigService.RenameExcluded(config, currentName, newName);
                 ConfigService.RenameStartCommit(config, currentName, newName);
+                ConfigService.RenameRemoteHost(config, currentName, newName);
                 currentName = newName;
                 changed = true;
             }
@@ -173,7 +225,10 @@ public class SessionHandler(
         NotificationService.ResetCooldown(session.Name);
 
         // Re-enter CCC's alternate screen buffer
+        Console.Write("\e(B");      // Reset charset on main screen
         Console.Write("\e[?1049h"); // Enter alternate screen buffer
+        Console.Write("\e(B");      // Reset charset on alternate screen (separate state)
+        Console.Write("\e[0m");     // Reset all attributes
         Console.Write("\e[?1003l\e[?1006l\e[?1015l\e[?1000l"); // Disable mouse tracking
         Console.Write("\e[2J");     // Clear screen
         Console.Write("\e[H");      // Cursor home
@@ -243,6 +298,12 @@ public class SessionHandler(
         if (session?.CurrentPath == null)
             return;
 
+        if (session.RemoteHostName != null)
+        {
+            state.SetStatus("Open folder not available for remote sessions");
+            return;
+        }
+
         try
         {
             var command = FlowHelper.GetFileManagerCommand();
@@ -271,6 +332,12 @@ public class SessionHandler(
         var session = state.GetSelectedSession();
         if (session?.CurrentPath == null)
             return;
+
+        if (session.RemoteHostName != null)
+        {
+            state.SetStatus("Open in IDE not available for remote sessions");
+            return;
+        }
 
         if (string.IsNullOrWhiteSpace(config.IdeCommand))
         {
