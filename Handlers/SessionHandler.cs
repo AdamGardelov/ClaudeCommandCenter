@@ -32,6 +32,7 @@ public class SessionHandler(
 
             // Step: Target (only if remote hosts configured)
             RemoteHost? remoteHost = null;
+            var sshVerified = false;
             if (hasRemotes)
             {
                 FlowHelper.PrintStep(++step, totalSteps, "Target");
@@ -39,17 +40,16 @@ public class SessionHandler(
 
                 if (remoteHost != null)
                 {
-                    var alive = false;
                     AnsiConsole.Status()
                         .Spinner(Spinner.Known.Dots)
                         .SpinnerStyle(new Style(Color.Grey70))
                         .Start($"[grey70]Checking connection to [white]{remoteHost.Name}[/]...[/]", _ =>
                         {
-                            alive = SshService.CheckConnectivity(remoteHost.Host);
+                            sshVerified = SshService.CheckConnectivity(remoteHost.Host);
                         });
 
-                    if (!alive)
-                        throw new FlowCancelledException($"Cannot reach {remoteHost.Name} ({remoteHost.Host})");
+                    if (!sshVerified)
+                        AnsiConsole.MarkupLine($"[yellow]⚠ Could not verify connection to {Markup.Escape(remoteHost.Name)} — continuing anyway[/]");
                 }
             }
 
@@ -60,7 +60,7 @@ public class SessionHandler(
 
             if (remoteHost != null)
             {
-                dir = flow.PickRemoteDirectory(remoteHost,
+                dir = flow.PickRemoteDirectory(remoteHost, sshVerified: sshVerified,
                           onWorktreeBranchCreated: branch => worktreeBranch = branch)
                       ?? throw new FlowCancelledException();
             }

@@ -417,7 +417,7 @@ public class FlowHelper(CccConfig config)
 
         prompt.AddChoice("Local");
         foreach (var host in config.RemoteHosts)
-            prompt.AddChoice(host.Name);
+            prompt.AddChoice($"{host.Name} ☁");
         prompt.AddChoice(CancelChoice);
 
         var selected = AnsiConsole.Prompt(prompt);
@@ -427,26 +427,34 @@ public class FlowHelper(CccConfig config)
         if (selected == "Local")
             return null;
 
-        return config.RemoteHosts.First(h => h.Name == selected);
+        return config.RemoteHosts.First(h => selected.StartsWith(h.Name));
     }
 
-    public string? PickRemoteDirectory(RemoteHost remoteHost, Action<string>? onWorktreeBranchCreated = null)
+    public string? PickRemoteDirectory(RemoteHost remoteHost, bool sshVerified = true, Action<string>? onWorktreeBranchCreated = null)
     {
         var favorites = remoteHost.FavoriteFolders;
 
         // Check which favorites are git repos via SSH (for worktree icon)
+        // Skip when SSH connectivity wasn't verified (e.g. password-based auth)
         var gitFavorites = new List<FavoriteFolder>();
-        AnsiConsole.Status()
-            .Spinner(Spinner.Known.Dots)
-            .SpinnerStyle(new Style(Color.Grey70))
-            .Start($"[grey70]Checking repos on {Markup.Escape(remoteHost.Name)}...[/]", _ =>
-            {
-                foreach (var fav in favorites)
+        if (sshVerified)
+        {
+            AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .SpinnerStyle(new Style(Color.Grey70))
+                .Start($"[grey70]Checking repos on {Markup.Escape(remoteHost.Name)}...[/]", _ =>
                 {
-                    if (SshService.IsGitRepo(remoteHost.Host, fav.Path))
-                        gitFavorites.Add(fav);
-                }
-            });
+                    foreach (var fav in favorites)
+                    {
+                        if (SshService.IsGitRepo(remoteHost.Host, fav.Path))
+                            gitFavorites.Add(fav);
+                    }
+                });
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("[grey70]Skipping repo detection (no verified connection). Consider setting up SSH keys: [white]ssh-copy-id " + Markup.Escape(remoteHost.Host) + "[/][/]");
+        }
 
         while (true)
         {
