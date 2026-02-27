@@ -13,6 +13,12 @@ public static partial class AnsiParser
     [GeneratedRegex(@"\x1b\[([0-9;]*)([A-Za-z])")]
     private static partial Regex CsiRegex();
 
+    // Matches non-CSI escape sequences that must be stripped to prevent terminal state corruption.
+    // Covers charset designations (ESC(X, ESC)X), single-char escapes (ESC M, ESC =, etc.),
+    // OSC sequences (ESC ] ... BEL/ST), and DCS sequences (ESC P ... ST).
+    [GeneratedRegex(@"\x1b[\(\)\*\+][A-Za-z0-9]|\x1b[^[\x1b]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1bP[^\x1b]*\x1b\\")]
+    private static partial Regex NonCsiEscapeRegex();
+
     private static readonly Color[] _basicColors =
     [
         Color.Black, Color.Maroon, Color.Green, Color.Olive,
@@ -41,11 +47,15 @@ public static partial class AnsiParser
             yield return new Segment(" ");
             effectiveMax--;
 
+            // Strip non-CSI escape sequences (charset switches, OSC, DCS, etc.)
+            // to prevent them from leaking to the terminal and corrupting state
+            var cleanedText = NonCsiEscapeRegex().Replace(ansiText, "");
+
             var state = new AnsiState();
             var visualWidth = 0;
             var lastEnd = 0;
 
-            foreach (Match match in CsiRegex().Matches(ansiText))
+            foreach (Match match in CsiRegex().Matches(cleanedText))
             {
                 if (visualWidth >= effectiveMax)
                     break;
@@ -53,7 +63,7 @@ public static partial class AnsiParser
                 // Text before this escape sequence
                 if (match.Index > lastEnd)
                 {
-                    var text = ansiText[lastEnd..match.Index];
+                    var text = cleanedText[lastEnd..match.Index];
                     var remaining = effectiveMax - visualWidth;
                     if (text.Length > remaining)
                         text = text[..remaining];
@@ -72,9 +82,9 @@ public static partial class AnsiParser
             }
 
             // Remaining text after last escape
-            if (lastEnd < ansiText.Length && visualWidth < effectiveMax)
+            if (lastEnd < cleanedText.Length && visualWidth < effectiveMax)
             {
-                var text = ansiText[lastEnd..];
+                var text = cleanedText[lastEnd..];
                 var remaining = effectiveMax - visualWidth;
                 if (text.Length > remaining)
                     text = text[..remaining];

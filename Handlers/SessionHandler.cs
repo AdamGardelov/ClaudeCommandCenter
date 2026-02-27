@@ -215,10 +215,15 @@ public class SessionHandler(
 
         // Exit CCC's alternate screen so the ConPTY session renders to normal screen
         Console.Write("\e[?1049l"); // Leave alternate screen
+        Console.Write("\e(B");      // Reset charset — previous remote session may have corrupted it
+        Console.Write("\e[0m");     // Reset all attributes
         Console.Write("\e[?25h");   // Show cursor
         Console.Write("\e[2J\e[H"); // Clear screen + cursor home
 
-        backend.ResetWindowSize(session.Name);
+        // Resize tmux window to full terminal size before attaching.
+        // CCC shrinks windows to preview width for the sidebar — without this resize,
+        // the session would display at preview width with tmux dot-filler on the right.
+        backend.ResizeWindow(session.Name, Console.WindowWidth, Console.WindowHeight);
         backend.AttachSession(session.Name);
 
         // User detached — reset cooldown so next idle transition notifies fresh
