@@ -178,8 +178,8 @@ between cells. Press `Escape` to return to list view.
 | Key                | Action                                                           |
 |--------------------|------------------------------------------------------------------|
 | `j` / `k` / arrows | Navigate sessions                                                |
-| `Enter`            | Attach to selected session                                       |
-| `G`                | Toggle grid view                                                 |
+| `Enter`            | Attach to session / expand or collapse group                     |
+| `G`                | Toggle grid view (group grid when on a grouped session)          |
 | `D`                | Toggle git diff mode (summary in preview, `Enter` for full diff) |
 | `n`                | Create new session (launches `claude` in a given directory)      |
 | `g`                | Create new group                                                 |

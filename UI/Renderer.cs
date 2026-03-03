@@ -85,64 +85,39 @@ public static class Renderer
 
     private static IRenderable BuildSessionPanel(AppState state)
     {
-        var standalone = state.GetStandaloneSessions();
-        var groups = state.Groups;
-        var sessionsFocused = state.ActiveSection == ActiveSection.Sessions;
-        var groupsFocused = state.ActiveSection == ActiveSection.Groups;
-
+        var treeItems = state.GetTreeItems();
         var rows = new List<IRenderable>();
 
-        // Sessions section header
-        var sessionsHeaderColor = sessionsFocused ? "white bold" : "grey50";
-        rows.Add(new Markup($" [{sessionsHeaderColor}]Sessions[/]"));
-
-        if (standalone.Count == 0)
-            rows.Add(new Markup("  [grey]No standalone sessions[/]"));
+        if (treeItems.Count == 0)
+        {
+            rows.Add(new Markup("  [grey]No sessions[/]"));
+        }
         else
-            for (var i = 0; i < standalone.Count; i++)
+        {
+            for (var i = 0; i < treeItems.Count; i++)
             {
-                var session = standalone[i];
-                var isSelected = sessionsFocused && i == state.CursorIndex;
-                rows.Add(BuildSessionRow(session, isSelected));
+                var isSelected = i == state.CursorIndex;
+                switch (treeItems[i])
+                {
+                    case TreeItem.SessionItem si:
+                        rows.Add(BuildSessionRow(si.Session, isSelected, si.GroupName != null));
+                        break;
+                    case TreeItem.GroupHeader gh:
+                        rows.Add(BuildTreeGroupRow(gh, isSelected, state));
+                        break;
+                }
             }
+        }
 
-        // Separator
-        rows.Add(new Rule().RuleStyle(Style.Parse("grey27")));
-
-        // Groups section header
-        var groupsHeaderColor = groupsFocused ? "white bold" : "grey50";
-        rows.Add(new Markup($" [{groupsHeaderColor}]Groups[/]"));
-
-        if (groups.Count == 0)
-            rows.Add(new Markup("  [grey]No groups · press [/][grey70 bold]g[/][grey] to create[/]"));
-        else
-            for (var i = 0; i < groups.Count; i++)
-            {
-                var group = groups[i];
-                var isSelected = groupsFocused && i == state.GroupCursor;
-                rows.Add(BuildGroupRow(group, isSelected, state));
-            }
-
-        // Panel border color based on focused section
+        // Border color based on selected item
         Color borderColor;
-        if (sessionsFocused)
-        {
-            var selected = state.GetSelectedSession();
-            borderColor = selected?.ColorTag != null
-                ? Style.Parse(selected.ColorTag).Foreground
-                : Color.Grey42;
-        }
-        else if (groupsFocused)
-        {
-            var selected = state.GetSelectedGroup();
-            borderColor = !string.IsNullOrEmpty(selected?.Color)
-                ? Style.Parse(selected.Color).Foreground
-                : Color.Grey42;
-        }
+        var selectedItem = treeItems.ElementAtOrDefault(state.CursorIndex);
+        if (selectedItem is TreeItem.SessionItem { Session.ColorTag: not null } selSession)
+            borderColor = Style.Parse(selSession.Session.ColorTag).Foreground;
+        else if (selectedItem is TreeItem.GroupHeader { Group.Color: not null and not "" } selGroup)
+            borderColor = Style.Parse(selGroup.Group.Color).Foreground;
         else
-        {
             borderColor = Color.Grey42;
-        }
 
         return new Panel(new Rows(rows))
             .Header("[grey70] Workspace [/]")
@@ -150,28 +125,31 @@ public static class Renderer
             .Expand();
     }
 
-    private static Markup BuildSessionRow(Session session, bool isSelected)
+    private static Markup BuildSessionRow(Session session, bool isSelected, bool indented = false)
     {
-        var name = Markup.Escape(session.Name);
+        var indent = indented ? "   " : "";
+        var rawName = Markup.Escape(session.Name);
         var spinner = Markup.Escape(GetSpinnerFrame());
         var remote = session.RemoteHostName != null ? "[mediumpurple3]☁[/]" : " ";
+        var nameWidth = indented ? 19 : 22;
+        var name = rawName.PadRight(nameWidth);
 
         if (session.IsDead)
         {
             if (session.IsExcluded)
             {
                 if (isSelected)
-                    return new Markup($"[grey50 on grey19] [grey42]†[/] {name,-22}[/]{remote}");
-                return new Markup($" [grey42]†[/] [grey35]{name,-22}[/]{remote}");
+                    return new Markup($"[grey50 on grey19]{indent} [grey42]†[/] {name}[/]{remote}");
+                return new Markup($"{indent} [grey42]†[/] [grey35]{name}[/]{remote}");
             }
 
             if (isSelected)
             {
                 var bg = session.ColorTag ?? "grey37";
-                return new Markup($"[white on {bg}] † {name,-22}[/]{remote}");
+                return new Markup($"[white on {bg}]{indent} † {name}[/]{remote}");
             }
 
-            return new Markup($" [red]†[/] [grey50]{name,-22}[/]{remote}");
+            return new Markup($"{indent} [red]†[/] [grey50]{name}[/]{remote}");
         }
 
         var status = session.IsWaitingForInput ? "!" : session.IsIdle ? "✓" : spinner;
@@ -180,51 +158,43 @@ public static class Renderer
         {
             var excludedStatus = session.IsWaitingForInput ? "[grey42]![/]" : session.IsIdle ? "[grey42]✓[/]" : $"[grey35]{spinner}[/]";
             if (isSelected)
-                return new Markup($"[grey50 on grey19] {excludedStatus} {name,-22}[/]{remote}");
-            return new Markup($" {excludedStatus} [grey35]{name,-22}[/]{remote}");
+                return new Markup($"[grey50 on grey19]{indent} {excludedStatus} {name}[/]{remote}");
+            return new Markup($"{indent} {excludedStatus} [grey35]{name}[/]{remote}");
         }
 
         if (isSelected)
         {
             var bg = session.ColorTag ?? "grey37";
-            return new Markup($"[white on {bg}] {status} {name,-22}[/]{remote}");
+            return new Markup($"[white on {bg}]{indent} {status} {name}[/]{remote}");
         }
 
         if (session.IsWaitingForInput)
-            return new Markup($" [yellow bold]![/] [navajowhite1]{name,-22}[/]{remote}");
+            return new Markup($"{indent} [yellow bold]![/] [navajowhite1]{name}[/]{remote}");
         if (session.IsIdle)
-            return new Markup($" [grey50]✓[/] [navajowhite1]{name,-22}[/]{remote}");
+            return new Markup($"{indent} [grey50]✓[/] [navajowhite1]{name}[/]{remote}");
 
-        return new Markup($" [green]{spinner}[/] [navajowhite1]{name,-22}[/]{remote}");
+        return new Markup($"{indent} [green]{spinner}[/] [navajowhite1]{name}[/]{remote}");
     }
 
-    private static Markup BuildGroupRow(SessionGroup group, bool isSelected, AppState state)
+    private static Markup BuildTreeGroupRow(TreeItem.GroupHeader header, bool isSelected, AppState state)
     {
+        var group = header.Group;
         var name = Markup.Escape(group.Name);
         var totalSessions = group.Sessions.Count;
-
-        // Check session states within the group
-        var groupSessionNames = new HashSet<string>(group.Sessions);
-        var groupSessions = state.Sessions.Where(s => groupSessionNames.Contains(s.Name)).ToList();
-        var anyWaiting = groupSessions.Any(s => s.IsWaitingForInput);
-        var allIdle = groupSessions.Count > 0 && groupSessions.All(s => s.IsIdle || s.IsDead);
-        var allDead = groupSessions.Count > 0 && groupSessions.All(s => s.IsDead);
-
-        var spinner = Markup.Escape(GetSpinnerFrame());
-        var status = totalSessions == 0 ? "[grey50]x[/]" : allDead ? "[red]†[/]" : anyWaiting ? "[yellow bold]![/]" : allIdle ? "[grey50]✓[/]" : $"[green]{spinner}[/]";
+        var expandIcon = header.IsExpanded ? "\u25bc" : "\u25b6";
         var countLabel = $"({totalSessions})";
         var colorTag = !string.IsNullOrEmpty(group.Color) ? group.Color : "grey50";
 
         if (isSelected)
         {
             var bg = !string.IsNullOrEmpty(group.Color) ? group.Color : "grey37";
-            return new Markup($"[white on {bg}] {status} {name,-14} {countLabel,-4} [/]");
+            return new Markup($"[white on {bg}] {expandIcon} {name,-14} {countLabel,-4} [/]");
         }
 
         if (totalSessions == 0)
-            return new Markup($" {status} [grey50 strikethrough]{name,-14}[/] [grey42]{countLabel}[/]");
+            return new Markup($" [grey50]{expandIcon}[/] [grey50 strikethrough]{name,-14}[/] [grey42]{countLabel}[/]");
 
-        return new Markup($" {status} [{colorTag}]{name,-14}[/] [grey50]{countLabel}[/]");
+        return new Markup($" [{colorTag}]{expandIcon}[/] [{colorTag}]{name,-14}[/] [grey50]{countLabel}[/]");
     }
 
     private static Panel BuildPreviewPanel(AppState state, string? capturedPane,
@@ -234,13 +204,11 @@ public static class Renderer
 
         if (session == null)
         {
-            // If groups section is focused, show group info instead of figlet
-            if (state.ActiveSection == ActiveSection.Groups)
-            {
-                var group = state.GetSelectedGroup();
-                if (group != null)
-                    return BuildGroupPreviewPanel(group, state);
-            }
+            // Check if cursor is on a group header
+            var treeItems = state.GetTreeItems();
+            var currentItem = treeItems.ElementAtOrDefault(state.CursorIndex);
+            if (currentItem is TreeItem.GroupHeader gh)
+                return BuildGroupPreviewPanel(gh.Group, state);
 
             // Panel width = terminal - session panel (35) - panel borders (4)
             var panelWidth = Math.Max(20, Console.WindowWidth - 35 - 4);
@@ -388,7 +356,7 @@ public static class Renderer
             rows.Add(new Markup("  [grey50]All sessions have ended[/]"));
 
         rows.Add(new Text(""));
-        rows.Add(new Markup("  [grey]Press [/][grey70 bold]Enter[/][grey] to open group grid · [/][grey70 bold]e[/][grey] to edit[/]"));
+        rows.Add(new Markup("  [grey]Press [/][grey70 bold]Enter[/][grey] to expand/collapse · [/][grey70 bold]G[/][grey] grid · [/][grey70 bold]e[/][grey] to edit[/]"));
 
         var borderColor = !string.IsNullOrEmpty(group.Color)
             ? Style.Parse(group.Color).Foreground
@@ -779,7 +747,6 @@ public static class Renderer
             return BuildInputStatusBar(state);
 
         var status = state.GetActiveStatus();
-
         if (status != null)
             return new Markup($" [yellow]{Markup.Escape(status)}[/]");
 
@@ -791,18 +758,13 @@ public static class Renderer
         if (visible.Count == 0)
             return new Markup(" ");
 
-        var sessionOnlyActions = new HashSet<string>
-        {
-            "approve",
-            "reject",
-            "send-text"
-        };
-        var hiddenWhenNoGroups = new HashSet<string>
-        {
-            "move-to-group"
-        };
-        var onGroup = state.ActiveSection == ActiveSection.Groups;
+        var hiddenWhenNoGroups = new HashSet<string> { "move-to-group" };
         var hasGroups = state.Groups.Count > 0;
+
+        // Check if cursor is on a group header — dim session-only actions
+        var treeItems = state.GetTreeItems();
+        var onGroupHeader = treeItems.ElementAtOrDefault(state.CursorIndex) is TreeItem.GroupHeader;
+        var sessionOnlyActions = new HashSet<string> { "approve", "reject", "send-text" };
 
         var parts = new List<string>();
         var prevGroup = -1;
@@ -816,17 +778,10 @@ public static class Renderer
                 parts.Add("[grey]│[/]");
             prevGroup = barGroup;
 
-            var dimmed = onGroup && sessionOnlyActions.Contains(b.ActionId);
+            var dimmed = onGroupHeader && sessionOnlyActions.Contains(b.ActionId);
             var keyColor = dimmed ? "grey35" : "grey70 bold";
             var labelColor = dimmed ? "grey27" : "grey";
             parts.Add($"[{keyColor}]{Markup.Escape(b.Key)}[/][{labelColor}] {Markup.Escape(b.Label!)} [/]");
-        }
-
-        // Tab hint when groups exist
-        if (state.Groups.Count > 0)
-        {
-            parts.Add("[grey]│[/]");
-            parts.Add("[grey70 bold]Tab[/][grey] switch section [/]");
         }
 
         return new Markup(" " + string.Join(" ", parts));

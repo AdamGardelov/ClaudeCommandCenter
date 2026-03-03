@@ -318,7 +318,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
             })
             .OrderBy(g => g.Name)
             .ToList();
-        _state.ClampGroupCursor();
+        _state.InitExpandedGroups();
     }
 
     private bool UpdateCapturedPane()
@@ -539,31 +539,14 @@ public class App(ISessionBackend backend, bool mobileMode = false)
             return;
         }
 
-        // Tab switches between Sessions and Groups sections in list view
-        if (key.Key == ConsoleKey.Tab && _state.ViewMode == ViewMode.List && _state.ActiveGroup == null)
-        {
-            if (_state.ActiveSection == ActiveSection.Sessions && _state.Groups.Count > 0)
-                _state.ActiveSection = ActiveSection.Groups;
-            else
-                _state.ActiveSection = ActiveSection.Sessions;
-            _lastSelectedSession = null;
-            return;
-        }
-
-        // List view arrow keys
+        // List view arrow keys — unified tree navigation
         switch (key.Key)
         {
             case ConsoleKey.UpArrow:
-                if (_state.ActiveSection == ActiveSection.Groups)
-                    MoveGroupCursor(-1);
-                else
-                    MoveCursor(-1);
+                MoveCursor(-1);
                 return;
             case ConsoleKey.DownArrow:
-                if (_state.ActiveSection == ActiveSection.Groups)
-                    MoveGroupCursor(1);
-                else
-                    MoveCursor(1);
+                MoveCursor(1);
                 return;
         }
 
@@ -574,22 +557,28 @@ public class App(ISessionBackend backend, bool mobileMode = false)
 
     private void DispatchAction(string actionId)
     {
-        // When Groups section is focused in list view, intercept attach, delete, and edit
-        if (_state.ViewMode == ViewMode.List && _state.ActiveSection == ActiveSection.Groups)
+        // When cursor is on a group header in list view, intercept actions
+        if (_state.ViewMode == ViewMode.List && _state.ActiveGroup == null)
         {
-            switch (actionId)
+            var currentItem = _state.GetTreeItems().ElementAtOrDefault(_state.CursorIndex);
+            if (currentItem is TreeItem.GroupHeader gh)
             {
-                case "attach":
-                    _groupHandler.Open();
-                    return;
-                case "delete-session":
-                    _groupHandler.Delete();
-                    return;
-                case "edit-session":
-                    _groupHandler.Edit();
-                    return;
-                case "move-to-group":
-                    return; // Not applicable when focused on groups
+                switch (actionId)
+                {
+                    case "attach":
+                        // Enter on group header = toggle expand/collapse
+                        _state.ToggleGroupExpanded(gh.Group.Name);
+                        _state.ClampCursor();
+                        return;
+                    case "delete-session":
+                        _groupHandler.Delete();
+                        return;
+                    case "edit-session":
+                        _groupHandler.Edit();
+                        return;
+                    case "move-to-group":
+                        return; // Not applicable for group headers
+                }
             }
         }
 
@@ -833,10 +822,10 @@ public class App(ISessionBackend backend, bool mobileMode = false)
 
     private void MoveCursor(int delta)
     {
-        var visible = _state.GetVisibleSessions();
-        if (visible.Count == 0)
+        var treeItems = _state.GetTreeItems();
+        if (treeItems.Count == 0)
             return;
-        _state.CursorIndex = Math.Clamp(_state.CursorIndex + delta, 0, visible.Count - 1);
+        _state.CursorIndex = Math.Clamp(_state.CursorIndex + delta, 0, treeItems.Count - 1);
         _lastSelectedSession = null; // Force pane recapture
     }
 
@@ -872,13 +861,6 @@ public class App(ISessionBackend backend, bool mobileMode = false)
             _state.CursorIndex = newIndex;
             _lastSelectedSession = null;
         }
-    }
-
-    private void MoveGroupCursor(int delta)
-    {
-        if (_state.Groups.Count == 0)
-            return;
-        _state.GroupCursor = Math.Clamp(_state.GroupCursor + delta, 0, _state.Groups.Count - 1);
     }
 
     private void HandleMobileKey(ConsoleKeyInfo key)
@@ -971,6 +953,33 @@ public class App(ISessionBackend backend, bool mobileMode = false)
 
         if (_state.ViewMode == ViewMode.List)
         {
+            // Check if cursor is on a grouped session or group header — open group grid
+            var treeItems = _state.GetTreeItems();
+            var currentItem = treeItems.ElementAtOrDefault(_state.CursorIndex);
+
+            if (currentItem is TreeItem.SessionItem { GroupName: not null } si)
+            {
+                _state.EnterGroupGrid(si.GroupName);
+                _lastSelectedSession = null;
+                ResizeGridPanes();
+                return;
+            }
+
+            if (currentItem is TreeItem.GroupHeader gh)
+            {
+                if (gh.Group.Sessions.Count == 0)
+                {
+                    _state.SetStatus("Group has no live sessions");
+                    return;
+                }
+
+                _state.EnterGroupGrid(gh.Group.Name);
+                _lastSelectedSession = null;
+                ResizeGridPanes();
+                return;
+            }
+
+            // Standalone session — global grid
             var gridSessions = _state.GetGridSessions();
             if (gridSessions.Count < 2)
             {

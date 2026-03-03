@@ -74,7 +74,7 @@ cross-cutting concerns (reload sessions, render, reset caches).
 
 | File                 | Purpose                                                                       |
 |----------------------|-------------------------------------------------------------------------------|
-| `AppState`           | Mutable state container: sessions, cursor, view mode, input buffer, groups    |
+| `AppState`           | Mutable state container: sessions, cursor, view mode, input buffer, groups, tree items |
 | `Renderer`           | Stateless rendering — builds Spectre.Console `IRenderable` from `AppState`    |
 | `AnsiParser`         | Converts tmux ANSI escape sequences to Spectre styles (256-color + truecolor) |
 | `SettingsDefinition` | Builds settings categories and items for the settings view                    |
@@ -84,13 +84,13 @@ cross-cutting concerns (reload sessions, render, reset caches).
 - `CccConfig`: Root config (favorites, groups, colors, descriptions, keybindings, worktreeBasePath)
 - `Session`: Runtime session with backend metadata + git info + waiting-for-input status
 - `SessionGroup`: Named group of session names with optional worktree path
+- `TreeItem`: Discriminated union for unified tree view (SessionItem, GroupHeader)
 - `KeyBinding` / `KeyBindingConfig`: Resolved keybinding and JSON config override
 - `SettingsItem` / `SettingsCategory`: Settings view data structures
 
 ### Enums
 
 - `ViewMode`: List, Grid, Settings, DiffOverlay
-- `ActiveSection`: Sessions, Groups
 - `SettingsItemType`: Text, Toggle, Number, Action
 
 ## Code Style

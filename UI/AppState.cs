@@ -17,10 +17,10 @@ public class AppState
 
     // Group state
     public List<SessionGroup> Groups { get; set; } = [];
-    public ActiveSection ActiveSection { get; set; } = ActiveSection.Sessions;
-    public int GroupCursor { get; set; }
+    public HashSet<string> ExpandedGroups { get; set; } = [];
     public string? ActiveGroup { get; set; }
     private int _savedCursorIndex;
+    private HashSet<string> _knownGroupNames = [];
 
 
     // Mobile mode state
@@ -53,20 +53,34 @@ public class AppState
             return null;
         }
 
-        // When groups section is focused in list view, no session is selected
-        if (ViewMode == ViewMode.List && ActiveGroup == null && ActiveSection == ActiveSection.Groups)
+        if (ViewMode == ViewMode.Grid)
+        {
+            var gridSessions = GetGridSessions();
+            if (CursorIndex >= 0 && CursorIndex < gridSessions.Count)
+                return gridSessions[CursorIndex];
             return null;
+        }
 
-        var sessions = ViewMode == ViewMode.Grid ? GetGridSessions() : GetVisibleSessions();
-        if (CursorIndex >= 0 && CursorIndex < sessions.Count)
-            return sessions[CursorIndex];
+        // List view: resolve from tree items
+        var treeItems = GetTreeItems();
+        if (CursorIndex >= 0 && CursorIndex < treeItems.Count)
+        {
+            if (treeItems[CursorIndex] is TreeItem.SessionItem si)
+                return si.Session;
+        }
+
         return null;
     }
 
     public SessionGroup? GetSelectedGroup()
     {
-        if (GroupCursor >= 0 && GroupCursor < Groups.Count)
-            return Groups[GroupCursor];
+        var treeItems = GetTreeItems();
+        if (CursorIndex >= 0 && CursorIndex < treeItems.Count)
+        {
+            if (treeItems[CursorIndex] is TreeItem.GroupHeader gh)
+                return gh.Group;
+        }
+
         return null;
     }
 
@@ -96,6 +110,54 @@ public class AppState
             .ThenBy(s => s.Created)
             .ThenBy(s => s.Name)
             .ToList();
+    }
+
+    public List<TreeItem> GetTreeItems()
+    {
+        var items = new List<TreeItem>();
+
+        // Standalone sessions first
+        foreach (var session in GetStandaloneSessions())
+            items.Add(new TreeItem.SessionItem(session, null));
+
+        // Then groups with their sessions
+        foreach (var group in Groups)
+        {
+            var isExpanded = ExpandedGroups.Contains(group.Name);
+            items.Add(new TreeItem.GroupHeader(group, isExpanded));
+
+            if (isExpanded)
+            {
+                var groupSessionNames = new HashSet<string>(group.Sessions);
+                var groupSessions = Sessions
+                    .Where(s => groupSessionNames.Contains(s.Name))
+                    .ToList();
+                foreach (var session in groupSessions)
+                    items.Add(new TreeItem.SessionItem(session, group.Name));
+            }
+        }
+
+        return items;
+    }
+
+    public void ToggleGroupExpanded(string groupName)
+    {
+        if (!ExpandedGroups.Remove(groupName))
+            ExpandedGroups.Add(groupName);
+    }
+
+    public void InitExpandedGroups()
+    {
+        var currentNames = new HashSet<string>(Groups.Select(g => g.Name));
+        // Clean up stale entries for groups that no longer exist
+        ExpandedGroups.RemoveWhere(n => !currentNames.Contains(n));
+        _knownGroupNames.RemoveWhere(n => !currentNames.Contains(n));
+        // Only expand groups we haven't seen before
+        foreach (var group in Groups)
+        {
+            if (_knownGroupNames.Add(group.Name))
+                ExpandedGroups.Add(group.Name);
+        }
     }
 
     public List<Session> GetGridSessions() =>
@@ -237,13 +299,23 @@ public class AppState
 
     public void ClampCursor()
     {
-        var visible = MobileMode ? GetMobileVisibleSessions() : GetVisibleSessions();
-        CursorIndex = visible.Count == 0 ? 0 : Math.Clamp(CursorIndex, 0, visible.Count - 1);
-    }
+        if (MobileMode)
+        {
+            var mobile = GetMobileVisibleSessions();
+            CursorIndex = mobile.Count == 0 ? 0 : Math.Clamp(CursorIndex, 0, mobile.Count - 1);
+            return;
+        }
 
-    public void ClampGroupCursor() => GroupCursor = Groups.Count == 0
-        ? 0
-        : Math.Clamp(GroupCursor, 0, Groups.Count - 1);
+        if (ViewMode == ViewMode.Grid)
+        {
+            var grid = GetGridSessions();
+            CursorIndex = grid.Count == 0 ? 0 : Math.Clamp(CursorIndex, 0, grid.Count - 1);
+            return;
+        }
+
+        var tree = GetTreeItems();
+        CursorIndex = tree.Count == 0 ? 0 : Math.Clamp(CursorIndex, 0, tree.Count - 1);
+    }
 
     public void EnterDiffOverlay(string name, string? branch, string? stat, string[] lines)
     {

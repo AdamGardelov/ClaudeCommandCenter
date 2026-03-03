@@ -1,4 +1,3 @@
-using ClaudeCommandCenter.Enums;
 using ClaudeCommandCenter.Models;
 using ClaudeCommandCenter.Services;
 using ClaudeCommandCenter.UI;
@@ -17,24 +16,6 @@ public class GroupHandler(
     Action resetGridCache,
     Action resizeGridPanes)
 {
-    public void Open()
-    {
-        var group = state.GetSelectedGroup();
-        if (group == null)
-            return;
-
-        if (group.Sessions.Count == 0)
-        {
-            // Stale group — offer to remove
-            state.SetStatus($"Group '{group.Name}' has no live sessions. Press d to remove.");
-            return;
-        }
-
-        state.EnterGroupGrid(group.Name);
-        resetPaneCache();
-        resizeGridPanes();
-    }
-
     public void Delete()
     {
         var group = state.GetSelectedGroup();
@@ -231,9 +212,11 @@ public class GroupHandler(
             {
                 ConfigService.SaveGroup(config, group);
                 loadSessions();
-                state.GroupCursor = state.Groups.FindIndex(g => g.Name == effectiveName);
-                if (state.GroupCursor < 0)
-                    state.GroupCursor = 0;
+                // Re-position cursor on the renamed group in the tree
+                var treeItems = state.GetTreeItems();
+                var newIdx = treeItems.FindIndex(t => t is TreeItem.GroupHeader gh && gh.Group.Name == effectiveName);
+                if (newIdx >= 0)
+                    state.CursorIndex = newIdx;
                 state.SetStatus("Group updated");
             }
             else
@@ -589,10 +572,13 @@ public class GroupHandler(
     private void FinishCreation(string groupName)
     {
         loadSessions();
-        state.ActiveSection = ActiveSection.Groups;
-        state.GroupCursor = state.Groups.FindIndex(g => g.Name == groupName);
-        if (state.GroupCursor < 0)
-            state.GroupCursor = 0;
+
+        // Position cursor on the new group header
+        var treeItems = state.GetTreeItems();
+        var idx = treeItems.FindIndex(t => t is TreeItem.GroupHeader gh && gh.Group.Name == groupName);
+        if (idx >= 0)
+            state.CursorIndex = idx;
+
         state.EnterGroupGrid(groupName);
         resetPaneCache();
         resizeGridPanes();
