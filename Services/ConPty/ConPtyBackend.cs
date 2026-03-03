@@ -124,6 +124,14 @@ public class ConPtyBackend : ISessionBackend
         var savedEncoding = Console.OutputEncoding;
         Console.OutputEncoding = Encoding.UTF8;
 
+        // Save and fix console input mode. ConPTY child processes (especially SSH)
+        // can leak SetConsoleMode calls to the parent console, causing
+        // Console.ReadKey / Console.KeyAvailable to stop working.
+        var hInput = GetStdHandle(StdInputHandle);
+        GetConsoleMode(hInput, out var savedInputMode);
+        FlushConsoleInputBuffer(hInput);
+        SetConsoleMode(hInput, savedInputMode | EnableProcessedInput | EnableVirtualTerminalInput);
+
         // Resize the ConPTY to the full terminal size so the session renders correctly
         var fullWidth = (short)Console.WindowWidth;
         var fullHeight = (short)Console.WindowHeight;
@@ -191,6 +199,7 @@ public class ConPtyBackend : ISessionBackend
             session.ForwardToConsole = false;
             outputCts.Cancel();
             Console.OutputEncoding = savedEncoding;
+            SetConsoleMode(hInput, savedInputMode);
         }
     }
 

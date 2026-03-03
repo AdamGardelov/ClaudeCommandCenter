@@ -88,6 +88,26 @@ internal static partial class NativeMethods
 
     internal const uint StillActive = 259;
 
+    // Console input mode management — needed to fix input corruption from ConPTY child processes
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    internal static partial nint GetStdHandle(int nStdHandle);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool GetConsoleMode(nint hConsoleHandle, out uint lpMode);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool SetConsoleMode(nint hConsoleHandle, uint dwMode);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool FlushConsoleInputBuffer(nint hConsoleInput);
+
+    internal const int StdInputHandle = -10;
+    internal const uint EnableProcessedInput = 0x0001;
+    internal const uint EnableVirtualTerminalInput = 0x0200;
+
     [StructLayout(LayoutKind.Sequential)]
     internal struct Coord(short x, short y)
     {
