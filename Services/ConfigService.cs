@@ -153,6 +153,22 @@ public static class ConfigService
         }
     }
 
+    public static void SetSkipPermissions(CccConfig config, string sessionName, bool enabled)
+    {
+        if (enabled)
+            config.SkipPermissionsSessions.Add(sessionName);
+        else
+            config.SkipPermissionsSessions.Remove(sessionName);
+        Save(config);
+    }
+
+    public static void RemoveSkipPermissions(CccConfig config, string sessionName)
+    {
+        if (config.SkipPermissionsSessions.Remove(sessionName))
+            Save(config);
+    }
+
+
     private static bool BackfillKeybindings(CccConfig config)
     {
         var defaults = KeyBindingService.GetDefaultConfigs();

@@ -40,7 +40,7 @@ public class TmuxBackend : ISessionBackend
         return sessions.OrderBy(s => s.Created).ThenBy(s => s.Name).ToList();
     }
 
-    public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null, string? remoteHost = null)
+    public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null, string? remoteHost = null, bool dangerouslySkipPermissions = false)
     {
         var envArgs = new List<string> { "-e", $"CCC_SESSION_NAME={name}" };
         if (!string.IsNullOrEmpty(claudeConfigDir))
@@ -49,7 +49,7 @@ public class TmuxBackend : ISessionBackend
             envArgs.Add($"CLAUDE_CONFIG_DIR={claudeConfigDir}");
         }
 
-        var (cmdFile, cmdArgs) = SshService.BuildSessionCommand(remoteHost, workingDirectory);
+        var (cmdFile, cmdArgs) = SshService.BuildSessionCommand(remoteHost, workingDirectory, dangerouslySkipPermissions);
         // For remote, each SSH arg must be shell-quoted when joined into a flat command
         // string, because tmux passes the final positional arg to sh -c which re-parses it.
         var quotedArgs = remoteHost != null

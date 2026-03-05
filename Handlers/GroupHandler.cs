@@ -40,6 +40,7 @@ public class GroupHandler(
                 ConfigService.RemoveExcluded(config, sessionName);
                 ConfigService.RemoveStartCommit(config, sessionName);
                 ConfigService.RemoveRemoteHost(config, sessionName);
+                ConfigService.RemoveSkipPermissions(config, sessionName);
             }
 
             ConfigService.RemoveGroup(config, group.Name);
@@ -179,7 +180,7 @@ public class GroupHandler(
             {
                 var sessionName = FlowHelper.UniqueSessionName(FlowHelper.SanitizeSessionName($"{effectiveName}-{label}"), usedNames);
                 usedNames.Add(sessionName);
-                var error = backend.CreateSession(sessionName, dir, ConfigService.ResolveClaudeConfigDir(config, dir));
+                var error = backend.CreateSession(sessionName, dir, ConfigService.ResolveClaudeConfigDir(config, dir), dangerouslySkipPermissions: config.DangerouslySkipPermissions);
                 if (error != null)
                     throw new FlowCancelledException($"Failed to create session '{sessionName}': {error}");
 
@@ -243,6 +244,7 @@ public class GroupHandler(
             ConfigService.RemoveExcluded(config, session.Name);
             ConfigService.RemoveStartCommit(config, session.Name);
             ConfigService.RemoveRemoteHost(config, session.Name);
+            ConfigService.RemoveSkipPermissions(config, session.Name);
             ConfigService.RemoveSessionFromGroup(config, state.ActiveGroup, session.Name);
             loadSessions();
 
@@ -320,7 +322,7 @@ public class GroupHandler(
         if (available.Count == 0)
             throw new FlowCancelledException("All worktrees already have active groups");
 
-        FlowHelper.PrintStep(1, 2, "Worktree");
+        FlowHelper.PrintStep(1, 3, "Worktree");
         var prompt = new SelectionPrompt<string>()
             .Title("[grey70]Select a worktree feature[/]")
             .HighlightStyle(new Style(Color.White, Color.Grey70));
@@ -341,14 +343,22 @@ public class GroupHandler(
         var feature = available.FirstOrDefault(f => f.Name == selectedName)
                       ?? throw new FlowCancelledException("Feature not found");
 
-        FlowHelper.PrintStep(2, 2, "Color");
+        FlowHelper.PrintStep(2, 3, "Color");
         var color = flow.PickColor();
+
+        FlowHelper.PrintStep(3, 3, "Skip Permissions");
+        var skipPerms = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("[grey70]Launch with [white]--dangerously-skip-permissions[/]?[/]")
+                .HighlightStyle(new Style(Color.White, Color.Grey70))
+                .AddChoices("No", "Yes"));
+        var skipPermissions = skipPerms == "Yes";
 
         var sessionNames = new List<string>();
         foreach (var (repoName, repoPath) in feature.Repos)
         {
             var sessionName = FlowHelper.SanitizeSessionName($"{feature.Name}-{repoName}");
-            var error = backend.CreateSession(sessionName, repoPath, ConfigService.ResolveClaudeConfigDir(config, repoPath));
+            var error = backend.CreateSession(sessionName, repoPath, ConfigService.ResolveClaudeConfigDir(config, repoPath), dangerouslySkipPermissions: skipPermissions || config.DangerouslySkipPermissions);
             if (error != null)
                 throw new FlowCancelledException($"Failed to create session '{sessionName}': {error}");
 
@@ -357,6 +367,9 @@ public class GroupHandler(
                 ConfigService.SaveColor(config, sessionName, color);
                 backend.ApplyStatusColor(sessionName, color);
             }
+
+            if (skipPermissions)
+                ConfigService.SetSkipPermissions(config, sessionName, true);
 
             sessionNames.Add(sessionName);
         }
@@ -382,7 +395,7 @@ public class GroupHandler(
         if (gitFavorites.Count < 2)
             throw new FlowCancelledException("Need at least 2 git repos in favorites");
 
-        FlowHelper.PrintStep(1, 3, "Repositories");
+        FlowHelper.PrintStep(1, 4, "Repositories");
         var selectedRepos = AnsiConsole.Prompt(
             new MultiSelectionPrompt<string>()
                 .Title("[grey70]Select repos[/]")
@@ -394,7 +407,7 @@ public class GroupHandler(
         if (selectedRepos.Count < 2)
             throw new FlowCancelledException("Groups need at least 2 repos");
 
-        FlowHelper.PrintStep(2, 3, "Feature name");
+        FlowHelper.PrintStep(2, 4, "Feature name");
         var featureName = FlowHelper.RequireText("[grey70]Feature name[/] [grey](used for branch + folder)[/][grey70]:[/]");
 
         var sanitizedName = FlowHelper.SanitizeSessionName(featureName);
@@ -403,8 +416,16 @@ public class GroupHandler(
         if (config.Groups.ContainsKey(sanitizedName))
             throw new FlowCancelledException($"Group '{sanitizedName}' already exists");
 
-        FlowHelper.PrintStep(3, 3, "Color");
+        FlowHelper.PrintStep(3, 4, "Color");
         var color = flow.PickColor();
+
+        FlowHelper.PrintStep(4, 4, "Skip Permissions");
+        var skipPerms = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("[grey70]Launch with [white]--dangerously-skip-permissions[/]?[/]")
+                .HighlightStyle(new Style(Color.White, Color.Grey70))
+                .AddChoices("No", "Yes"));
+        var skipPermissions = skipPerms == "Yes";
 
         var basePath = ConfigService.ExpandPath(config.WorktreeBasePath);
         var featurePath = Path.Combine(basePath, branchName);
@@ -456,7 +477,7 @@ public class GroupHandler(
         foreach (var (repoName, worktreePath) in worktrees)
         {
             var sessionName = FlowHelper.SanitizeSessionName($"{sanitizedName}-{repoName}");
-            var sessionError = backend.CreateSession(sessionName, worktreePath, ConfigService.ResolveClaudeConfigDir(config, worktreePath));
+            var sessionError = backend.CreateSession(sessionName, worktreePath, ConfigService.ResolveClaudeConfigDir(config, worktreePath), dangerouslySkipPermissions: skipPermissions || config.DangerouslySkipPermissions);
             if (sessionError != null)
                 throw new FlowCancelledException($"Failed to create session '{sessionName}': {sessionError}");
 
@@ -465,6 +486,9 @@ public class GroupHandler(
                 ConfigService.SaveColor(config, sessionName, color);
                 backend.ApplyStatusColor(sessionName, color);
             }
+
+            if (skipPermissions)
+                ConfigService.SetSkipPermissions(config, sessionName, true);
 
             sessionNames.Add(sessionName);
         }
@@ -483,14 +507,14 @@ public class GroupHandler(
 
     private void CreateManually()
     {
-        FlowHelper.PrintStep(1, 3, "Name");
+        FlowHelper.PrintStep(1, 4, "Name");
         var name = FlowHelper.RequireText("[grey70]Group name:[/]");
         name = FlowHelper.SanitizeSessionName(name);
 
         if (config.Groups.ContainsKey(name))
             throw new FlowCancelledException($"Group '{name}' already exists");
 
-        FlowHelper.PrintStep(2, 3, "Directories");
+        FlowHelper.PrintStep(2, 4, "Directories");
         var directories = new List<(string Dir, string Label)>();
 
         for (var i = 0; i < 9; i++)
@@ -534,8 +558,16 @@ public class GroupHandler(
         if (directories.Count < 2)
             throw new FlowCancelledException("Groups need at least 2 sessions");
 
-        FlowHelper.PrintStep(3, 3, "Color");
+        FlowHelper.PrintStep(3, 4, "Color");
         var color = flow.PickColor();
+
+        FlowHelper.PrintStep(4, 4, "Skip Permissions");
+        var skipPerms = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("[grey70]Launch with [white]--dangerously-skip-permissions[/]?[/]")
+                .HighlightStyle(new Style(Color.White, Color.Grey70))
+                .AddChoices("No", "Yes"));
+        var skipPermissions = skipPerms == "Yes";
 
         var sessionNames = new List<string>();
         var usedNames = new HashSet<string>(StringComparer.Ordinal);
@@ -543,7 +575,7 @@ public class GroupHandler(
         {
             var sessionName = FlowHelper.UniqueSessionName(FlowHelper.SanitizeSessionName($"{name}-{label}"), usedNames);
             usedNames.Add(sessionName);
-            var error = backend.CreateSession(sessionName, dir, ConfigService.ResolveClaudeConfigDir(config, dir));
+            var error = backend.CreateSession(sessionName, dir, ConfigService.ResolveClaudeConfigDir(config, dir), dangerouslySkipPermissions: skipPermissions || config.DangerouslySkipPermissions);
             if (error != null)
                 throw new FlowCancelledException($"Failed to create session '{sessionName}': {error}");
 
@@ -552,6 +584,9 @@ public class GroupHandler(
                 ConfigService.SaveColor(config, sessionName, color);
                 backend.ApplyStatusColor(sessionName, color);
             }
+
+            if (skipPermissions)
+                ConfigService.SetSkipPermissions(config, sessionName, true);
 
             sessionNames.Add(sessionName);
         }
