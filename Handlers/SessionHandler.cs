@@ -27,7 +27,8 @@ public class SessionHandler(
         FlowHelper.RunFlow("New Session", () =>
         {
             var hasRemotes = config.RemoteHosts.Count > 0;
-            var totalSteps = hasRemotes ? 5 : 4;
+            var globalSkip = config.DangerouslySkipPermissions;
+            var totalSteps = (hasRemotes ? 1 : 0) + 4 + (globalSkip ? 0 : 1);
             var step = 0;
 
             // Step: Target (only if remote hosts configured)
@@ -91,11 +92,15 @@ public class SessionHandler(
             FlowHelper.PrintStep(++step, totalSteps, "Color");
             var color = flow.PickColor();
 
+            // Step: Skip permissions
+            var skipPermissions = FlowHelper.PromptSkipPermissions(config, ref step, totalSteps);
+
             // Create session
+            var effectiveSkip = skipPermissions || globalSkip;
             var claudeConfigDir = remoteHost == null
                 ? ConfigService.ResolveClaudeConfigDir(config, dir)
                 : null;
-            var error = backend.CreateSession(name, dir, claudeConfigDir, remoteHost?.Host);
+            var error = backend.CreateSession(name, dir, claudeConfigDir, remoteHost?.Host, effectiveSkip);
             if (error != null)
                 throw new FlowCancelledException(error);
 
@@ -105,6 +110,8 @@ public class SessionHandler(
                 ConfigService.SaveColor(config, name, color);
             if (remoteHost != null)
                 ConfigService.SaveRemoteHost(config, name, remoteHost.Name);
+            if (effectiveSkip)
+                ConfigService.SetSkipPermissions(config, name, true);
             backend.ApplyStatusColor(name, color ?? "grey42");
             backend.AttachSession(name);
             loadSessions();
@@ -132,6 +139,7 @@ public class SessionHandler(
                 ConfigService.RemoveExcluded(config, session.Name);
                 ConfigService.RemoveStartCommit(config, session.Name);
                 ConfigService.RemoveRemoteHost(config, session.Name);
+                ConfigService.RemoveSkipPermissions(config, session.Name);
                 state.SetStatus("Session killed");
             }
             else
@@ -178,6 +186,7 @@ public class SessionHandler(
                 ConfigService.RenameExcluded(config, currentName, newName);
                 ConfigService.RenameStartCommit(config, currentName, newName);
                 ConfigService.RenameRemoteHost(config, currentName, newName);
+                ConfigService.RenameSkipPermissions(config, currentName, newName);
                 currentName = newName;
                 changed = true;
             }

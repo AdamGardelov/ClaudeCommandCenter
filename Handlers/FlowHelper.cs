@@ -64,6 +64,23 @@ public class FlowHelper(CccConfig config)
         AnsiConsole.MarkupLine($"{string.Join(" ", dots)}  [grey50]Step {current}/{total} \u2014 {Markup.Escape(label)}[/]");
     }
 
+    public static bool PromptSkipPermissions(CccConfig config, ref int step, int totalSteps)
+    {
+        if (config.DangerouslySkipPermissions)
+        {
+            AnsiConsole.MarkupLine("[grey70]Global skip-permissions is [white]ON[/] — all sessions use it[/]");
+            return false;
+        }
+
+        PrintStep(++step, totalSteps, "Skip Permissions");
+        var choice = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+                .Title("[grey70]Launch with [white]--dangerously-skip-permissions[/]?[/]")
+                .HighlightStyle(new Style(Color.White, Color.Grey70))
+                .AddChoices("No", "Yes"));
+        return choice == "Yes";
+    }
+
     public static string RequireText(string prompt)
     {
         var result = AnsiConsole.Prompt(

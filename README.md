@@ -242,9 +242,18 @@ Press `s` to open the in-app settings page. Navigate categories on the left, set
 | Keybindings   | Enable/disable actions                  |
 | Notifications | Bell, desktop, OSC notify, cooldown     |
 | Favorites     | Add, edit, delete favorite folders      |
-| Advanced      | Open raw config file, reset keybindings |
+| Advanced      | Skip permissions toggle, open raw config file, reset keybindings |
 
 **Controls:** `j/k` navigate, `Tab` switch panels, `Enter` edit/toggle, `Esc` back, `o` open config file.
+
+### Skip Permissions
+
+Sessions can launch Claude with `--dangerously-skip-permissions` in two ways:
+
+- **Global toggle** — Settings > Advanced > Skip Permissions. When ON, all new sessions skip permissions automatically.
+- **Per-session** — When creating a session or group, a prompt lets you opt in for that specific session. When the global toggle is ON, the per-session prompt is skipped automatically.
+
+Both are decided at creation time and apply for the lifetime of the session — changing the global toggle won't affect already-running sessions. Sessions launched with skip-permissions show a `⚡` indicator in the session list, preview panel, and grid view.
 
 ### Worktree Support
 

@@ -19,4 +19,5 @@ public class Session
     public bool IsExcluded { get; set; }
     public string? StartCommitSha { get; set; }
     public string? RemoteHostName { get; set; }
+    public bool SkipPermissions { get; set; }
 }

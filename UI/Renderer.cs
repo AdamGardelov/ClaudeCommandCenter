@@ -130,7 +130,9 @@ public static class Renderer
         var indent = indented ? "   " : "";
         var rawName = Markup.Escape(session.Name);
         var spinner = Markup.Escape(GetSpinnerFrame());
-        var remote = session.RemoteHostName != null ? "[mediumpurple3]☁[/]" : " ";
+        var skipIcon = session.SkipPermissions ? "[yellow]⚡[/]" : " ";
+        var remoteIcon = session.RemoteHostName != null ? "[mediumpurple3]☁[/]" : " ";
+        var flags = $"{skipIcon}{remoteIcon}";
         var nameWidth = indented ? 19 : 22;
         var name = rawName.PadRight(nameWidth);
 
@@ -139,17 +141,17 @@ public static class Renderer
             if (session.IsExcluded)
             {
                 if (isSelected)
-                    return new Markup($"[grey50 on grey19]{indent} [grey42]†[/] {name}[/]{remote}");
-                return new Markup($"{indent} [grey42]†[/] [grey35]{name}[/]{remote}");
+                    return new Markup($"[grey50 on grey19]{indent} [grey42]†[/] {name}[/]{flags}");
+                return new Markup($"{indent} [grey42]†[/] [grey35]{name}[/]{flags}");
             }
 
             if (isSelected)
             {
                 var bg = session.ColorTag ?? "grey37";
-                return new Markup($"[white on {bg}]{indent} † {name}[/]{remote}");
+                return new Markup($"[white on {bg}]{indent} † {name}[/]{flags}");
             }
 
-            return new Markup($"{indent} [red]†[/] [grey50]{name}[/]{remote}");
+            return new Markup($"{indent} [red]†[/] [grey50]{name}[/]{flags}");
         }
 
         var status = session.IsWaitingForInput ? "!" : session.IsIdle ? "✓" : spinner;
@@ -158,22 +160,22 @@ public static class Renderer
         {
             var excludedStatus = session.IsWaitingForInput ? "[grey42]![/]" : session.IsIdle ? "[grey42]✓[/]" : $"[grey35]{spinner}[/]";
             if (isSelected)
-                return new Markup($"[grey50 on grey19]{indent} {excludedStatus} {name}[/]{remote}");
-            return new Markup($"{indent} {excludedStatus} [grey35]{name}[/]{remote}");
+                return new Markup($"[grey50 on grey19]{indent} {excludedStatus} {name}[/]{flags}");
+            return new Markup($"{indent} {excludedStatus} [grey35]{name}[/]{flags}");
         }
 
         if (isSelected)
         {
             var bg = session.ColorTag ?? "grey37";
-            return new Markup($"[white on {bg}]{indent} {status} {name}[/]{remote}");
+            return new Markup($"[white on {bg}]{indent} {status} {name}[/]{flags}");
         }
 
         if (session.IsWaitingForInput)
-            return new Markup($"{indent} [yellow bold]![/] [navajowhite1]{name}[/]{remote}");
+            return new Markup($"{indent} [yellow bold]![/] [navajowhite1]{name}[/]{flags}");
         if (session.IsIdle)
-            return new Markup($"{indent} [grey50]✓[/] [navajowhite1]{name}[/]{remote}");
+            return new Markup($"{indent} [grey50]✓[/] [navajowhite1]{name}[/]{flags}");
 
-        return new Markup($"{indent} [green]{spinner}[/] [navajowhite1]{name}[/]{remote}");
+        return new Markup($"{indent} [green]{spinner}[/] [navajowhite1]{name}[/]{flags}");
     }
 
     private static Markup BuildTreeGroupRow(TreeItem.GroupHeader header, bool isSelected, AppState state)
@@ -241,6 +243,8 @@ public static class Renderer
 
         rows.Add(new Markup($" [{labelColor}]Created:[/]  [white]{session.Created?.ToString("yyyy-MM-dd HH:mm:ss") ?? "unknown"}[/]"));
         rows.Add(new Markup($" [{labelColor}]Status:[/]   {StatusLabel(session)}"));
+        if (session.SkipPermissions)
+            rows.Add(new Markup($" [{labelColor}]Perms:[/]    [yellow bold]⚡ skip-permissions[/]"));
         rows.Add(new Rule().RuleStyle(Style.Parse(session.ColorTag ?? "grey42")));
 
         if (!string.IsNullOrWhiteSpace(capturedPane))
@@ -349,7 +353,8 @@ public static class Renderer
             var branch = session.GitBranch != null ? $" [aqua]{Markup.Escape(session.GitBranch)}[/]" : "";
             var path = session.CurrentPath != null ? $" [grey50]{Markup.Escape(ShortenPath(session.CurrentPath))}[/]" : "";
             var remote = session.RemoteHostName != null ? $" [mediumpurple3]@{Markup.Escape(session.RemoteHostName)}[/]" : "";
-            rows.Add(new Markup($"  {status} [white]{name}[/]{branch}{remote}{path}"));
+            var skip = session.SkipPermissions ? " [yellow]⚡[/]" : "";
+            rows.Add(new Markup($"  {status} [white]{name}[/]{branch}{remote}{skip}{path}"));
         }
 
         if (groupSessions.Count == 0)
@@ -468,7 +473,8 @@ public static class Renderer
 
         var name = Markup.Escape(nameStr);
         var branch = branchStr != null ? $" [aqua]{Markup.Escape(branchStr)}[/]" : "";
-        rows.Add(new Markup($" {status} [white bold]{name}[/]{branch}"));
+        var skipIcon = session.SkipPermissions ? " [yellow]⚡[/]" : "";
+        rows.Add(new Markup($" {status} [white bold]{name}[/]{branch}{skipIcon}"));
 
         if (session.CurrentPath != null)
         {

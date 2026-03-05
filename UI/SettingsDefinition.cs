@@ -165,6 +165,13 @@ public static class SettingsDefinition
     [
         new()
         {
+            Label = "Skip Permissions",
+            Type = SettingsItemType.Toggle,
+            GetValue = c => c.DangerouslySkipPermissions ? "ON" : "OFF",
+            SetValue = (c, _) => c.DangerouslySkipPermissions = !c.DangerouslySkipPermissions,
+        },
+        new()
+        {
             Label = "Open Config File",
             Type = SettingsItemType.Action,
         },

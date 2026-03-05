@@ -58,15 +58,17 @@ public static class SshService
     /// Remote: ssh -t host 'cd path && claude'
     /// </summary>
     public static (string FileName, List<string> Args) BuildSessionCommand(
-        string? remoteHost, string workingDirectory)
+        string? remoteHost, string workingDirectory, bool dangerouslySkipPermissions = false)
     {
+        var claudeCmd = dangerouslySkipPermissions ? "claude --dangerously-skip-permissions" : "claude";
+
         if (remoteHost == null)
         {
             var shell = Environment.GetEnvironmentVariable("SHELL") ?? "/bin/bash";
-            return (shell, ["-lc", "claude"]);
+            return (shell, ["-lc", claudeCmd]);
         }
 
-        return ("ssh", ["-t", remoteHost, $"cd {EscapePath(workingDirectory)} && claude"]);
+        return ("ssh", ["-t", remoteHost, $"cd {EscapePath(workingDirectory)} && {claudeCmd}"]);
     }
 
     /// <summary>

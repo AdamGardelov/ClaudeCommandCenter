@@ -51,7 +51,7 @@ public class ConPtyBackend : ISessionBackend
         }
     }
 
-    public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null, string? remoteHost = null)
+    public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null, string? remoteHost = null, bool dangerouslySkipPermissions = false)
     {
         lock (_sessionsLock)
         {
@@ -61,7 +61,7 @@ public class ConPtyBackend : ISessionBackend
 
         try
         {
-            var session = StartProcess(name, workingDirectory, claudeConfigDir, remoteHost);
+            var session = StartProcess(name, workingDirectory, claudeConfigDir, remoteHost, dangerouslySkipPermissions);
             lock (_sessionsLock)
             {
                 if (!_sessions.TryAdd(name, session))
@@ -348,7 +348,7 @@ public class ConPtyBackend : ISessionBackend
         }
     }
 
-    private static ConPtySession StartProcess(string name, string workingDirectory, string? claudeConfigDir, string? remoteHost)
+    private static ConPtySession StartProcess(string name, string workingDirectory, string? claudeConfigDir, string? remoteHost, bool dangerouslySkipPermissions = false)
     {
         // Create pipes: CCC writes to inputWrite → process reads from inputRead
         //               Process writes to outputWrite → CCC reads from outputRead
@@ -421,13 +421,13 @@ public class ConPtyBackend : ISessionBackend
             string processWorkDir;
             if (remoteHost != null)
             {
-                var (sshFile, sshArgs) = SshService.BuildSessionCommand(remoteHost, workingDirectory);
+                var (sshFile, sshArgs) = SshService.BuildSessionCommand(remoteHost, workingDirectory, dangerouslySkipPermissions);
                 commandLine = $"{sshFile} {string.Join(" ", sshArgs.ConvertAll(QuoteWindowsArg))}";
                 processWorkDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             }
             else
             {
-                commandLine = "claude";
+                commandLine = dangerouslySkipPermissions ? "claude --dangerously-skip-permissions" : "claude";
                 processWorkDir = workingDirectory;
             }
 

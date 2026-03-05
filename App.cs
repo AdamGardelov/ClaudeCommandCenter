@@ -238,6 +238,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
             s.IsExcluded = _config.ExcludedSessions.Contains(s.Name);
             if (_config.SessionRemoteHosts.TryGetValue(s.Name, out var remoteHostName))
                 s.RemoteHostName = remoteHostName;
+            s.SkipPermissions = _config.SkipPermissionsSessions.Contains(s.Name);
             backend.ApplyStatusColor(s.Name, color ?? "grey42");
 
             // Preserve content tracking state so sessions don't briefly flash as "working"
