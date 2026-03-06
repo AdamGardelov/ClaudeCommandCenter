@@ -175,14 +175,23 @@ public class SettingsHandler(
         }
 
         // Determine the key string from the press
-        var newKey = key.Key switch
+        string? newKey;
+        if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && !key.Modifiers.HasFlag(ConsoleModifiers.Alt)
+            && key.Key >= ConsoleKey.A && key.Key <= ConsoleKey.Z)
         {
-            ConsoleKey.Enter => "Enter",
-            ConsoleKey.Spacebar => "Space",
-            ConsoleKey.Tab => "Tab",
-            _ when key.KeyChar >= '!' && key.KeyChar <= '~' => key.KeyChar.ToString(),
-            _ => null,
-        };
+            newKey = $"Ctrl+{key.Key}";
+        }
+        else
+        {
+            newKey = key.Key switch
+            {
+                ConsoleKey.Enter => "Enter",
+                ConsoleKey.Spacebar => "Space",
+                ConsoleKey.Tab => "Tab",
+                _ when key.KeyChar >= '!' && key.KeyChar <= '~' => key.KeyChar.ToString(),
+                _ => null,
+            };
+        }
 
         if (newKey == null)
             return;

@@ -361,7 +361,7 @@ public static class Renderer
             rows.Add(new Markup("  [grey50]All sessions have ended[/]"));
 
         rows.Add(new Text(""));
-        rows.Add(new Markup("  [grey]Press [/][grey70 bold]Enter[/][grey] to expand/collapse · [/][grey70 bold]G[/][grey] grid · [/][grey70 bold]e[/][grey] to edit[/]"));
+        rows.Add(new Markup("  [grey]Press [/][grey70 bold]Enter[/][grey] to expand/collapse · [/][grey70 bold]Ctrl+G[/][grey] grid · [/][grey70 bold]e[/][grey] to edit[/]"));
 
         var borderColor = !string.IsNullOrEmpty(group.Color)
             ? Style.Parse(group.Color).Foreground
@@ -521,7 +521,7 @@ public static class Renderer
         var name = session != null ? Markup.Escape(session.Name) : "session";
         var groupName = state.ActiveGroup != null ? Markup.Escape(state.ActiveGroup) : "group";
 
-        return new Markup($" [mediumpurple3]{groupName}[/] [grey]│[/] [green bold]▶[/] [white]Typing to[/] [aqua]{name}[/] [grey]│[/] [grey70 bold]Ctrl+Arrows[/][grey] switch [/] [grey70 bold]G[/][grey] back [/]");
+        return new Markup($" [mediumpurple3]{groupName}[/] [grey]│[/] [green bold]▶[/] [white]Typing to[/] [aqua]{name}[/] [grey]│[/] [grey70 bold]Ctrl+Arrows[/][grey] switch [/] [grey70 bold]Ctrl+G[/][grey] back [/]");
     }
 
     private static Markup BuildGridStatusBar(AppState state)
@@ -532,7 +532,7 @@ public static class Renderer
         var session = state.GetSelectedSession();
         var name = session != null ? Markup.Escape(session.Name) : "session";
 
-        return new Markup($" [green bold]▶[/] [white]Typing to[/] [aqua]{name}[/] [grey]│[/] [grey70 bold]Ctrl+Arrows[/][grey] switch [/] [grey70 bold]G[/][grey] list view [/]");
+        return new Markup($" [green bold]▶[/] [white]Typing to[/] [aqua]{name}[/] [grey]│[/] [grey70 bold]Ctrl+Arrows[/][grey] switch [/] [grey70 bold]Ctrl+G[/][grey] list view [/]");
     }
 
     private static Markup BuildInputStatusBar(AppState state)

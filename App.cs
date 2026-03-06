@@ -720,8 +720,8 @@ public class App(ISessionBackend backend, bool mobileMode = false)
 
     private void HandleGridKey(ConsoleKeyInfo key)
     {
-        // G (Shift+G): toggle grid off — same key that enters grid mode
-        if (key.Key == ConsoleKey.G && key.KeyChar == 'G')
+        // Ctrl+G: toggle grid off — same key that enters grid mode
+        if (key.Key == ConsoleKey.G && key.Modifiers.HasFlag(ConsoleModifiers.Control))
         {
             FlushGridKeyBatch();
 

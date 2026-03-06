@@ -154,7 +154,7 @@ scrollable session list, a 3-line detail bar for the selected session, and a con
 
 ### Grid View
 
-Press `G` to toggle a grid view that displays all sessions as rich panels in an auto-scaling grid. Each cell shows the
+Press `Ctrl+G` to toggle a grid view that displays all sessions as rich panels in an auto-scaling grid. Each cell shows the
 session name, status, git branch, working directory, and live pane output.
 
 The grid auto-scales based on session count:
@@ -179,7 +179,7 @@ between cells. Press `Escape` to return to list view.
 |--------------------|------------------------------------------------------------------|
 | `j` / `k` / arrows | Navigate sessions                                                |
 | `Enter`            | Attach to session / expand or collapse group                     |
-| `G`                | Toggle grid view (group grid when on a grouped session)          |
+| `Ctrl+G`           | Toggle grid view (group grid when on a grouped session)          |
 | `D`                | Toggle git diff mode (summary in preview, `Enter` for full diff) |
 | `n`                | Create new session (launches `claude` in a given directory)      |
 | `g`                | Create new group                                                 |
@@ -201,7 +201,7 @@ between cells. Press `Escape` to return to list view.
 | Key               | Action                                                  |
 |-------------------|---------------------------------------------------------|
 | `Ctrl+Arrows`    | Switch between grid cells                               |
-| `G`               | Back to list view (same key toggles in/out)             |
+| `Ctrl+G`          | Back to list view (same key toggles in/out)             |
 | All other keys    | Forwarded directly to the selected session              |
 
 Arrow keys always work for navigation regardless of configuration. When you attach to a session, detach to return to the
@@ -401,7 +401,7 @@ Each override supports three optional fields:
 
 | Field     | Type     | Description                                                         |
 |-----------|----------|---------------------------------------------------------------------|
-| `key`     | `string` | Single char (`"n"`) or special key (`"Enter"`)                      |
+| `key`     | `string` | Single char (`"n"`), special key (`"Enter"`), or modifier combo (`"Ctrl+G"`) |
 | `enabled` | `bool`   | `false` to disable the action (ignored for non-disableable actions) |
 | `label`   | `string` | Status bar text; empty string hides from the bar                    |
 
@@ -424,7 +424,7 @@ Each override supports three optional fields:
 | `edit-session`   | `e`         | edit          | Yes         |
 | `toggle-exclude` | `x`         | hide          | Yes         |
 | `move-to-group`  | `m`         | move          | Yes         |
-| `toggle-grid`    | `G`         | grid          | Yes         |
+| `toggle-grid`    | `Ctrl+G`    | grid          | Yes         |
 | `toggle-diff`    | `D`         | diff          | Yes         |
 | `refresh`        | `r`         | (hidden)      | Yes         |
 | `quit`           | `q`         | quit          | No          |

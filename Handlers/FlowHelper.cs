@@ -595,6 +595,11 @@ public class FlowHelper(CccConfig config)
 
     public static string ResolveKeyId(ConsoleKeyInfo key)
     {
+        // Ctrl+letter combos (Ctrl+A through Ctrl+Z)
+        if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && !key.Modifiers.HasFlag(ConsoleModifiers.Alt)
+            && key.Key >= ConsoleKey.A && key.Key <= ConsoleKey.Z)
+            return $"Ctrl+{key.Key}";
+
         return key.Key switch
         {
             ConsoleKey.Enter => "Enter",

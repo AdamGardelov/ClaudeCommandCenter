@@ -133,7 +133,7 @@ public static class KeyBindingService
         new()
         {
             ActionId = "toggle-grid",
-            Key = "G",
+            Key = "Ctrl+G",
             Label = "grid",
             CanDisable = true,
             StatusBarOrder = 40
