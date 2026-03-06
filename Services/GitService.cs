@@ -12,12 +12,42 @@ public static class GitService
     }
 
     /// <summary>
-    /// Creates a git worktree at the specified destination with a new branch.
+    /// Detects the default branch for a repo. Uses the configured value if set,
+    /// otherwise checks origin/HEAD, then falls back to common branch names.
+    /// </summary>
+    public static string GetDefaultBranch(string repoPath, string configuredBranch, string? remoteHost = null)
+    {
+        if (!string.IsNullOrWhiteSpace(configuredBranch))
+            return configuredBranch;
+
+        // Try origin/HEAD (set by git clone, points to the remote's default branch)
+        var (ok, symref) = remoteHost != null
+            ? RunGitRemote(remoteHost, repoPath, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+            : RunGit(repoPath, "symbolic-ref", "--short", "refs/remotes/origin/HEAD");
+
+        if (ok && !string.IsNullOrWhiteSpace(symref))
+            return symref.Replace("origin/", "");
+
+        // Fallback: check which common branches exist
+        foreach (var candidate in new[] { "development", "main", "master" })
+        {
+            var (exists, _) = remoteHost != null
+                ? RunGitRemote(remoteHost, repoPath, "rev-parse", "--verify", $"refs/heads/{candidate}")
+                : RunGit(repoPath, "rev-parse", "--verify", $"refs/heads/{candidate}");
+            if (exists)
+                return candidate;
+        }
+
+        return "main";
+    }
+
+    /// <summary>
+    /// Creates a git worktree at the specified destination with a new branch based on startPoint.
     /// </summary>
     /// <returns>null on success, error message on failure</returns>
-    public static string? CreateWorktree(string repoPath, string worktreeDest, string branchName)
+    public static string? CreateWorktree(string repoPath, string worktreeDest, string branchName, string startPoint)
     {
-        var (success, output) = RunGit(repoPath, "worktree", "add", "-b", branchName, worktreeDest);
+        var (success, output) = RunGit(repoPath, "worktree", "add", "-b", branchName, worktreeDest, startPoint);
         return success ? null : output ?? "Failed to create worktree";
     }
 
@@ -112,16 +142,16 @@ public static class GitService
         session.IsWorktree = gitDir?.Contains("/worktrees/") == true;
     }
 
-    public static string? CreateWorktree(string repoPath, string worktreeDest, string branchName, string? remoteHost)
+    public static string? CreateWorktree(string repoPath, string worktreeDest, string branchName, string startPoint, string? remoteHost)
     {
         if (remoteHost == null)
-            return CreateWorktree(repoPath, worktreeDest, branchName);
+            return CreateWorktree(repoPath, worktreeDest, branchName, startPoint);
 
         // Create parent directory on remote
         var parentDir = worktreeDest[..worktreeDest.LastIndexOf('/')];
         SshService.Run(remoteHost, $"mkdir -p {SshService.EscapePath(parentDir)}");
 
-        var (success, output) = RunGitRemote(remoteHost, repoPath, "worktree", "add", "-b", branchName, worktreeDest);
+        var (success, output) = RunGitRemote(remoteHost, repoPath, "worktree", "add", "-b", branchName, worktreeDest, startPoint);
         return success ? null : output ?? "Failed to create worktree";
     }
 

@@ -150,6 +150,19 @@ public static class SettingsDefinition
                         c.FavoriteFolders[index].Path = v;
                 },
             });
+            items.Add(new SettingsItem
+            {
+                Label = $"  └ Default Branch",
+                Type = SettingsItemType.Text,
+                GetValue = c => index < c.FavoriteFolders.Count
+                    ? c.FavoriteFolders[index].DefaultBranch
+                    : "",
+                SetValue = (c, v) =>
+                {
+                    if (index < c.FavoriteFolders.Count)
+                        c.FavoriteFolders[index].DefaultBranch = v;
+                },
+            });
         }
 
         items.Add(new SettingsItem

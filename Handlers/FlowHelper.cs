@@ -103,7 +103,7 @@ public class FlowHelper(CccConfig config)
         return string.IsNullOrWhiteSpace(path) ? null : path;
     }
 
-    private static string? CreateWorktreeWithProgress(string repoPath, string worktreeDest, string branchName)
+    private static string? CreateWorktreeWithProgress(string repoPath, string worktreeDest, string branchName, string startPoint)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(worktreeDest)!);
 
@@ -111,10 +111,10 @@ public class FlowHelper(CccConfig config)
         AnsiConsole.Status()
             .Spinner(Spinner.Known.Dots)
             .SpinnerStyle(new Style(Color.Grey70))
-            .Start($"[grey70]Creating worktree [white]{branchName}[/]...[/]", _ =>
+            .Start($"[grey70]Creating worktree [white]{branchName}[/] from [white]{startPoint}[/]...[/]", _ =>
             {
                 GitService.FetchPrune(repoPath);
-                error = GitService.CreateWorktree(repoPath, worktreeDest, branchName);
+                error = GitService.CreateWorktree(repoPath, worktreeDest, branchName, startPoint);
             });
 
         if (error != null)
@@ -404,8 +404,9 @@ public class FlowHelper(CccConfig config)
                 var branchName = GitService.SanitizeBranchName(hint);
                 var basePath = ConfigService.ExpandPath(config.WorktreeBasePath);
                 var worktreeDest = Path.Combine(basePath, branchName, repoName);
+                var startPoint = GitService.GetDefaultBranch(repoPath, fav.DefaultBranch);
 
-                var result = CreateWorktreeWithProgress(repoPath, worktreeDest, branchName);
+                var result = CreateWorktreeWithProgress(repoPath, worktreeDest, branchName, startPoint);
                 if (result != null)
                     onWorktreeBranchCreated?.Invoke(branchName);
                 return result;
@@ -533,7 +534,8 @@ public class FlowHelper(CccConfig config)
                     .Start($"[grey70]Creating worktree [white]{Markup.Escape(branchName)}[/] on {Markup.Escape(remoteHost.Name)}...[/]", _ =>
                     {
                         GitService.FetchPrune(fav.Path, remoteHost.Host);
-                        error = GitService.CreateWorktree(fav.Path, worktreeDest, branchName, remoteHost.Host);
+                        var startPoint = GitService.GetDefaultBranch(fav.Path, fav.DefaultBranch, remoteHost.Host);
+                        error = GitService.CreateWorktree(fav.Path, worktreeDest, branchName, startPoint, remoteHost.Host);
                     });
 
                 if (error != null)

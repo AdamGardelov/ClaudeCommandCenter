@@ -446,13 +446,13 @@ public class GroupHandler(
         var featurePath = Path.Combine(basePath, branchName);
 
         // Resolve selected names back to favorites
-        var repos = new List<(string Name, string RepoPath)>();
+        var repos = new List<(string Name, string RepoPath, string DefaultBranch)>();
         foreach (var sel in selectedRepos)
         {
             var name = sel.Split("  ")[0];
             var fav = gitFavorites.FirstOrDefault(f => f.Name == name);
             if (fav != null)
-                repos.Add((name, ConfigService.ExpandPath(fav.Path)));
+                repos.Add((name, ConfigService.ExpandPath(fav.Path), fav.DefaultBranch));
         }
 
         // Create worktrees with progress
@@ -464,7 +464,7 @@ public class GroupHandler(
             .SpinnerStyle(new Style(Color.Grey70))
             .Start("[grey70]Creating worktrees...[/]", ctx =>
             {
-                foreach (var (repoName, repoPath) in repos)
+                foreach (var (repoName, repoPath, defaultBranch) in repos)
                 {
                     ctx.Status($"[grey70]Creating worktree [white]{repoName}[/]...[/]");
                     GitService.FetchPrune(repoPath);
@@ -472,7 +472,8 @@ public class GroupHandler(
                     var dest = Path.Combine(featurePath, repoName);
                     Directory.CreateDirectory(featurePath);
 
-                    error = GitService.CreateWorktree(repoPath, dest, branchName);
+                    var startPoint = GitService.GetDefaultBranch(repoPath, defaultBranch);
+                    error = GitService.CreateWorktree(repoPath, dest, branchName, startPoint);
                     if (error != null)
                     {
                         error = $"Failed to create worktree for {repoName}: {error}";
