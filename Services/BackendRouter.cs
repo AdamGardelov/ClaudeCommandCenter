@@ -21,6 +21,7 @@ public class BackendRouter(ISessionBackend local, Dictionary<string, RemoteTmuxB
         // Remote sessions
         foreach (var (hostName, remoteBackend) in remotes)
         {
+            // ListSessions() sets IsOffline as a side effect — result is empty list on failure
             var remoteSessions = remoteBackend.ListSessions();
 
             if (remoteBackend.IsOffline)
