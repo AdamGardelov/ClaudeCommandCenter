@@ -136,6 +136,19 @@ public static class Renderer
         var nameWidth = indented ? 19 : 22;
         var name = rawName.PadRight(nameWidth);
 
+        if (session.IsOffline)
+        {
+            var prefix = indented ? "  " : "";
+            var escapedName = Markup.Escape(session.Name);
+            var hostInfo = session.RemoteHostName != null
+                ? $" [grey35]({Markup.Escape(session.RemoteHostName)})[/]"
+                : "";
+            var row = $"[grey35]{prefix}✗ {escapedName}[/]{hostInfo}";
+            return isSelected
+                ? new Markup($"[on grey15]{row}[/]")
+                : new Markup(row);
+        }
+
         if (session.IsDead)
         {
             if (session.IsExcluded)
@@ -246,6 +259,13 @@ public static class Renderer
         if (session.SkipPermissions)
             rows.Add(new Markup($" [{labelColor}]Perms:[/]    [yellow bold]⚡ skip-permissions[/]"));
         rows.Add(new Rule().RuleStyle(Style.Parse(session.ColorTag ?? "grey42")));
+
+        if (session.IsOffline)
+        {
+            return new Panel(new Markup("[grey35]Session is offline — host unreachable[/]"))
+                .BorderColor(Color.Grey35)
+                .Header("[grey35]Offline[/]");
+        }
 
         if (!string.IsNullOrWhiteSpace(capturedPane))
         {
