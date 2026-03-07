@@ -130,8 +130,8 @@ public static class Renderer
         var indent = indented ? "   " : "";
         var rawName = Markup.Escape(session.Name);
         var spinner = Markup.Escape(GetSpinnerFrame());
-        var skipIcon = session.SkipPermissions ? "[yellow]⚡[/]" : " ";
-        var remoteIcon = session.RemoteHostName != null ? "[mediumpurple3]☁[/]" : " ";
+        var remoteIcon = session.RemoteHostName != null ? "[mediumpurple3]☁[/]" : "";
+        var skipIcon = session.SkipPermissions ? "[yellow]⚡[/]" : "";
         var flags = $"{remoteIcon}{skipIcon}";
         var nameWidth = indented ? 19 : 22;
         var name = rawName.PadRight(nameWidth);
