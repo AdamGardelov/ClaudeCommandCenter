@@ -100,7 +100,7 @@ public class SessionHandler(
             var claudeConfigDir = remoteHost == null
                 ? ConfigService.ResolveClaudeConfigDir(config, dir)
                 : null;
-            var error = backend.CreateSession(name, dir, claudeConfigDir, remoteHost?.Host, effectiveSkip);
+            var error = backend.CreateSession(name, dir, claudeConfigDir, remoteHost?.Name, effectiveSkip);
             if (error != null)
                 throw new FlowCancelledException(error);
 
@@ -113,7 +113,8 @@ public class SessionHandler(
             if (effectiveSkip)
                 ConfigService.SetSkipPermissions(config, name, true);
             backend.ApplyStatusColor(name, color ?? "grey42");
-            backend.AttachSession(name);
+            if (remoteHost == null)
+                backend.AttachSession(name);
             loadSessions();
             resetPaneCache();
         }, state);
@@ -221,6 +222,11 @@ public class SessionHandler(
         var session = state.GetSelectedSession();
         if (session == null)
             return;
+        if (session.IsOffline)
+        {
+            state.SetStatus($"Cannot attach — {session.RemoteHostName ?? "host"} is offline");
+            return;
+        }
 
         // Exit CCC's alternate screen so the ConPTY session renders to normal screen
         Console.Write("\e[?1049l"); // Leave alternate screen

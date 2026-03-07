@@ -17,9 +17,11 @@ public class RemoteTmuxBackend : ISessionBackend
 
     public List<Session> ListSessions()
     {
-        var (success, output) = Run(
-            "list-sessions",
-            "-F", "#{session_name}\t#{session_created}\t#{session_attached}\t#{session_windows}\t#{pane_current_path}\t#{pane_dead}");
+        // Use | as separator instead of \t because the format string is shell-quoted
+        // for SSH transport, and single quotes prevent \t interpretation
+        const string sep = "|";
+        var fmt = $"#{{session_name}}{sep}#{{session_created}}{sep}#{{session_attached}}{sep}#{{session_windows}}{sep}#{{pane_current_path}}{sep}#{{pane_dead}}";
+        var (success, output) = Run("list-sessions", "-F", fmt);
 
         if (!success || output == null)
         {
@@ -32,7 +34,7 @@ public class RemoteTmuxBackend : ISessionBackend
         var sessions = new List<Session>();
         foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
-            var parts = line.Split('\t');
+            var parts = line.Split('|');
             if (parts.Length < 4)
                 continue;
 
@@ -58,14 +60,14 @@ public class RemoteTmuxBackend : ISessionBackend
     public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null, string? remoteHost = null, bool dangerouslySkipPermissions = false)
     {
         var claudeCmd = dangerouslySkipPermissions ? "claude --dangerously-skip-permissions" : "claude";
-        var escapedPath = SshService.EscapePath(workingDirectory);
-        // Escape single quotes in claudeCmd for embedding inside single-quoted shell string
-        var shellCmd = $"exec \"$SHELL\" -lc '{claudeCmd.Replace("'", "'\\''")}'";
-        var fullCmd = $"cd {escapedPath} && {shellCmd}";
+        // Use tmux -c flag for working directory instead of cd && which gets
+        // split by the remote SSH shell (SSH joins ArgumentList into one string)
+        var shellCmd = $"bash -lc '{claudeCmd.Replace("'", "'\\''")}'";
 
         var args = new List<string>
         {
             "new-session", "-d", "-s", name, "-n", name,
+            "-c", workingDirectory,
             "-e", $"CCC_SESSION_NAME={name}",
         };
         if (!string.IsNullOrEmpty(claudeConfigDir))
@@ -73,8 +75,7 @@ public class RemoteTmuxBackend : ISessionBackend
             args.Add("-e");
             args.Add($"CLAUDE_CONFIG_DIR={claudeConfigDir}");
         }
-        // fullCmd is passed as a single ArgumentList entry — no shell joining, so no quoting needed
-        args.Add(fullCmd);
+        args.Add(shellCmd);
 
         var (success, error) = RunWithError([.. args]);
         if (!success)
@@ -105,10 +106,8 @@ public class RemoteTmuxBackend : ISessionBackend
         };
         startInfo.ArgumentList.Add("-t");
         startInfo.ArgumentList.Add(_host.Host);
-        startInfo.ArgumentList.Add("tmux");
-        startInfo.ArgumentList.Add("attach-session");
-        startInfo.ArgumentList.Add("-t");
-        startInfo.ArgumentList.Add(name);
+        // Pass as single command string so session names with spaces aren't split
+        startInfo.ArgumentList.Add($"tmux attach-session -t {SshControlMasterService.ShellQuote(name)}");
 
         try
         {

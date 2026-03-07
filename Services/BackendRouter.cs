@@ -94,17 +94,30 @@ public class BackendRouter(ISessionBackend local, Dictionary<string, RemoteTmuxB
     public void ForwardLiteralBatch(string sessionName, string text) =>
         BackendFor(sessionName).ForwardLiteralBatch(sessionName, text);
 
-    public string? CapturePaneContent(string sessionName, int lines = 500) =>
-        BackendFor(sessionName).CapturePaneContent(sessionName, lines);
+    public string? CapturePaneContent(string sessionName, int lines = 500)
+    {
+        if (IsRemoteOffline(sessionName))
+            return null;
+        return BackendFor(sessionName).CapturePaneContent(sessionName, lines);
+    }
 
-    public void ResizeWindow(string sessionName, int width, int height) =>
-        BackendFor(sessionName).ResizeWindow(sessionName, width, height);
+    public void ResizeWindow(string sessionName, int width, int height)
+    {
+        if (!IsRemoteOffline(sessionName))
+            BackendFor(sessionName).ResizeWindow(sessionName, width, height);
+    }
 
-    public void ResetWindowSize(string sessionName) =>
-        BackendFor(sessionName).ResetWindowSize(sessionName);
+    public void ResetWindowSize(string sessionName)
+    {
+        if (!IsRemoteOffline(sessionName))
+            BackendFor(sessionName).ResetWindowSize(sessionName);
+    }
 
-    public void ApplyStatusColor(string sessionName, string? spectreColor) =>
-        BackendFor(sessionName).ApplyStatusColor(sessionName, spectreColor);
+    public void ApplyStatusColor(string sessionName, string? spectreColor)
+    {
+        if (!IsRemoteOffline(sessionName))
+            BackendFor(sessionName).ApplyStatusColor(sessionName, spectreColor);
+    }
 
     public void DetectWaitingForInputBatch(List<Session> sessions)
     {
@@ -138,6 +151,14 @@ public class BackendRouter(ISessionBackend local, Dictionary<string, RemoteTmuxB
         local.Dispose();
         foreach (var remote in remotes.Values)
             remote.Dispose();
+    }
+
+    private bool IsRemoteOffline(string sessionName)
+    {
+        return _sessionHosts.TryGetValue(sessionName, out var hostName)
+               && hostName != null
+               && remotes.TryGetValue(hostName, out var remote)
+               && remote.IsOffline;
     }
 
     private ISessionBackend BackendFor(string sessionName)

@@ -10,7 +10,7 @@ public static class SshControlMasterService
     // Tracks last failed connection attempt per host to throttle retries (30s cooldown)
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _lastFailure = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
-    private static readonly TimeSpan _retryCooldown = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan _retryCooldown = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// Ensures a ControlMaster socket exists for the host.
@@ -27,6 +27,15 @@ public static class SshControlMasterService
         if (IsAlive(host))
             return true;
 
+        // If this host has failed before, reconnect in background to avoid
+        // blocking the main loop. The next poll will pick it up once connected.
+        if (_lastFailure.ContainsKey(host))
+        {
+            _ = Task.Run(() => StartControlMaster(host));
+            return false;
+        }
+
+        // First connection attempt (startup) — block so sessions are available immediately
         return StartControlMaster(host);
     }
 
@@ -56,10 +65,15 @@ public static class SshControlMasterService
         startInfo.ArgumentList.Add("BatchMode=yes");
         startInfo.ArgumentList.Add("-o");
         startInfo.ArgumentList.Add("ConnectTimeout=5");
+        startInfo.ArgumentList.Add("-o");
+        startInfo.ArgumentList.Add("ServerAliveInterval=3");
+        startInfo.ArgumentList.Add("-o");
+        startInfo.ArgumentList.Add("ServerAliveCountMax=1");
         startInfo.ArgumentList.Add(host);
-        startInfo.ArgumentList.Add("tmux");
-        foreach (var arg in tmuxArgs)
-            startInfo.ArgumentList.Add(arg);
+        // Build the remote command as a single string so the remote shell
+        // doesn't re-split arguments (e.g. format strings with spaces/tabs)
+        var quotedArgs = string.Join(" ", tmuxArgs.Select(ShellQuote));
+        startInfo.ArgumentList.Add($"tmux {quotedArgs}");
 
         try
         {
@@ -67,9 +81,23 @@ public static class SshControlMasterService
             if (process == null)
                 return (false, null, null);
 
-            var stdout = process.StandardOutput.ReadToEnd();
-            var stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit();
+            // Use async reads to avoid deadlock, with a timeout to prevent
+            // hanging when the network drops (iptables, cable pull, etc.)
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+
+            if (!process.WaitForExit(3000))
+            {
+                // Timed out — kill the SSH command and the stale ControlMaster,
+                // so next EnsureConnected creates a fresh one with keepalive
+                try { process.Kill(); } catch { }
+                _ = Task.Run(() => Disconnect(host));
+                _lastFailure[host] = DateTime.UtcNow;
+                return (false, null, "SSH command timed out");
+            }
+
+            var stdout = stdoutTask.Result;
+            var stderr = stderrTask.Result;
 
             return process.ExitCode == 0
                 ? (true, stdout.TrimEnd(), null)
@@ -189,9 +217,13 @@ public static class SshControlMasterService
             startInfo.ArgumentList.Add("-o");
             startInfo.ArgumentList.Add("BatchMode=yes");
             startInfo.ArgumentList.Add("-o");
-            startInfo.ArgumentList.Add("ConnectTimeout=10");
+            startInfo.ArgumentList.Add("ConnectTimeout=3");
             startInfo.ArgumentList.Add("-o");
             startInfo.ArgumentList.Add("ControlPersist=no");
+            startInfo.ArgumentList.Add("-o");
+            startInfo.ArgumentList.Add("ServerAliveInterval=3");
+            startInfo.ArgumentList.Add("-o");
+            startInfo.ArgumentList.Add("ServerAliveCountMax=2");
             startInfo.ArgumentList.Add(host);
 
             using var process = Process.Start(startInfo);
@@ -201,7 +233,7 @@ public static class SshControlMasterService
                 return false;
             }
 
-            process.WaitForExit(12000);
+            process.WaitForExit(5000);
             var connected = process.ExitCode == 0;
 
             if (!connected)
@@ -227,5 +259,14 @@ public static class SshControlMasterService
         // Replace characters that are invalid in socket filenames
         var safeName = string.Concat(host.Select(c => char.IsLetterOrDigit(c) || c == '-' || c == '.' ? c : '_'));
         return Path.Combine(_socketDir, $"{safeName}.sock");
+    }
+
+    internal static string ShellQuote(string arg)
+    {
+        // If the arg is safe, return as-is
+        if (arg.Length > 0 && arg.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' || c == '.' || c == '/' || c == '~' || c == '=' || c == ':'))
+            return arg;
+        // Wrap in single quotes, escaping any existing single quotes
+        return $"'{arg.Replace("'", "'\\''")}'";
     }
 }

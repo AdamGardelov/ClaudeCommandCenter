@@ -37,6 +37,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
     private bool _gridKeyForwarded;
     private readonly List<ConsoleKeyInfo> _gridKeyBatch = [];
     private DateTime _lastGridActivity = DateTime.MinValue;
+    private DateTime _lastSessionLoad = DateTime.MinValue;
 
     public void Run()
     {
@@ -88,6 +89,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
         _state.Keybindings = bindings;
 
         LoadSessions();
+        _lastSessionLoad = DateTime.UtcNow;
         _updateCheck = UpdateChecker.CheckForUpdateAsync();
 
         try
@@ -184,6 +186,15 @@ public class App(ISessionBackend backend, bool mobileMode = false)
                     if (_hasSpinningSessions)
                         Render();
                 }
+            }
+
+            // Periodically reload session list when remote hosts are configured
+            // so offline/reconnected state is detected without manual refresh
+            if (_config.RemoteHosts.Count > 0 && (DateTime.UtcNow - _lastSessionLoad).TotalSeconds > 15)
+            {
+                _lastSessionLoad = DateTime.UtcNow;
+                LoadSessions();
+                Render();
             }
 
             // Periodically capture pane content for preview/grid.
