@@ -338,37 +338,56 @@ automatically uses the correct config:
 }
 ```
 
-#### Remote Sessions
+#### Remote Hosts
 
-Run Claude Code sessions on remote machines via SSH. The session runs on the remote host while CCC manages it locally
-through tmux or ConPTY — capture, attach, detach, and send keys all work transparently.
+Sessions live in tmux on the remote machine. Close your laptop, reopen it, and everything is still running — CCC
+reconnects and shows the live state.
+
+**Prerequisites:**
+
+- SSH key-based authentication is required. CCC uses SSH ControlMaster with `BatchMode=yes`, so password prompts will
+  never appear and unauthenticated connections will fail silently.
+- `tmux` must be installed on the remote machine.
+- `claude` must be installed and on PATH on the remote machine (login shell is used, so `~/.profile` / `~/.bash_profile`
+  are sourced).
+- `git` on the remote (for branch detection and worktree creation).
+
+**Config:**
+
+Add `remoteHosts` to `~/.ccc/config.json`:
 
 ```json
 {
     "remoteHosts": [
         {
-            "name": "SUPERCOMPUTER",
-            "host": "adam@supercomputer.example.com",
+            "name": "MY-SERVER",
+            "host": "user@server.example.com",
             "worktreeBasePath": "~/worktrees",
             "favoriteFolders": [
-                { "name": "Core", "path": "~/Dev/Wint/Core" },
-                { "name": "Salary", "path": "~/Dev/Wint/Wint.Salary" }
+                { "name": "MyProject", "path": "~/projects/myproject", "defaultBranch": "main" }
             ]
         }
     ]
 }
 ```
 
-Each remote host has its own favorite folders and worktree base path. When creating a new session (`n`), you'll be
-prompted to choose between Local and any configured remote hosts. The directory picker then shows that host's favorites.
+Each remote host has its own `favoriteFolders` and `worktreeBasePath`. When creating a new session (`n`), a "Where to
+run?" step appears first — choose Local or any configured remote host. The directory picker then shows that host's
+favorites.
 
-Remote sessions show the host name in the detail panel (`Remote: SUPERCOMPUTER`) and in group views (`@SUPERCOMPUTER`).
-Git branch detection and worktree creation work over SSH automatically.
+Remote sessions show the host name in the detail panel (`Remote: MY-SERVER`) and in group views (`@MY-SERVER`). Git
+branch detection and worktree creation work over SSH automatically.
 
-**Requirements:**
-- SSH key-based authentication (no interactive password prompts)
-- `claude` must be installed and on PATH on the remote machine
-- `git` on the remote machine (for branch detection and worktree creation)
+**Offline behavior:**
+
+If a host is unreachable, its sessions appear greyed out with a `✗` indicator and CCC shows the last-known session list
+from its local cache. No interaction is possible while offline. Sessions become live again automatically within ~30
+seconds of the host reconnecting — no manual refresh needed.
+
+**Attaching to a remote session:**
+
+Press `Enter` on a remote session to open a full `ssh + tmux attach` terminal. To detach and return to CCC, press the
+tmux prefix followed by `d` (default: `Ctrl-b d`).
 
 When creating a session, CCC matches the working directory against `claudeConfigRoutes` (first match wins) and sets
 `CLAUDE_CONFIG_DIR` accordingly. If no route matches, `defaultClaudeConfigDir` is used. If that's also empty, the
