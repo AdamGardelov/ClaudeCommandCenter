@@ -9,10 +9,26 @@ Console.InputEncoding = Encoding.UTF8;
 try
 {
     var mobile = args.Contains("-m") || args.Contains("--mobile");
-    ISessionBackend backend = OperatingSystem.IsWindows()
+    ISessionBackend localBackend = OperatingSystem.IsWindows()
         ? new ConPtyBackend()
         : new TmuxBackend();
-    var app = new App(backend, mobile);
+
+    // Load config to discover remote hosts
+    var config = ConfigService.Load();
+
+    // Build one RemoteTmuxBackend per configured remote host
+    var remotes = config.RemoteHosts.ToDictionary(
+        h => h.Name,
+        h => new RemoteTmuxBackend(h));
+
+    // Kick off ControlMaster connections in background (non-blocking startup)
+    foreach (var host in config.RemoteHosts)
+        Task.Run(() => SshControlMasterService.EnsureConnected(host.Host));
+
+    // Router is the single ISessionBackend used by App
+    var routedBackend = new BackendRouter(localBackend, remotes, config);
+
+    var app = new App(routedBackend, mobile);
     app.Run();
 }
 catch (Exception ex)
