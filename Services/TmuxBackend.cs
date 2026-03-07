@@ -201,10 +201,6 @@ public class TmuxBackend : ISessionBackend
         }
     }
 
-    // Number of consecutive stable polls before marking as "waiting for input"
-    // 4 polls × 500ms = 2 seconds — avoids false positives from short pauses between tool calls
-    private const int StableThreshold = 4;
-
     public void DetectWaitingForInputBatch(List<Session> sessions)
     {
         if (sessions.Count == 0)
@@ -281,7 +277,7 @@ public class TmuxBackend : ISessionBackend
             session.PreviousContent = content;
         }
 
-        var isStable = session.StableContentCount >= StableThreshold;
+        var isStable = session.StableContentCount >= SessionContentAnalyzer.StableThreshold;
         session.IsIdle = isStable && SessionContentAnalyzer.IsIdlePrompt(content);
         session.IsWaitingForInput = isStable && !session.IsIdle;
     }

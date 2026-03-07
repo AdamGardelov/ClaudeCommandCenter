@@ -8,6 +8,12 @@ namespace ClaudeCommandCenter.Services;
 /// </summary>
 internal static partial class SessionContentAnalyzer
 {
+    /// <summary>
+    /// Number of consecutive stable polls before marking a session as "waiting for input".
+    /// 4 polls × 500ms = 2 seconds — avoids false positives from short pauses between tool calls.
+    /// </summary>
+    public const int StableThreshold = 4;
+
     private static readonly Regex AnsiEscapePattern = AnsiEscapeRegex();
 
     /// <summary>

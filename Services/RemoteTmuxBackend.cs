@@ -8,10 +8,6 @@ public class RemoteTmuxBackend : ISessionBackend
 {
     private readonly RemoteHost _host;
 
-    // Number of consecutive stable polls before marking as "waiting for input"
-    // 4 polls × 500ms = 2 seconds — avoids false positives from short pauses between tool calls
-    private const int StableThreshold = 4;
-
     public bool IsOffline { get; private set; }
 
     public RemoteTmuxBackend(RemoteHost remoteHost)
@@ -63,13 +59,24 @@ public class RemoteTmuxBackend : ISessionBackend
     {
         var claudeCmd = dangerouslySkipPermissions ? "claude --dangerously-skip-permissions" : "claude";
         var escapedPath = SshService.EscapePath(workingDirectory);
-        var fullCmd = $"cd {escapedPath} && exec \"$SHELL\" -lc '{claudeCmd}'";
+        // Escape single quotes in claudeCmd for embedding inside single-quoted shell string
+        var shellCmd = $"exec \"$SHELL\" -lc '{claudeCmd.Replace("'", "'\\''")}'";
+        var fullCmd = $"cd {escapedPath} && {shellCmd}";
 
-        var (success, error) = RunWithError(
+        var args = new List<string>
+        {
             "new-session", "-d", "-s", name, "-n", name,
             "-e", $"CCC_SESSION_NAME={name}",
-            fullCmd);
+        };
+        if (!string.IsNullOrEmpty(claudeConfigDir))
+        {
+            args.Add("-e");
+            args.Add($"CLAUDE_CONFIG_DIR={claudeConfigDir}");
+        }
+        // fullCmd is passed as a single ArgumentList entry — no shell joining, so no quoting needed
+        args.Add(fullCmd);
 
+        var (success, error) = RunWithError([.. args]);
         if (!success)
             return error ?? "Failed to create remote tmux session";
 
@@ -262,17 +269,20 @@ public class RemoteTmuxBackend : ISessionBackend
             session.PreviousContent = content;
         }
 
-        var isStable = session.StableContentCount >= StableThreshold;
+        var isStable = session.StableContentCount >= SessionContentAnalyzer.StableThreshold;
         session.IsIdle = isStable && SessionContentAnalyzer.IsIdlePrompt(content);
         session.IsWaitingForInput = isStable && !session.IsIdle;
     }
 
-    private (bool Success, string? Output) Run(params string[] args) =>
-        SshControlMasterService.RunTmuxCommand(_host.Host, args);
+    private (bool Success, string? Output) Run(params string[] args)
+    {
+        var (success, output, _) = SshControlMasterService.RunTmuxCommand(_host.Host, args);
+        return (success, output);
+    }
 
     private (bool Success, string? Error) RunWithError(params string[] args)
     {
-        var (success, _) = Run(args);
-        return (success, success ? null : "Remote tmux command failed");
+        var (success, _, error) = SshControlMasterService.RunTmuxCommand(_host.Host, args);
+        return (success, success ? null : (error ?? "Remote tmux command failed"));
     }
 }

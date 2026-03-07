@@ -31,12 +31,13 @@ public static class SshControlMasterService
 
     /// <summary>
     /// Runs a tmux command on the remote host via the ControlMaster socket.
-    /// Returns (success, stdout) or (false, null) if the host is offline.
+    /// Returns (success, stdout, null) on success, or (false, null, stderr) on failure.
+    /// Returns (false, null, null) if the host is offline.
     /// </summary>
-    public static (bool Success, string? Output) RunTmuxCommand(string host, params string[] tmuxArgs)
+    public static (bool Success, string? Output, string? Error) RunTmuxCommand(string host, params string[] tmuxArgs)
     {
         if (!EnsureConnected(host))
-            return (false, null);
+            return (false, null, null);
 
         var socketPath = SocketPath(host);
         var startInfo = new ProcessStartInfo
@@ -63,16 +64,19 @@ public static class SshControlMasterService
         {
             using var process = Process.Start(startInfo);
             if (process == null)
-                return (false, null);
+                return (false, null, null);
 
             var stdout = process.StandardOutput.ReadToEnd();
+            var stderr = process.StandardError.ReadToEnd();
             process.WaitForExit();
 
-            return process.ExitCode == 0 ? (true, stdout.TrimEnd()) : (false, null);
+            return process.ExitCode == 0
+                ? (true, stdout.TrimEnd(), null)
+                : (false, null, stderr.Trim());
         }
         catch
         {
-            return (false, null);
+            return (false, null, null);
         }
     }
 
