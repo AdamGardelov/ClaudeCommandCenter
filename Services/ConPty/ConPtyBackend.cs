@@ -294,9 +294,6 @@ public class ConPtyBackend : ISessionBackend
         // No-op — ConPTY has no tmux-style status bar. Color is shown by CCC's own UI.
     }
 
-    // Number of consecutive stable polls before marking as "waiting for input"
-    private const int StableThreshold = 4;
-
     public void DetectWaitingForInputBatch(List<Session> sessions)
     {
         if (sessions.Count == 0)
@@ -654,7 +651,7 @@ public class ConPtyBackend : ISessionBackend
             session.PreviousContent = content;
         }
 
-        var isStable = session.StableContentCount >= StableThreshold;
+        var isStable = session.StableContentCount >= SessionContentAnalyzer.StableThreshold;
         session.IsIdle = isStable && SessionContentAnalyzer.IsIdlePrompt(content);
         session.IsWaitingForInput = isStable && !session.IsIdle;
     }
