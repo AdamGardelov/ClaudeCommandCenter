@@ -247,8 +247,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
             if (_config.SessionColors.TryGetValue(s.Name, out var color))
                 s.ColorTag = color;
             s.IsExcluded = _config.ExcludedSessions.Contains(s.Name);
-            if (_config.SessionRemoteHosts.TryGetValue(s.Name, out var remoteHostName))
-                s.RemoteHostName = remoteHostName;
+            // RemoteHostName is set authoritatively by BackendRouter.ListSessions() — don't override from config
             s.SkipPermissions = _config.SkipPermissionsSessions.Contains(s.Name);
             if (!s.IsOffline)
                 backend.ApplyStatusColor(s.Name, color ?? "grey42");
@@ -288,7 +287,18 @@ public class App(ISessionBackend backend, bool mobileMode = false)
                 GitService.DetectGitInfo(s, host.Host);
         }
 
-        if (startCommitsDirty)
+        // Sync SessionRemoteHosts from backend truth (for offline fallback)
+        var configDirty = startCommitsDirty;
+        var liveRemoteHosts = _state.Sessions
+            .Where(s => s.RemoteHostName != null)
+            .ToDictionary(s => s.Name, s => s.RemoteHostName!);
+        if (!liveRemoteHosts.OrderBy(kv => kv.Key).SequenceEqual(_config.SessionRemoteHosts.OrderBy(kv => kv.Key)))
+        {
+            _config.SessionRemoteHosts = liveRemoteHosts;
+            configDirty = true;
+        }
+
+        if (configDirty)
             ConfigService.SaveConfig(_config);
 
         LoadGroups();
