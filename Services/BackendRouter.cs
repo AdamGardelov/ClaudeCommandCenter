@@ -11,14 +11,21 @@ public class BackendRouter(ISessionBackend local, Dictionary<string, RemoteTmuxB
     // Maps session name → remote host name (null = local). Rebuilt on each ListSessions().
     private Dictionary<string, string?> _sessionHosts = new();
 
+    // Untracked remote sessions discovered during last ListSessions() — available for adoption
+    private List<Session> _untrackedRemoteSessions = [];
+
+    public List<Session> GetUntrackedRemoteSessions() => _untrackedRemoteSessions;
+
     public List<Session> ListSessions()
     {
         var all = new List<Session>();
+        var untracked = new List<Session>();
 
         // Local sessions
         all.AddRange(local.ListSessions());
 
-        // Remote sessions
+        // Remote sessions — only include tracked (known to CCC) sessions
+        var tracked = config.SessionRemoteHosts;
         foreach (var (hostName, remoteBackend) in remotes)
         {
             // ListSessions() sets IsOffline as a side effect — result is empty list on failure
@@ -41,15 +48,32 @@ public class BackendRouter(ISessionBackend local, Dictionary<string, RemoteTmuxB
             }
             else
             {
-                // Update cache with fresh data
-                ConfigService.SaveRemoteSessionCache(config, hostName, remoteSessions);
-                all.AddRange(remoteSessions);
+                // Split into tracked (show in dashboard) and untracked (available for adoption)
+                foreach (var s in remoteSessions)
+                {
+                    if (tracked.TryGetValue(s.Name, out var trackedHost) && trackedHost == hostName)
+                        all.Add(s);
+                    else
+                        untracked.Add(s);
+                }
+
+                // Cache only tracked sessions
+                var trackedForHost = remoteSessions
+                    .Where(s => tracked.TryGetValue(s.Name, out var h) && h == hostName)
+                    .ToList();
+                ConfigService.SaveRemoteSessionCache(config, hostName, trackedForHost);
             }
         }
+
+        _untrackedRemoteSessions = untracked;
 
         // Rebuild routing map
         _sessionHosts = new Dictionary<string, string?>();
         foreach (var s in all)
+            _sessionHosts[s.Name] = s.RemoteHostName;
+
+        // Also route untracked sessions so operations (like adopt → kill) work
+        foreach (var s in untracked)
             _sessionHosts[s.Name] = s.RemoteHostName;
 
         return all;

@@ -797,6 +797,7 @@ public static class Renderer
             return new Markup(" ");
 
         var hiddenWhenNoGroups = new HashSet<string> { "move-to-group" };
+        var hiddenWhenNoUntracked = new HashSet<string> { "adopt-remote" };
         var hasGroups = state.Groups.Count > 0;
 
         // Check if cursor is on a group header — dim session-only actions
@@ -810,6 +811,8 @@ public static class Renderer
         foreach (var b in visible)
         {
             if (!hasGroups && hiddenWhenNoGroups.Contains(b.ActionId))
+                continue;
+            if (!state.HasUntrackedRemoteSessions && hiddenWhenNoUntracked.Contains(b.ActionId))
                 continue;
             var barGroup = b.StatusBarOrder / 10;
             if (prevGroup >= 0 && barGroup != prevGroup)

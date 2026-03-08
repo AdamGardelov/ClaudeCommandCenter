@@ -290,6 +290,7 @@ public class AppState
         return StatusMessage;
     }
 
+    public bool HasUntrackedRemoteSessions { get; set; }
     public string? LatestVersion { get; set; }
 
     public int[] DiffFileBoundaries { get; set; } = [];

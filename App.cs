@@ -239,6 +239,7 @@ public class App(ISessionBackend backend, bool mobileMode = false)
     {
         var oldSessions = _state.Sessions.ToDictionary(s => s.Name);
         _state.Sessions = backend.ListSessions();
+        _state.HasUntrackedRemoteSessions = backend.GetUntrackedRemoteSessions().Count > 0;
         var startCommitsDirty = false;
         foreach (var s in _state.Sessions)
         {
@@ -660,6 +661,9 @@ public class App(ISessionBackend backend, bool mobileMode = false)
                 break;
             case "toggle-exclude":
                 _sessionHandler.ToggleExclude();
+                break;
+            case "adopt-remote":
+                _sessionHandler.AdoptRemoteSession();
                 break;
             case "move-to-group":
                 _groupHandler.MoveSessionToGroup();

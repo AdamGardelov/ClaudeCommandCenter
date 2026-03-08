@@ -312,6 +312,63 @@ public class SessionHandler(
         state.InputTarget = session.Name;
     }
 
+    public void AdoptRemoteSession()
+    {
+        var untracked = backend.GetUntrackedRemoteSessions();
+        if (untracked.Count == 0)
+        {
+            state.SetStatus("No untracked remote sessions found");
+            return;
+        }
+
+        FlowHelper.RunFlow("Adopt Remote Session", () =>
+        {
+            FlowHelper.PrintStep(1, 3, "Session");
+            var prompt = new SelectionPrompt<string>()
+                .Title("[grey70]Select a remote session to adopt[/]")
+                .HighlightStyle(new Style(Color.White, Color.Grey70));
+
+            foreach (var s in untracked)
+            {
+                var host = s.RemoteHostName ?? "unknown";
+                var path = s.CurrentPath != null ? $"  [grey50]{Markup.Escape(s.CurrentPath)}[/]" : "";
+                prompt.AddChoice($"{Markup.Escape(s.Name)}  [mediumpurple3]@{Markup.Escape(host)}[/]{path}");
+            }
+
+            prompt.AddChoice(FlowHelper.CancelChoice);
+
+            var selected = AnsiConsole.Prompt(prompt);
+            if (selected == FlowHelper.CancelChoice)
+                throw new FlowCancelledException();
+
+            // Parse session name from the selection (text before first double-space)
+            var sessionName = Markup.Remove(selected.Split("  ")[0]);
+            var session = untracked.FirstOrDefault(s => s.Name == sessionName)
+                          ?? throw new FlowCancelledException("Session not found");
+
+            // Step: Description
+            FlowHelper.PrintStep(2, 3, "Description");
+            var description = flow.PromptOptional("Description", null);
+
+            // Step: Color
+            FlowHelper.PrintStep(3, 3, "Color");
+            var color = flow.PickColor();
+
+            // Track the session
+            ConfigService.SaveRemoteHost(config, session.Name, session.RemoteHostName!);
+            if (!string.IsNullOrWhiteSpace(description))
+                ConfigService.SaveDescription(config, session.Name, description);
+            if (color != null)
+            {
+                ConfigService.SaveColor(config, session.Name, color);
+                backend.ApplyStatusColor(session.Name, color);
+            }
+
+            loadSessions();
+            state.SetStatus($"Adopted '{session.Name}' from {session.RemoteHostName}");
+        }, state);
+    }
+
     public void OpenFolder()
     {
         var session = state.GetSelectedSession();

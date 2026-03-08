@@ -96,6 +96,14 @@ public static class KeyBindingService
             CanDisable = true,
             StatusBarOrder = 25
         },
+        new()
+        {
+            ActionId = "adopt-remote",
+            Key = "a",
+            Label = "adopt",
+            CanDisable = true,
+            StatusBarOrder = 26
+        },
         // Group 3: Open (navigate to things)
         new()
         {

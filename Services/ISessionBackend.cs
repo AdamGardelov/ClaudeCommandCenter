@@ -26,6 +26,9 @@ public interface ISessionBackend : IDisposable
     // State detection
     void DetectWaitingForInputBatch(List<Session> sessions);
 
+    // Remote session discovery
+    List<Session> GetUntrackedRemoteSessions() => [];
+
     // Environment checks
     bool IsAvailable();
     bool IsInsideHost();

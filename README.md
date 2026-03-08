@@ -190,6 +190,7 @@ between cells. Press `Escape` to return to list view.
 | `e`                | Edit session (name, description, color)                          |
 | `x`                | Exclude/restore session from grid view                           |
 | `m`                | Move standalone session to a group                               |
+| `a`                | Adopt an untracked remote session into CCC                       |
 | `r`                | Refresh session list                                             |
 | `Y`                | Approve — sends `y` to the selected session                      |
 | `N`                | Reject — sends `n` to the selected session                       |
@@ -378,6 +379,12 @@ favorites.
 Remote sessions show the host name in the detail panel (`Remote: MY-SERVER`) and in group views (`@MY-SERVER`). Git
 branch detection and worktree creation work over SSH automatically.
 
+**Session visibility:**
+
+CCC only shows remote sessions that it created or that you explicitly adopted. Tmux sessions on the remote that were
+created outside CCC are not shown by default. Press `a` to see and adopt untracked remote sessions — this lets you
+bring existing sessions into CCC with a description and color.
+
 **Offline behavior:**
 
 If a host is unreachable, its sessions appear greyed out with a `✗` indicator and CCC shows the last-known session list
@@ -443,6 +450,7 @@ Each override supports three optional fields:
 | `edit-session`   | `e`         | edit          | Yes         |
 | `toggle-exclude` | `x`         | hide          | Yes         |
 | `move-to-group`  | `m`         | move          | Yes         |
+| `adopt-remote`   | `a`         | adopt         | Yes         |
 | `toggle-grid`    | `Ctrl+G`    | grid          | Yes         |
 | `toggle-diff`    | `D`         | diff          | Yes         |
 | `refresh`        | `r`         | (hidden)      | Yes         |
