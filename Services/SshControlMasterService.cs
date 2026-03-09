@@ -207,6 +207,15 @@ public static class SshControlMasterService
             }
 
             var socketPath = SocketPath(host);
+
+            // Remove stale socket file — ssh -M refuses to start if the path exists
+            // but the master process behind it is dead (VPN drop, network change, etc.)
+            if (File.Exists(socketPath))
+            {
+                try { File.Delete(socketPath); }
+                catch { /* best-effort */ }
+            }
+
             var startInfo = new ProcessStartInfo
             {
                 FileName = "ssh",
